@@ -42,17 +42,17 @@ const stages = [
   {
     name: "E · Mini apps",
     what: "Apps running inside, opened from a post",
-    when: "Jan – Feb",
+    when: "Not scheduled",
   },
   {
     name: "F · Open to others",
     what: "A public SDK so anyone can publish an app",
-    when: "Feb – Mar",
+    when: "Not scheduled",
   },
   {
     name: "G · Scale",
     what: "Mainnet, mobile and cash on-ramps",
-    when: "Later",
+    when: "Not scheduled",
   },
 ];
 
@@ -78,8 +78,9 @@ export default function Home() {
       <section className="roadmap">
         <h2>How we get there</h2>
         <p>
-          One stage at a time. Mini apps come last on purpose: they multiply an
-          audience that already exists.
+          One stage at a time. The first three are what we commit to; from mini
+          apps onward there are no dates yet. They come last on purpose: apps
+          multiply an audience that already exists.
         </p>
         <ol>
           {stages.map((stage) => (

@@ -24,7 +24,9 @@ No paid channels and no subscriptions.
 
 ## Roadmap
 
-Built in stages, one at a time. Mini apps come last on purpose: they multiply an audience that already exists.
+Built in stages, one at a time. Stages A, B and C are what we commit to for now. From E onward there are no dates yet: we schedule them once the first three are done.
+
+Mini apps come last on purpose: they multiply an audience that already exists.
 
 | Stage | What gets built | Dates | Done when |
 | --- | --- | --- | --- |
@@ -32,9 +34,9 @@ Built in stages, one at a time. Mini apps come last on purpose: they multiply an
 | B · Feed | Posts, follows, Home, Explore | Oct 20 – Nov 9 | A full day of the feed moving without us |
 | C · Wallet | Passkey wallet at sign-up, balance, tips by @username | Nov 10 – Dec 7 | Tips circulating on testnet |
 | D · Payments | Event tickets, pools, raffles, receipts | Dec 8 – Jan 4 | A community charged for something real |
-| E · Our mini apps | Sandboxed container, internal SDK, 2-3 apps by the team | Jan 5 – Feb 1 | An app opened straight from a post |
-| F · Open to others | Public SDK, app registry, weekly reward, bridges | Feb 2 – March | The first app published by someone outside |
-| G · Scale | Mainnet, mobile, MoneyGram Ramps, budgeted agents | Later | — |
+| E · Our mini apps | Sandboxed container, internal SDK, 2-3 apps by the team | Not scheduled | An app opened straight from a post |
+| F · Open to others | Public SDK, app registry, weekly reward, bridges | Not scheduled | The first app published by someone outside |
+| G · Scale | Mainnet, mobile, MoneyGram Ramps, budgeted agents | Not scheduled | — |
 
 ## Stack
 

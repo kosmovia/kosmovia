@@ -35,6 +35,7 @@ El proyecto se construye por etapas largas, no todo junto. Lo que no es de la et
 
 - **A · Base social (ahora):** identidad @usuario, comunidades, canales y chat
 - Después: **B** muro · **C** wallet interna · **D** pagos · **E** mini apps nuestras · **F** SDK abierto a terceros · **G** escala
+- A, B y C son a lo que nos comprometemos por el programa. De la E para abajo no hay fecha: no prometer nada de eso, ni en los textos ni en el código
 
 ## Stack
 
