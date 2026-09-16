@@ -17,6 +17,45 @@ const features = [
   },
 ];
 
+const stages = [
+  {
+    name: "A · Social base",
+    what: "Identity, communities, channels and chat",
+    when: "Sep – Oct",
+    now: true,
+  },
+  {
+    name: "B · Feed",
+    what: "Posts, follows, Home and Explore",
+    when: "Oct – Nov",
+  },
+  {
+    name: "C · Wallet",
+    what: "A Stellar wallet at sign-up, tips by @username",
+    when: "Nov – Dec",
+  },
+  {
+    name: "D · Payments",
+    what: "Tickets, pools and raffles inside a community",
+    when: "Dec – Jan",
+  },
+  {
+    name: "E · Mini apps",
+    what: "Apps running inside, opened from a post",
+    when: "Jan – Feb",
+  },
+  {
+    name: "F · Open to others",
+    what: "A public SDK so anyone can publish an app",
+    when: "Feb – Mar",
+  },
+  {
+    name: "G · Scale",
+    what: "Mainnet, mobile and cash on-ramps",
+    when: "Later",
+  },
+];
+
 export default function Home() {
   return (
     <main>
@@ -36,6 +75,22 @@ export default function Home() {
           </li>
         ))}
       </ul>
+      <section className="roadmap">
+        <h2>How we get there</h2>
+        <p>
+          One stage at a time. Mini apps come last on purpose: they multiply an
+          audience that already exists.
+        </p>
+        <ol>
+          {stages.map((stage) => (
+            <li key={stage.name} className={stage.now ? "now" : undefined}>
+              <span className="name">{stage.name}</span>
+              <span className="what">{stage.what}</span>
+              <span className="when">{stage.when}</span>
+            </li>
+          ))}
+        </ol>
+      </section>
       <p className="cta">
         <a href="https://github.com/kosmovia/kosmovia">Follow the code on GitHub</a>
       </p>

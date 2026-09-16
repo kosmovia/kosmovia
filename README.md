@@ -24,16 +24,30 @@ No paid channels and no subscriptions.
 
 ## Roadmap
 
-| Stage | Dates (2026) | Goal |
-| --- | --- | --- |
-| 0 · Base | Sep 15–21 | Repo, website, brand, confirmed stack |
-| 1 · Chat + apps | Sep 22 – Oct 5 | Chat on the web, plus the container that runs a mini app |
-| 2 · Wallet | Oct 6–12 | Passkey sign-up, send and tips on testnet |
-| 3 · Mini app & demo | Oct 13–19 | First mini app running inside, tested by 10 new users |
+Built in stages, one at a time. Mini apps come last on purpose: they multiply an audience that already exists.
 
-## Stack (to confirm)
+| Stage | What gets built | Dates | Done when |
+| --- | --- | --- | --- |
+| A · Social base | Identity, communities, channels, chat | Sep 21 – Oct 19 | 15 people talking for a week on their own |
+| B · Feed | Posts, follows, Home, Explore | Oct 20 – Nov 9 | A full day of the feed moving without us |
+| C · Wallet | Passkey wallet at sign-up, balance, tips by @username | Nov 10 – Dec 7 | Tips circulating on testnet |
+| D · Payments | Event tickets, pools, raffles, receipts | Dec 8 – Jan 4 | A community charged for something real |
+| E · Our mini apps | Sandboxed container, internal SDK, 2-3 apps by the team | Jan 5 – Feb 1 | An app opened straight from a post |
+| F · Open to others | Public SDK, app registry, weekly reward, bridges | Feb 2 – March | The first app published by someone outside |
+| G · Scale | Mainnet, mobile, MoneyGram Ramps, budgeted agents | Later | — |
 
-Soroban (Rust) · Stellar SDK and Stellar RPC (TypeScript) · Smart Account Kit with passkeys · OpenZeppelin Relayer for sponsored fees
+## Stack
+
+| Stage | Tools and protocols |
+| --- | --- |
+| A–B | Next.js on Vercel · Supabase (Postgres, Auth, Realtime) · GitHub Actions |
+| C | Stellar SDK and Stellar RPC (TypeScript) · passkeys (WebAuthn) · OpenZeppelin Smart Account Kit · OpenZeppelin Relayer · SEP-10 |
+| D | USDC on testnet · Stellar DEX and AMM · Soroban (Rust) only where a contract is needed |
+| E | Sandboxed iframe + message bridge · our own TypeScript SDK · x402 for instant USDC payments |
+| F | App registry · Matrix with mautrix bridges if federation is worth it · Groq free tier for AI |
+| G | Mainnet · SEP-24 with MoneyGram Ramps · PWA first, native later |
+
+Free tools only, and everything runs on testnet until the team decides otherwise. Anything past stage B is still to confirm.
 
 ## Team
 

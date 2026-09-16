@@ -29,10 +29,16 @@ Kosmovia es una plataforma de comunidades gratuita para Stellar, estilo Discord,
 - No tocar configuración de despliegue ni secretos.
 - Al terminar, resumir en una línea qué cambió.
 
-## Stack (a confirmar con Roberto)
+## Por etapas
 
-- Contratos: Soroban (Rust)
-- Cliente y scripts: TypeScript, Stellar SDK, Stellar RPC
-- Wallet: Smart Account Kit (cuentas inteligentes con passkeys) + OpenZeppelin Relayer para pagar comisiones
-- Chat: por decidir (la propuesta es Matrix con cliente propio)
-- Website: se define en la etapa 0 y se publica gratis en Vercel
+El proyecto se construye por etapas largas, no todo junto. Lo que no es de la etapa actual, no se empieza.
+
+- **A · Base social (ahora):** identidad @usuario, comunidades, canales y chat
+- Después: **B** muro · **C** wallet interna · **D** pagos · **E** mini apps nuestras · **F** SDK abierto a terceros · **G** escala
+
+## Stack
+
+- **Etapas A y B:** Next.js en Vercel, Supabase (Postgres, cuentas y tiempo real) y GitHub Actions
+- **Etapa C en adelante (a confirmar con Roberto):** Stellar SDK y Stellar RPC en TypeScript, passkeys, Smart Account Kit de OpenZeppelin, OpenZeppelin Relayer y SEP-10; Soroban en Rust solo donde haga falta un contrato
+- **Mini apps:** iframe aislado con puente de mensajes y un SDK propio en TypeScript
+- Matrix se evalúa recién en la etapa F, si queremos federación y puentes con Telegram y Discord

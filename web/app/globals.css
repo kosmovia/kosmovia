@@ -96,3 +96,73 @@ footer {
   color: var(--muted);
   font-size: 14px;
 }
+
+.roadmap {
+  margin: 0 0 48px;
+}
+
+.roadmap h2 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.roadmap > p {
+  margin: 0 0 20px;
+  max-width: 58ch;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.roadmap ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.roadmap li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 12px 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+.roadmap .name {
+  flex: 0 0 auto;
+  min-width: 150px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.roadmap .what {
+  flex: 1 1 220px;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.roadmap .when {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.roadmap .now {
+  border-bottom-color: var(--accent);
+}
+
+.roadmap .now .name {
+  color: var(--accent);
+}
+
+.roadmap .now .name::after {
+  content: "now";
+  margin-left: 8px;
+  padding: 1px 7px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
