@@ -9,12 +9,15 @@ The gateway to Stellar for newcomers, users, communities and builders.
 
 Early development, testnet only. Web first, mobile next.
 
+Live: **https://kosmovia.vercel.app**
+
 ## What it does
 
 - Communities, channels and chat, in the browser and on the phone
 - A Stellar wallet created at sign-up: no seed phrases, no extensions, sponsored fees
 - Send and tip USDC or XLM by @username, inside the chat
 - Explore communities, projects and events of the Stellar ecosystem
+- Mini apps that run inside Kosmovia, with `@username` identity and payments in USDC
 
 No paid channels and no subscriptions.
 
@@ -23,9 +26,9 @@ No paid channels and no subscriptions.
 | Stage | Dates (2026) | Goal |
 | --- | --- | --- |
 | 0 · Base | Sep 15–21 | Repo, website, brand, confirmed stack |
-| 1 · Chat | Sep 22 – Oct 5 | Communities and chat working on the web |
+| 1 · Chat + apps | Sep 22 – Oct 5 | Chat on the web, plus the container that runs a mini app |
 | 2 · Wallet | Oct 6–12 | Passkey sign-up, send and tips on testnet |
-| 3 · Test & demo | Oct 13–19 | 10 new users test it, public demo |
+| 3 · Mini app & demo | Oct 13–19 | First mini app running inside, tested by 10 new users |
 
 ## Stack (to confirm)
 
