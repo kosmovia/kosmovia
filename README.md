@@ -36,9 +36,21 @@ Soroban (Rust) · Stellar SDK and Stellar RPC (TypeScript) · Smart Account Kit 
 - **Roberto** — full-stack: backend, Soroban contracts, SDK
 - **Victor** — frontend: web client, UX/UI
 - **Carla** — design and marketing: brand, Figma, community
-- **Alejandro** — product: coordination, AI-assisted prototyping
+- **Alejandro** — product and full stack: landing site, glue services, deploys
 
 Built in the Stellar Elite Bolivia (TechRebel) program.
+
+## Repo structure
+
+| Folder | Owner | What it holds |
+| --- | --- | --- |
+| `web` | Alejandro | Landing site, deployed on Vercel |
+| `app` | Victor | Web client: communities, channels, chat |
+| `server` | Roberto | Chat server and backend services |
+| `contracts` | Roberto | Soroban contracts (Rust), testnet only |
+| `design` | Carla | Brand assets and Figma exports |
+
+Anyone can open a Pull Request on any folder; its owner reviews it.
 
 ## Contributing
 
