@@ -1,0 +1,22 @@
+# Secretos: nunca subir
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Dependencias y compilados
+node_modules/
+dist/
+build/
+out/
+.next/
+target/
+
+# Hosting y herramientas
+.vercel/
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
