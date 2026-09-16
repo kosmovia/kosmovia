@@ -2,7 +2,7 @@
 
 **Explore. Connect. Belong.**
 
-A free, Discord-style community platform for Stellar, with a built-in non-custodial wallet.
+A free social network for Stellar: Discord-style communities, a feed that carries what you build, a built-in non-custodial wallet, and mini apps that run inside.
 The gateway to Stellar for newcomers, users, communities and builders.
 
 ## Status
@@ -13,7 +13,8 @@ Live: **https://kosmovia.vercel.app**
 
 ## What it does
 
-- Communities, channels and chat, in the browser and on the phone
+- Communities with channels, threads and roles, in the browser and on the phone
+- A feed with posts from your communities and the people you follow
 - A Stellar wallet created at sign-up: no seed phrases, no extensions, sponsored fees
 - Send and tip USDC or XLM by @username, inside the chat
 - Explore communities, projects and events of the Stellar ecosystem

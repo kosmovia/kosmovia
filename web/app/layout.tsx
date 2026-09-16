@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Kosmovia · Explore. Connect. Belong.",
   description:
-    "A free, Discord-style community platform for Stellar, with a built-in non-custodial wallet.",
+    "A free social network for Stellar: communities, a feed, a built-in wallet and mini apps that run inside.",
 };
 
 export default function RootLayout({

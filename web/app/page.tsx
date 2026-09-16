@@ -1,15 +1,19 @@
 const features = [
   {
     title: "Communities",
-    text: "Channels, threads and direct messages, in the browser and on the phone.",
+    text: "Channels, threads, roles and direct messages, with the layout you already know.",
+  },
+  {
+    title: "A feed that spreads",
+    text: "Posts from your communities and the people you follow. Mini apps open straight from a post.",
   },
   {
     title: "A wallet from day one",
-    text: "Created at sign-up. No seed phrases, no extensions, fees sponsored.",
+    text: "Created at sign-up. No seed phrases, no extensions, fees sponsored. Tip by @username.",
   },
   {
-    title: "Tips by @username",
-    text: "Send USDC or XLM inside the chat, to a name instead of an address.",
+    title: "Mini apps inside",
+    text: "Build an app, publish it in Kosmovia and charge in USDC. No app store, no review queue.",
   },
 ];
 
@@ -20,9 +24,9 @@ export default function Home() {
       <h1>Kosmovia</h1>
       <p className="tagline">Explore. Connect. Belong.</p>
       <p className="lead">
-        A free, Discord-style community platform for Stellar, with a built-in
-        non-custodial wallet. The gateway to Stellar for newcomers, users,
-        communities and builders.
+        A free social network for Stellar: Discord-style communities, a feed that
+        carries what you build, a built-in non-custodial wallet, and mini apps
+        that run inside it.
       </p>
       <ul className="features">
         {features.map((feature) => (
