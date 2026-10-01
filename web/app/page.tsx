@@ -1,43 +1,45 @@
+import Rings from "./Rings";
+
 const features = [
   {
     title: "Communities",
-    text: "Channels, threads, roles and direct messages, with the layout you already know.",
-  },
-  {
-    title: "A feed that spreads",
-    text: "Posts from your communities and the people you follow. Mini apps open straight from a post.",
+    text: "Channels, roles and chat, with the layout you already know. Run by people, builders or companies.",
   },
   {
     title: "A wallet from day one",
-    text: "Created at sign-up. No seed phrases, no extensions, fees sponsored. Tip by @username.",
+    text: "Sign in with Google or email and your USDC wallet is ready. No seed phrases, no extensions, fees covered.",
   },
   {
-    title: "Mini apps inside",
-    text: "Build an app, publish it in Kosmovia and charge in USDC. No app store, no review queue.",
+    title: "Payments inside the community",
+    text: "Sell event tickets with a QR at the door, run pools and send money by @username.",
+  },
+  {
+    title: "Verified businesses",
+    text: "Banks, fintechs, car dealers and real estate agencies get verified and open their own communities to reach users and builders.",
   },
 ];
 
 const stages = [
   {
-    name: "A · Social base",
-    what: "Identity, communities, channels and chat",
-    when: "Sep – Oct",
+    name: "A · Communities + wallet",
+    what: "Sign in with Google or email, USDC wallet, communities, channels and chat",
+    when: "Now",
     now: true,
   },
   {
-    name: "B · Feed",
-    what: "Posts, follows, Home and Explore",
+    name: "B · Payments",
+    what: "Event tickets with QR, pools, send by @username",
     when: "Oct – Nov",
   },
   {
-    name: "C · Wallet",
-    what: "A Stellar wallet at sign-up, tips by @username",
+    name: "C · Verified businesses",
+    what: "Business verification (KYC), company communities, API connections",
     when: "Nov – Dec",
   },
   {
-    name: "D · Payments",
-    what: "Tickets, pools and raffles inside a community",
-    when: "Dec – Jan",
+    name: "D · Feed",
+    what: "Posts, follows, Home and Explore",
+    when: "Not scheduled",
   },
   {
     name: "E · Mini apps",
@@ -50,8 +52,8 @@ const stages = [
     when: "Not scheduled",
   },
   {
-    name: "G · Scale",
-    what: "Mainnet, mobile and cash on-ramps",
+    name: "G · Beyond Bolivia",
+    what: "More countries, mainnet and cash on-ramps",
     when: "Not scheduled",
   },
 ];
@@ -59,14 +61,17 @@ const stages = [
 export default function Home() {
   return (
     <main>
-      <p className="badge">Building in public · Stellar Elite Bolivia</p>
-      <h1>Kosmovia</h1>
-      <p className="tagline">Explore. Connect. Belong.</p>
-      <p className="lead">
-        A free social network for Stellar: Discord-style communities, a feed that
-        carries what you build, a built-in non-custodial wallet, and mini apps
-        that run inside it.
-      </p>
+      <div className="hero">
+        <Rings />
+        <p className="badge">Building in public · Stellar Elite Bolivia</p>
+        <h1>Kosmovia</h1>
+        <p className="tagline">Explore. Connect. Belong.</p>
+        <p className="lead">
+          Communities with a wallet and payments built in, on Stellar. For
+          people, builders and businesses — starting in Bolivia, built for the
+          world.
+        </p>
+      </div>
       <ul className="features">
         {features.map((feature) => (
           <li key={feature.title}>
@@ -78,9 +83,8 @@ export default function Home() {
       <section className="roadmap">
         <h2>How we get there</h2>
         <p>
-          One stage at a time. The first three are what we commit to; from mini
-          apps onward there are no dates yet. They come last on purpose: apps
-          multiply an audience that already exists.
+          Bolivia first, then the world. We commit to the first three stages;
+          the rest has no date yet.
         </p>
         <ol>
           {stages.map((stage) => (
@@ -95,7 +99,7 @@ export default function Home() {
       <p className="cta">
         <a href="https://github.com/kosmovia/kosmovia">Follow the code on GitHub</a>
       </p>
-      <footer>Early development · testnet only</footer>
+      <footer>Early development · testnet only · Built on Stellar</footer>
     </main>
   );
 }
