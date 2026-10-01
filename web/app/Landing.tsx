@@ -20,6 +20,7 @@ export default function Landing({
           aria-label={ui.switchLabel}
           title={ui.switchLabel}
           hrefLang={lang === "en" ? "es" : "en"}
+          lang={lang === "en" ? "es" : "en"}
         >
           {ui.switchText}
         </Link>
@@ -32,21 +33,33 @@ export default function Landing({
           <h1>Kosmovia</h1>
           <p className="tagline">{content.tagline}</p>
           <p className="lead">{content.lead}</p>
+          <p className="cta">
+            <a href="https://github.com/kosmovia/kosmovia">{content.cta}</a>
+          </p>
         </div>
         <ul className="features">
-          {content.features.map((feature) => (
+          {content.features.map((feature) => {
+            const phase = feature.stage
+              ? roadmap.stages.find((s) => s.key === feature.stage)
+              : undefined;
+            return (
             <li key={feature.title}>
               <h2>{feature.title}</h2>
+              {phase && <span className="feature-phase">{phase.when}</span>}
               <p>{feature.text}</p>
             </li>
-          ))}
+            );
+          })}
         </ul>
         <section className="roadmap">
           <h2>{roadmap.title}</h2>
           <p>{roadmap.intro}</p>
           <ol>
             {roadmap.stages.map((stage) => (
-              <li key={stage.name} className={stage.now ? "now" : undefined}>
+              <li
+                key={stage.key}
+                className={stage.now ? "now" : stage.soon ? "soon" : undefined}
+              >
                 <span className="name">
                   {stage.name}
                   {stage.now && <span className="pill">{roadmap.nowLabel}</span>}
@@ -57,9 +70,6 @@ export default function Landing({
             ))}
           </ol>
         </section>
-        <p className="cta">
-          <a href="https://github.com/kosmovia/kosmovia">{content.cta}</a>
-        </p>
         <footer>{content.footer}</footer>
       </main>
     </div>

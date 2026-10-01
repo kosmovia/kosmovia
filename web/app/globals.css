@@ -77,8 +77,8 @@ button:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -115,16 +115,21 @@ main {
 /* Decorative "portal": soft glow plus dotted rings, centered behind the h1. */
 .portal {
   position: absolute;
-  top: 50%;
+  top: 0;
   left: 50%;
   z-index: 0;
-  width: min(100vw, 900px);
+  width: min(100vw, 640px);
   aspect-ratio: 1;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -24%);
   overflow: hidden;
   pointer-events: none;
-  -webkit-mask-image: radial-gradient(circle, #000 35%, transparent 70%);
-  mask-image: radial-gradient(circle, #000 35%, transparent 70%);
+  /* Fade out below the title so rings never cross the lead text. */
+  -webkit-mask-image: radial-gradient(circle, #000 20%, transparent 55%),
+    linear-gradient(to bottom, #000 38%, transparent 56%);
+  -webkit-mask-composite: source-in;
+  mask-image: radial-gradient(circle, #000 20%, transparent 55%),
+    linear-gradient(to bottom, #000 38%, transparent 56%);
+  mask-composite: intersect;
 }
 
 .portal::before {
@@ -174,12 +179,12 @@ h1 {
 
 .tagline {
   margin: 4px 0 24px;
-  color: var(--accent);
+  color: var(--accent-strong);
   font-size: clamp(18px, 3vw, 22px);
 }
 
 .lead {
-  margin: 0 0 48px;
+  margin: 0 0 28px;
   max-width: 58ch;
   color: var(--muted);
   font-size: 18px;
@@ -199,6 +204,7 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--surface);
+  box-shadow: 0 1px 2px rgb(10 18 19 / 0.05);
   transition: border-color 0.2s;
 }
 
@@ -212,21 +218,41 @@ h1 {
   font-size: 16px;
 }
 
+.feature-phase {
+  display: block;
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .features p {
   margin: 0;
   color: var(--muted);
   font-size: 15px;
 }
 
+.cta {
+  margin: 0 0 48px;
+}
+
 .cta a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 22px;
+  border: 1px solid var(--accent-strong);
+  border-radius: 999px;
+  background: var(--surface);
   color: var(--fg);
+  font-weight: 600;
   text-decoration: none;
-  border-bottom: 1px solid var(--accent);
-  padding-bottom: 2px;
+  transition: background-color 0.2s, color 0.2s;
 }
 
 .cta a:hover {
-  color: var(--accent-strong);
+  background: var(--accent-strong);
+  color: var(--bg);
 }
 
 footer {
@@ -261,31 +287,54 @@ footer {
 }
 
 .roadmap li {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 230px) minmax(0, 1fr) auto;
   align-items: baseline;
-  gap: 4px 12px;
+  gap: 4px 16px;
   padding: 12px 2px;
   border-bottom: 1px solid var(--line);
 }
 
 .roadmap .name {
-  flex: 0 0 auto;
-  min-width: 150px;
   font-size: 15px;
   font-weight: 600;
 }
 
 .roadmap .what {
-  flex: 1 1 220px;
   color: var(--muted);
   font-size: 15px;
 }
 
 .roadmap .when {
-  flex: 0 0 auto;
   color: var(--muted);
   font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.roadmap .soon .when {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .roadmap li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .roadmap .name {
+    order: 0;
+  }
+
+  .roadmap .when {
+    order: 1;
+    text-align: left;
+  }
+
+  .roadmap .what {
+    order: 2;
+  }
 }
 
 .roadmap .now {
@@ -293,13 +342,17 @@ footer {
 }
 
 .roadmap .now .name {
-  color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.roadmap .now .when {
+  display: none;
 }
 
 .roadmap .now .pill {
   margin-left: 8px;
   padding: 1px 7px;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--accent-strong);
   border-radius: 999px;
   font-size: 11px;
   letter-spacing: 0.04em;

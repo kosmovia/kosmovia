@@ -2,12 +2,19 @@ export type Content = {
   badge: string;
   tagline: string;
   lead: string;
-  features: { title: string; text: string }[];
+  features: { title: string; text: string; stage?: string }[];
   roadmap: {
     title: string;
     intro: string;
     nowLabel: string;
-    stages: { name: string; what: string; when: string; now?: boolean }[];
+    stages: {
+      key: string;
+      name: string;
+      what: string;
+      when: string;
+      now?: boolean;
+      soon?: boolean;
+    }[];
   };
   cta: string;
   footer: string;
@@ -35,10 +42,12 @@ export const en: Content = {
     },
     {
       title: "Payments inside the community",
+      stage: "B",
       text: "Sell event tickets with a QR at the door, run pools and send money by @username.",
     },
     {
       title: "Verified businesses",
+      stage: "C",
       text: "Banks, fintechs, car dealers and real estate agencies get verified and open their own communities to reach users and builders.",
     },
   ],
@@ -49,37 +58,46 @@ export const en: Content = {
     nowLabel: "now",
     stages: [
       {
+        key: "A",
         name: "A · Communities + wallet",
         what: "Sign in with Google or email, USDC wallet, communities, channels and chat",
         when: "Now",
         now: true,
       },
       {
+        key: "B",
         name: "B · Payments",
         what: "Event tickets with QR, pools, send by @username",
         when: "Oct – Nov 2026",
+        soon: true,
       },
       {
+        key: "C",
         name: "C · Verified businesses",
         what: "Business verification (KYC), company communities, API connections",
         when: "Nov – Dec 2026",
+        soon: true,
       },
       {
+        key: "D",
         name: "D · Feed",
         what: "Posts, follows, Home and Explore",
         when: "2027",
       },
       {
+        key: "E",
         name: "E · Mini apps",
         what: "Apps running inside, opened from a post",
         when: "2027",
       },
       {
+        key: "F",
         name: "F · Open to others",
         what: "A public SDK so anyone can publish an app",
         when: "2027",
       },
       {
+        key: "G",
         name: "G · Beyond Bolivia",
         what: "More countries, mainnet and cash on-ramps",
         when: "2027",
@@ -112,10 +130,12 @@ export const es: Content = {
     },
     {
       title: "Pagos dentro de la comunidad",
+      stage: "B",
       text: "Vende entradas con QR para la puerta, organiza colectas y envía dinero por @usuario.",
     },
     {
       title: "Empresas verificadas",
+      stage: "C",
       text: "Bancos, fintechs, concesionarias e inmobiliarias se verifican y abren sus propias comunidades para llegar a usuarios y builders.",
     },
   ],
@@ -126,37 +146,46 @@ export const es: Content = {
     nowLabel: "ahora",
     stages: [
       {
+        key: "A",
         name: "A · Comunidades + wallet",
         what: "Entra con Google o email, wallet en USDC, comunidades, canales y chat",
         when: "Ahora",
         now: true,
       },
       {
+        key: "B",
         name: "B · Pagos",
         what: "Entradas con QR, colectas, envíos por @usuario",
         when: "Oct – Nov 2026",
+        soon: true,
       },
       {
+        key: "C",
         name: "C · Empresas verificadas",
         what: "Verificación de empresas (KYC), comunidades de empresas, conexión por API",
         when: "Nov – Dic 2026",
+        soon: true,
       },
       {
+        key: "D",
         name: "D · Muro",
         what: "Publicaciones, seguidores, Inicio y Explorar",
         when: "2027",
       },
       {
+        key: "E",
         name: "E · Mini apps",
         what: "Apps que corren dentro, abiertas desde una publicación",
         when: "2027",
       },
       {
+        key: "F",
         name: "F · Abierto a otros",
         what: "Un SDK público para que cualquiera publique su app",
         when: "2027",
       },
       {
+        key: "G",
         name: "G · Más allá de Bolivia",
         what: "Más países, mainnet y rampas de efectivo",
         when: "2027",
