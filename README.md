@@ -27,9 +27,9 @@ Bolivia first, then the world. Stages A to D are what we commit to in 2026; the 
 | Stage | What gets built | When | Done when |
 | --- | --- | --- | --- |
 | A · Communities + wallet | Sign in with Google or email, USDC wallet, communities, channels and chat | Now | A community chatting, every member with a wallet, on testnet |
-| B · Payments | Event tickets with QR, pools, send by @username | Oct – Nov 2026 | A ticket sold and checked in with its QR |
-| C · Verified businesses | Business verification (KYC), company communities, API connections | Nov – Dec 2026 | A verified business running its own community |
-| D · Feed | Posts, follows, Home and Explore | Dec 2026 | Members posting and following each other on testnet |
+| B · Feed | Posts, follows, Home and Explore | Oct 2026 | Members posting and following each other on testnet |
+| C · Payments | Event tickets with QR, pools, send by @username | Nov 2026 | A ticket sold and checked in with its QR |
+| D · Verified businesses | Business verification (KYC), company communities, API connections | Dec 2026 | A verified business running its own community |
 | E · Mini apps | Apps running inside, opened from a post | 2027 | — |
 | F · Open to others | A public SDK so anyone can publish an app | 2027 | — |
 | G · Beyond Bolivia | More countries, mainnet and cash on-ramps | 2027 | — |
