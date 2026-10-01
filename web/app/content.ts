@@ -1,10 +1,16 @@
 export type Content = {
   badge: string;
-  tagline: string;
-  lead: string;
-  features: { title: string; text: string; stage?: string }[];
+  nav: {
+    label: string;
+    skip: string;
+    solution: string;
+    how: string;
+    cases: string;
+    roadmap: string;
+    team: string;
+  };
+  actions: { how: string; github: string };
   roadmap: {
-    title: string;
     intro: string;
     nowLabel: string;
     stages: {
@@ -16,7 +22,6 @@ export type Content = {
       soon?: boolean;
     }[];
   };
-  cta: string;
   footer: string;
   ui: {
     switchLabel: string;
@@ -29,30 +34,17 @@ export type Content = {
 
 export const en: Content = {
   badge: "Building in public · Stellar Elite Bolivia",
-  tagline: "Explore. Connect. Belong.",
-  lead: "Communities with a wallet and payments built in, on Stellar. For people, builders and businesses — starting in Bolivia, built for the world.",
-  features: [
-    {
-      title: "Communities",
-      text: "Channels, roles and chat, with the layout you already know. Run by people, builders or companies.",
-    },
-    {
-      title: "A wallet from day one",
-      text: "Sign in with Google or email and your USDC wallet is ready. No seed phrases, no extensions, fees covered.",
-    },
-    {
-      title: "Payments and transfers",
-      stage: "C",
-      text: "Send money by @username, get paid with a link or QR, and close deals with escrow contracts.",
-    },
-    {
-      title: "Verified businesses",
-      stage: "D",
-      text: "Banks, fintechs, car dealers and real estate agencies get verified and open their own communities to reach users and builders.",
-    },
-  ],
+  nav: {
+    label: "Main",
+    skip: "Skip to content",
+    solution: "Solution",
+    how: "How it works",
+    cases: "Use cases",
+    roadmap: "Roadmap",
+    team: "Team",
+  },
+  actions: { how: "See how it works", github: "Follow the code on GitHub" },
   roadmap: {
-    title: "How we get there",
     intro:
       "Bolivia first, then the world. Communities, the wallet, Explore, payments and verified businesses all arrive in October 2026; the rest follows in 2027.",
     nowLabel: "now",
@@ -105,7 +97,6 @@ export const en: Content = {
       },
     ],
   },
-  cta: "Follow the code on GitHub",
   footer: "Early development · testnet only · Built on Stellar",
   ui: {
     switchLabel: "Ver en español",
@@ -118,30 +109,17 @@ export const en: Content = {
 
 export const es: Content = {
   badge: "Construyendo en público · Stellar Elite Bolivia",
-  tagline: "Explora. Conecta. Pertenece.",
-  lead: "Comunidades con wallet y pagos integrados, en Stellar. Para personas, builders y empresas: empezamos en Bolivia, pensado para el mundo.",
-  features: [
-    {
-      title: "Comunidades",
-      text: "Canales, roles y chat, con el diseño que ya conoces. Las pueden crear personas, builders o empresas.",
-    },
-    {
-      title: "Una wallet desde el primer día",
-      text: "Entra con Google o email y tu wallet en USDC ya está lista. Sin frases semilla, sin extensiones y sin pagar comisiones.",
-    },
-    {
-      title: "Pagos y envíos",
-      stage: "C",
-      text: "Envía dinero por @usuario, cobra con un link o QR y cierra tratos con contratos de garantía.",
-    },
-    {
-      title: "Empresas verificadas",
-      stage: "D",
-      text: "Bancos, fintechs, concesionarias e inmobiliarias se verifican y abren sus propias comunidades para llegar a usuarios y builders.",
-    },
-  ],
+  nav: {
+    label: "Principal",
+    skip: "Saltar al contenido",
+    solution: "Solución",
+    how: "Cómo funciona",
+    cases: "Casos de uso",
+    roadmap: "Hoja de ruta",
+    team: "Equipo",
+  },
+  actions: { how: "Ver cómo funciona", github: "Sigue el código en GitHub" },
   roadmap: {
-    title: "Cómo llegamos",
     intro:
       "Primero Bolivia, después el mundo. Las comunidades, la wallet, Explorar, los pagos y las empresas verificadas llegan en octubre de 2026; lo demás sigue en 2027.",
     nowLabel: "ahora",
@@ -194,7 +172,6 @@ export const es: Content = {
       },
     ],
   },
-  cta: "Sigue el código en GitHub",
   footer: "Desarrollo inicial · solo testnet · Construido en Stellar",
   ui: {
     switchLabel: "View in English",

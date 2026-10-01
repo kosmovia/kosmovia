@@ -5,7 +5,21 @@ export type Item = { lead?: string; text: string; link?: string };
 export type Card = { head: string; text: string };
 export type Mark = { v: "yes" | "no" | "partial"; text: string };
 
-export type Slide =
+export type SlideId =
+  | "cover"
+  | "problem"
+  | "solution"
+  | "how"
+  | "cases"
+  | "stellar"
+  | "works"
+  | "compare"
+  | "money"
+  | "roadmap"
+  | "team"
+  | "close";
+
+export type Slide = { id: SlideId } & (
   | { kind: "cover"; title: string; tagline: string; sub: string; meta: string }
   | { kind: "list"; title: string; items: Item[] }
   | { kind: "cards"; title: string; items: Card[] }
@@ -29,7 +43,23 @@ export type Slide =
       people: { name: string; role: string }[];
       footer: string;
     }
-  | { kind: "close"; title: string; text: string; links: string[]; big: string };
+  | { kind: "close"; title: string; text: string; links: string[]; big: string }
+);
+
+export type SlideOf<K extends Slide["kind"]> = Extract<Slide, { kind: K }>;
+
+/** The landing reads its section copy from the deck, so both share one source. */
+export function section<K extends Slide["kind"]>(
+  deck: Deck,
+  id: SlideId,
+  kind: K,
+): SlideOf<K> {
+  const found = deck.slides.find((s) => s.id === id);
+  if (!found || found.kind !== kind) {
+    throw new Error(`Deck slide "${id}" (${kind}) not found`);
+  }
+  return found as SlideOf<K>;
+}
 
 export type Deck = {
   lang: "en" | "es";
@@ -68,6 +98,7 @@ export const en: Deck = {
   },
   slides: [
     {
+      id: "cover",
       kind: "cover",
       title: "Kosmovia",
       tagline: "Explore. Connect. Belong.",
@@ -75,6 +106,7 @@ export const en: Deck = {
       meta: "Stellar Elite Bolivia · 2026 · kosmovia.vercel.app",
     },
     {
+      id: "problem",
       kind: "list",
       title: "Communities and money live in different places",
       items: [
@@ -90,6 +122,7 @@ export const en: Deck = {
       ],
     },
     {
+      id: "solution",
       kind: "cards",
       title: "One place to connect and pay",
       items: [
@@ -112,6 +145,7 @@ export const en: Deck = {
       ],
     },
     {
+      id: "how",
       kind: "steps",
       title: "How it works",
       items: [
@@ -128,6 +162,7 @@ export const en: Deck = {
       ],
     },
     {
+      id: "cases",
       kind: "cards",
       title: "Built for real use, starting in Bolivia",
       items: [
@@ -150,6 +185,7 @@ export const en: Deck = {
       ],
     },
     {
+      id: "stellar",
       kind: "list",
       title: "Why Stellar",
       items: [
@@ -161,6 +197,7 @@ export const en: Deck = {
       ],
     },
     {
+      id: "works",
       kind: "list",
       title: "What already works",
       items: [
@@ -184,6 +221,7 @@ export const en: Deck = {
       ],
     },
     {
+      id: "compare",
       kind: "table",
       title: "How we are different",
       caption:
@@ -235,6 +273,7 @@ export const en: Deck = {
       ],
     },
     {
+      id: "money",
       kind: "list",
       title: "How Kosmovia makes money",
       items: [
@@ -254,12 +293,14 @@ export const en: Deck = {
       ],
     },
     {
+      id: "roadmap",
       kind: "roadmap",
       title: "Roadmap — Bolivia first, then the world",
       nowLabel: contentEn.roadmap.nowLabel,
       stages: contentEn.roadmap.stages,
     },
     {
+      id: "team",
       kind: "team",
       title: "The team",
       people: [
@@ -274,6 +315,7 @@ export const en: Deck = {
       footer: "Stellar Elite Bolivia · TechRebel",
     },
     {
+      id: "close",
       kind: "close",
       title: "Join us",
       text: "We're looking for communities and testers in Bolivia, pilot businesses (car dealers, real estate, fintechs) and your feedback.",
@@ -301,6 +343,7 @@ export const es: Deck = {
   },
   slides: [
     {
+      id: "cover",
       kind: "cover",
       title: "Kosmovia",
       tagline: "Explora. Conecta. Pertenece.",
@@ -308,6 +351,7 @@ export const es: Deck = {
       meta: "Stellar Elite Bolivia · 2026 · kosmovia.vercel.app",
     },
     {
+      id: "problem",
       kind: "list",
       title: "Las comunidades y el dinero viven en lugares distintos",
       items: [
@@ -323,6 +367,7 @@ export const es: Deck = {
       ],
     },
     {
+      id: "solution",
       kind: "cards",
       title: "Un solo lugar para conectar y pagar",
       items: [
@@ -345,6 +390,7 @@ export const es: Deck = {
       ],
     },
     {
+      id: "how",
       kind: "steps",
       title: "Cómo funciona",
       items: [
@@ -361,6 +407,7 @@ export const es: Deck = {
       ],
     },
     {
+      id: "cases",
       kind: "cards",
       title: "Hecho para usos reales, empezando por Bolivia",
       items: [
@@ -383,6 +430,7 @@ export const es: Deck = {
       ],
     },
     {
+      id: "stellar",
       kind: "list",
       title: "Por qué Stellar",
       items: [
@@ -396,6 +444,7 @@ export const es: Deck = {
       ],
     },
     {
+      id: "works",
       kind: "list",
       title: "Lo que ya funciona",
       items: [
@@ -419,6 +468,7 @@ export const es: Deck = {
       ],
     },
     {
+      id: "compare",
       kind: "table",
       title: "En qué nos diferenciamos",
       caption:
@@ -470,6 +520,7 @@ export const es: Deck = {
       ],
     },
     {
+      id: "money",
       kind: "list",
       title: "De qué vive Kosmovia",
       items: [
@@ -489,12 +540,14 @@ export const es: Deck = {
       ],
     },
     {
+      id: "roadmap",
       kind: "roadmap",
       title: "Hoja de ruta — Primero Bolivia, después el mundo",
       nowLabel: contentEs.roadmap.nowLabel,
       stages: contentEs.roadmap.stages,
     },
     {
+      id: "team",
       kind: "team",
       title: "El equipo",
       people: [
@@ -509,6 +562,7 @@ export const es: Deck = {
       footer: "Stellar Elite Bolivia · TechRebel",
     },
     {
+      id: "close",
       kind: "close",
       title: "Súmate",
       text: "Buscamos comunidades y testers en Bolivia, empresas piloto (concesionarias, inmobiliarias, fintechs) y tu opinión.",
