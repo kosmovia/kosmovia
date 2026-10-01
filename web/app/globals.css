@@ -7,7 +7,7 @@
   --accent: #0f8f84;
   --accent-strong: #0b7a70;
   --glow: #2dd4bf;
-  --ring-opacity: 0.4;
+  --ring-opacity: 0.5;
   --glow-opacity: 0.16;
 }
 
@@ -21,8 +21,8 @@
     --accent: #2dd4bf;
     --accent-strong: #14b8a6;
     --glow: #5eead4;
-    --ring-opacity: 0.3;
-    --glow-opacity: 0.14;
+    --ring-opacity: 0.6;
+    --glow-opacity: 0.22;
   }
 }
 
@@ -35,8 +35,8 @@
   --accent: #2dd4bf;
   --accent-strong: #14b8a6;
   --glow: #5eead4;
-  --ring-opacity: 0.3;
-  --glow-opacity: 0.14;
+  --ring-opacity: 0.6;
+  --glow-opacity: 0.22;
 }
 
 * {
@@ -178,7 +178,7 @@ h1 {
 .features {
   display: grid;
   gap: 16px;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   margin: 0 0 48px;
   padding: 0;
   list-style: none;
