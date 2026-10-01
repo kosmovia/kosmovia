@@ -14,7 +14,7 @@ Live: **https://kosmovia.vercel.app** (the landing is in English, and in Spanish
 
 - Communities with channels, roles and chat, run by people, builders or companies
 - A wallet from day one: sign in with Google or email and your USDC wallet is ready. No seed phrases, no extensions, fees covered
-- Payments inside the community: event tickets with a QR at the door, pools, and sending money by @username
+- Payments and transfers: send money by @username, get paid with a link or QR, and close deals with escrow contracts
 - Verified businesses (banks, fintechs, car dealers, real estate agencies) that open their own communities to reach users and builders
 - Bolivia first, then the world
 
@@ -28,7 +28,7 @@ Bolivia first, then the world. Stages A to D are what we commit to in 2026; the 
 | --- | --- | --- | --- |
 | A · Communities + wallet | Sign in with Google or email, USDC wallet, communities, channels and chat | Now | A community chatting, every member with a wallet, on testnet |
 | B · Explore | Discover communities, profiles and what's happening now | Oct 2026 | People finding and joining communities they did not know |
-| C · Payments | Event tickets with QR, pools, send by @username | Nov 2026 | A ticket sold and checked in with its QR |
+| C · Payments | Send and request money by @username, community payments, escrow and split contracts | Nov 2026 | Money sent between members and a deal closed with an escrow contract, on testnet |
 | D · Verified businesses | Business verification (KYC), company communities, API connections | Dec 2026 | A verified business running its own community |
 | E · Mini apps | Apps running inside, opened from a post | 2027 | — |
 | F · Open to others | A public SDK so anyone can publish an app | 2027 | — |
@@ -38,8 +38,8 @@ Bolivia first, then the world. Stages A to D are what we commit to in 2026; the 
 
 | When | Tools and protocols |
 | --- | --- |
-| Now (A–C) | Next.js on Vercel · Pollar SDK (sign-in, USDC wallet, sponsored fees) · Firebase (database) · Stellar testnet with USDC · a KYC provider for businesses (to be chosen) |
-| Later | Mini apps: sandboxed iframe + our own TypeScript SDK · Scale: mainnet, cash on-ramps (SEP-24), PWA |
+| 2026 (A–D) | Next.js on Vercel · Pollar SDK (sign-in, USDC wallet, sponsored fees) · Firebase (database) · Stellar testnet with USDC · Soroban contracts for escrow and split payments · a KYC provider for businesses (to be chosen) |
+| 2027 | Mini apps: sandboxed iframe + our own TypeScript SDK · Scale: mainnet, cash on-ramps (SEP-24), PWA |
 
 Free tools only, testnet until the team decides otherwise.
 
@@ -59,7 +59,7 @@ Built in the Stellar Elite Bolivia (TechRebel) program.
 | `web` | Alejandro and Victor | Landing + web app, deployed on Vercel |
 | `app` | Victor | Victor — the dApp (web client: login, communities, chat, wallet). Victor's landing can replace web/ through a PR. |
 | `server` | Roberto and Alejandro | Backend services |
-| `contracts` | Roberto | Soroban contracts (Rust), only if a contract is needed |
+| `contracts` | Roberto | Soroban contracts (Rust): escrow and split payments |
 | `design` | Carla | Brand assets and Figma exports |
 
 Anyone can open a Pull Request on any folder; its owner reviews it.

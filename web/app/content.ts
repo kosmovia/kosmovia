@@ -41,9 +41,9 @@ export const en: Content = {
       text: "Sign in with Google or email and your USDC wallet is ready. No seed phrases, no extensions, fees covered.",
     },
     {
-      title: "Payments inside the community",
+      title: "Payments and transfers",
       stage: "C",
-      text: "Sell event tickets with a QR at the door, run pools and send money by @username.",
+      text: "Send money by @username, get paid with a link or QR, and close deals with escrow contracts.",
     },
     {
       title: "Verified businesses",
@@ -74,7 +74,7 @@ export const en: Content = {
       {
         key: "C",
         name: "C · Payments",
-        what: "Event tickets with QR, pools, send by @username",
+        what: "Send and request money by @username, community payments, escrow and split contracts",
         when: "Nov 2026",
         soon: true,
       },
@@ -130,9 +130,9 @@ export const es: Content = {
       text: "Entra con Google o email y tu wallet en USDC ya está lista. Sin frases semilla, sin extensiones y sin pagar comisiones.",
     },
     {
-      title: "Pagos dentro de la comunidad",
+      title: "Pagos y envíos",
       stage: "C",
-      text: "Vende entradas con QR para la puerta, organiza colectas y envía dinero por @usuario.",
+      text: "Envía dinero por @usuario, cobra con un link o QR y cierra tratos con contratos de garantía.",
     },
     {
       title: "Empresas verificadas",
@@ -163,7 +163,7 @@ export const es: Content = {
       {
         key: "C",
         name: "C · Pagos",
-        what: "Entradas con QR, colectas, envíos por @usuario",
+        what: "Envíos y cobros por @usuario, pagos en comunidades, contratos de garantía y pagos divididos",
         when: "Nov 2026",
         soon: true,
       },
