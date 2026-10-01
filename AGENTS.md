@@ -4,7 +4,7 @@ Valen para el equipo y para sus asistentes de IA (Claude, Antigravity).
 
 ## El proyecto
 
-Kosmovia es una plataforma de comunidades gratuita para Stellar, estilo Discord, con wallet no custodia integrada. Web primero, celular después. Sin canales de pago ni suscripciones.
+Kosmovia es una plataforma de comunidades con wallet y pagos integrados en Stellar, para personas, builders y empresas verificadas. Empezamos por Bolivia y después escalamos al mundo. Web primero, celular después. Sin canales de pago ni suscripciones.
 
 ## Reglas que no se rompen
 
@@ -33,13 +33,18 @@ Kosmovia es una plataforma de comunidades gratuita para Stellar, estilo Discord,
 
 El proyecto se construye por etapas largas, no todo junto. Lo que no es de la etapa actual, no se empieza.
 
-- **A · Base social (ahora):** identidad @usuario, comunidades, canales y chat
-- Después: **B** muro · **C** wallet interna · **D** pagos · **E** mini apps nuestras · **F** SDK abierto a terceros · **G** escala
-- A, B y C son a lo que nos comprometemos por el programa. De la E para abajo no hay fecha: no prometer nada de eso, ni en los textos ni en el código
+- **A · Comunidades + wallet (ahora)**
+- **B · Pagos**
+- **C · Empresas verificadas (KYC)**
+- Luego: **D** muro · **E** mini apps · **F** SDK abierto · **G** más allá de Bolivia
+- A, B y C son el compromiso; de la D en adelante no hay fecha: no prometer nada de eso, ni en los textos ni en el código
 
 ## Stack
 
-- **Etapas A y B:** Next.js en Vercel, Supabase (Postgres, cuentas y tiempo real) y GitHub Actions
-- **Etapa C en adelante (a confirmar con Roberto):** Stellar SDK y Stellar RPC en TypeScript, passkeys, Smart Account Kit de OpenZeppelin, OpenZeppelin Relayer y SEP-10; Soroban en Rust solo donde haga falta un contrato
-- **Mini apps:** iframe aislado con puente de mensajes y un SDK propio en TypeScript
-- Matrix se evalúa recién en la etapa F, si queremos federación y puentes con Telegram y Discord
+- Next.js en Vercel
+- Pollar SDK para login, wallet USDC y comisiones patrocinadas
+- Firebase como base de datos
+- USDC en testnet de Stellar
+- Proveedor de KYC para empresas, a definir (Roberto)
+- Render solo si hace falta un backend aparte
+- Soroban en Rust solo donde haga falta un contrato
