@@ -7,6 +7,21 @@ export const metadata: Metadata = {
   description:
     "Communities with a wallet and payments built in, on Stellar. Starting in Bolivia, built for the world.",
   alternates: { canonical: "/", languages: { en: "/", es: "/es" } },
+  openGraph: {
+    type: "website",
+    siteName: "Kosmovia",
+    locale: "en_US",
+    url: "/",
+    title: "Kosmovia · Explore. Connect. Belong.",
+    description:
+      "Communities with a wallet and payments built in, on Stellar. Starting in Bolivia, built for the world.",
+  },
+  twitter: {
+    card: "summary",
+    title: "Kosmovia · Explore. Connect. Belong.",
+    description:
+      "Communities with a wallet and payments built in, on Stellar. Starting in Bolivia, built for the world.",
+  },
 };
 
 export default function Home() {
