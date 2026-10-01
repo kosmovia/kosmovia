@@ -54,7 +54,7 @@ export const en: Content = {
   roadmap: {
     title: "How we get there",
     intro:
-      "Bolivia first, then the world. Communities, the wallet, Explore, payments and verified businesses come first, in 2026; the rest follows in 2027.",
+      "Bolivia first, then the world. Communities, the wallet, Explore, payments and verified businesses all arrive in October 2026; the rest follows in 2027.",
     nowLabel: "now",
     stages: [
       {
@@ -75,14 +75,14 @@ export const en: Content = {
         key: "C",
         name: "C · Payments",
         what: "Send and request money by @username, community payments, escrow and split contracts",
-        when: "Nov 2026",
+        when: "Oct 2026",
         soon: true,
       },
       {
         key: "D",
         name: "D · Verified businesses",
         what: "Business verification (KYC), company communities, API connections",
-        when: "Dec 2026",
+        when: "Oct 2026",
         soon: true,
       },
       {
@@ -143,7 +143,7 @@ export const es: Content = {
   roadmap: {
     title: "Cómo llegamos",
     intro:
-      "Primero Bolivia, después el mundo. Las comunidades, la wallet, Explorar, los pagos y las empresas verificadas van primero, en 2026; lo demás sigue en 2027.",
+      "Primero Bolivia, después el mundo. Las comunidades, la wallet, Explorar, los pagos y las empresas verificadas llegan en octubre de 2026; lo demás sigue en 2027.",
     nowLabel: "ahora",
     stages: [
       {
@@ -164,14 +164,14 @@ export const es: Content = {
         key: "C",
         name: "C · Pagos",
         what: "Envíos y cobros por @usuario, pagos en comunidades, contratos de garantía y pagos divididos",
-        when: "Nov 2026",
+        when: "Oct 2026",
         soon: true,
       },
       {
         key: "D",
         name: "D · Empresas verificadas",
         what: "Verificación de empresas (KYC), comunidades de empresas, conexión por API",
-        when: "Dic 2026",
+        when: "Oct 2026",
         soon: true,
       },
       {

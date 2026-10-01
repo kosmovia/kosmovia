@@ -35,10 +35,10 @@ El proyecto se construye por etapas largas, no todo junto. Lo que no es de la et
 
 - **A · Comunidades + wallet (ahora)**
 - **B · Explorar (oct 2026):** descubrir comunidades, perfiles y actividad en vivo, al estilo de Towns
-- **C · Pagos (nov 2026):** infraestructura de wallet y pagos, no solo eventos: envíos y cobros por @usuario, pagos en comunidades y contratos (garantía o escrow, pagos divididos). Las entradas a eventos son solo un caso de uso
-- **D · Empresas verificadas, KYC (dic 2026)**
+- **C · Pagos (oct 2026):** infraestructura de wallet y pagos, no solo eventos: envíos y cobros por @usuario, pagos en comunidades y contratos (garantía o escrow, pagos divididos). Las entradas a eventos son solo un caso de uso
+- **D · Empresas verificadas, KYC (oct 2026)**
 - 2027: **E** mini apps · **F** SDK abierto · **G** más allá de Bolivia
-- De la A a la D es el compromiso de 2026; de la E en adelante queda para 2027: no prometer más que eso, ni en los textos ni en el código
+- De la A a la D es el compromiso para octubre de 2026; de la E en adelante queda para 2027: no prometer más que eso, ni en los textos ni en el código
 
 ## Diseño
 

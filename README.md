@@ -22,14 +22,14 @@ No paid channels and no subscriptions.
 
 ## Roadmap
 
-Bolivia first, then the world. Stages A to D are what we commit to in 2026; the rest follows in 2027.
+Bolivia first, then the world. Stages A to D are what we commit to for October 2026; the rest follows in 2027.
 
 | Stage | What gets built | When | Done when |
 | --- | --- | --- | --- |
 | A · Communities + wallet | Sign in with Google or email, USDC wallet, communities, channels and chat | Now | A community chatting, every member with a wallet, on testnet |
 | B · Explore | Discover communities, profiles and what's happening now | Oct 2026 | People finding and joining communities they did not know |
-| C · Payments | Send and request money by @username, community payments, escrow and split contracts | Nov 2026 | Money sent between members and a deal closed with an escrow contract, on testnet |
-| D · Verified businesses | Business verification (KYC), company communities, API connections | Dec 2026 | A verified business running its own community |
+| C · Payments | Send and request money by @username, community payments, escrow and split contracts | Oct 2026 | Money sent between members and a deal closed with an escrow contract, on testnet |
+| D · Verified businesses | Business verification (KYC), company communities, API connections | Oct 2026 | A verified business running its own community |
 | E · Mini apps | Apps running inside, opened from a post | 2027 | — |
 | F · Open to others | A public SDK so anyone can publish an app | 2027 | — |
 | G · Beyond Bolivia | More countries, mainnet and cash on-ramps | 2027 | — |
@@ -38,7 +38,7 @@ Bolivia first, then the world. Stages A to D are what we commit to in 2026; the 
 
 | When | Tools and protocols |
 | --- | --- |
-| 2026 (A–D) | Next.js on Vercel · Pollar SDK (sign-in, USDC wallet, sponsored fees) · Firebase (database) · Stellar testnet with USDC · Soroban contracts for escrow and split payments · a KYC provider for businesses (to be chosen) |
+| Oct 2026 (A–D) | Next.js on Vercel · Pollar SDK (sign-in, USDC wallet, sponsored fees) · Firebase (database) · Stellar testnet with USDC · Soroban contracts for escrow and split payments · a KYC provider for businesses (to be chosen) |
 | 2027 | Mini apps: sandboxed iframe + our own TypeScript SDK · Scale: mainnet, cash on-ramps (SEP-24), PWA |
 
 Free tools only, testnet until the team decides otherwise.
