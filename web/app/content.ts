@@ -5,9 +5,7 @@ export type Content = {
     skip: string;
     solution: string;
     how: string;
-    cases: string;
     roadmap: string;
-    team: string;
   };
   actions: { how: string; github: string };
   roadmap: {
@@ -23,6 +21,7 @@ export type Content = {
     }[];
   };
   footer: string;
+  footerTeam: string;
   ui: {
     switchLabel: string;
     switchText: string;
@@ -39,9 +38,7 @@ export const en: Content = {
     skip: "Skip to content",
     solution: "Solution",
     how: "How it works",
-    cases: "Use cases",
     roadmap: "Roadmap",
-    team: "Team",
   },
   actions: { how: "See how it works", github: "Follow the code on GitHub" },
   roadmap: {
@@ -98,6 +95,7 @@ export const en: Content = {
     ],
   },
   footer: "Early development · testnet only · Built on Stellar",
+  footerTeam: "Made by Alejandro, Roberto, Victor and Carla · Stellar Elite Bolivia",
   ui: {
     switchLabel: "Ver en español",
     switchText: "ES",
@@ -114,9 +112,7 @@ export const es: Content = {
     skip: "Saltar al contenido",
     solution: "Solución",
     how: "Cómo funciona",
-    cases: "Casos de uso",
     roadmap: "Hoja de ruta",
-    team: "Equipo",
   },
   actions: { how: "Ver cómo funciona", github: "Sigue el código en GitHub" },
   roadmap: {
@@ -173,6 +169,7 @@ export const es: Content = {
     ],
   },
   footer: "Desarrollo inicial · solo testnet · Construido en Stellar",
+  footerTeam: "Hecho por Alejandro, Roberto, Victor y Carla · Stellar Elite Bolivia",
   ui: {
     switchLabel: "View in English",
     switchText: "EN",

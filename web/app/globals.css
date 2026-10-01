@@ -237,8 +237,8 @@ section[id] {
 
 .hero-in {
   position: relative;
-  padding-top: 72px;
-  padding-bottom: 72px;
+  padding-top: 64px;
+  padding-bottom: 56px;
 }
 
 .hero-text {
@@ -386,12 +386,12 @@ h1 {
 /* ---------- Sections ---------- */
 
 .sec {
-  padding: 64px 0;
+  padding: 48px 0;
 }
 
 @media (min-width: 760px) {
   .sec {
-    padding: 88px 0;
+    padding: 64px 0;
   }
 }
 
@@ -400,7 +400,7 @@ h1 {
 }
 
 .sec-head {
-  margin: 0 0 36px;
+  margin: 0 0 28px;
 }
 
 .sec-head .bar {
@@ -418,47 +418,6 @@ h1 {
   font-size: clamp(26px, 4.4vw, 40px);
   line-height: 1.15;
   letter-spacing: -0.02em;
-}
-
-.sec-head p {
-  margin: 14px 0 0;
-  max-width: 60ch;
-  color: var(--muted);
-}
-
-/* Problem */
-
-.problems {
-  display: grid;
-  gap: 16px;
-}
-
-@media (min-width: 760px) {
-  .problems {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 32px;
-  }
-}
-
-.problems li {
-  padding-top: 16px;
-  border-top: 1px solid var(--line);
-}
-
-.problems .num {
-  display: block;
-  margin-bottom: 8px;
-  color: var(--accent-strong);
-  font-size: 14px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.06em;
-}
-
-.problems p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 17px;
 }
 
 /* Cards */
@@ -568,183 +527,33 @@ h1 {
   color: var(--fg);
 }
 
-/* Why Stellar */
-
-.points {
-  display: grid;
-  gap: 12px;
-}
-
-@media (min-width: 760px) {
-  .points {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 14px 40px;
-  }
-}
-
-.points li {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--line);
-  font-size: 16px;
-}
-
-.points svg {
-  flex: none;
-  margin-top: 4px;
-  color: var(--accent-strong);
-}
-
-/* Comparison */
-
-.cmp-table {
-  display: none;
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0 6px;
-  font-size: 15px;
-}
-
-.cmp-table th,
-.cmp-table td {
-  padding: 14px 16px;
-  text-align: left;
-  vertical-align: middle;
-}
-
-.cmp-table thead th {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.cmp-table tbody th {
-  font-size: 16px;
-}
-
-.cmp-table tbody tr > * {
-  border-bottom: 1px solid var(--line);
-}
-
-.cell {
-  display: inline-flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.mark {
-  flex: none;
-}
-
-.mark-yes {
-  color: var(--accent-strong);
-}
-
-.mark-no {
-  color: var(--no);
-}
-
-.mark-partial {
-  color: var(--muted);
-}
-
-.cmp-table .me > * {
-  border-top: 1px solid var(--accent-strong);
-  border-bottom: 1px solid var(--accent-strong);
-  background: var(--surface);
-  font-weight: 600;
-}
-
-.cmp-table .me > :first-child {
-  border-left: 1px solid var(--accent-strong);
-  border-radius: 12px 0 0 12px;
-  color: var(--accent-strong);
-}
-
-.cmp-table .me > :last-child {
-  border-right: 1px solid var(--accent-strong);
-  border-radius: 0 12px 12px 0;
-}
-
-.cmp-cards {
-  display: grid;
-  gap: 12px;
-}
-
-.cmp-cards li {
-  padding: 18px 20px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--surface);
-}
-
-.cmp-cards .me {
-  border-color: var(--accent-strong);
-}
-
-.cmp-cards h3 {
-  margin: 0 0 8px;
-  font-size: 16px;
-}
-
-.cmp-cards .me h3 {
-  color: var(--accent-strong);
-}
-
-.cmp-cards dl {
-  display: grid;
-  margin: 0;
-}
-
-.cmp-cards dl > div {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 0;
-  border-top: 1px solid var(--line);
-  font-size: 14px;
-}
-
-.cmp-cards dt {
-  color: var(--muted);
-}
-
-.cmp-cards dd {
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-  margin: 0;
-  text-align: right;
-}
-
-@media (min-width: 900px) {
-  .cmp-table {
-    display: table;
-  }
-
-  .cmp-cards {
-    display: none;
-  }
-}
-
-/* Roadmap */
+/* Roadmap: compact A-D timeline plus one line for 2027 */
 
 .road {
-  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .road li {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 260px) minmax(0, 1fr) auto;
-  align-items: baseline;
-  gap: 4px 24px;
-  padding: 16px 2px;
-  border-bottom: 1px solid var(--line);
+  gap: 2px;
+  padding-left: 28px;
+}
+
+.road li::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--line);
+  border-radius: 50%;
+  background: var(--bg);
 }
 
 .road .name {
@@ -752,41 +561,15 @@ h1 {
   font-weight: 600;
 }
 
-.road .what {
-  color: var(--muted);
-  font-size: 15px;
-}
-
 .road .when {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
-  text-align: right;
-  white-space: nowrap;
 }
 
-.road .soon .when {
-  color: var(--fg);
-  font-weight: 600;
-}
-
-@media (max-width: 700px) {
-  .road li {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .road .when {
-    order: 1;
-    text-align: left;
-  }
-
-  .road .what {
-    order: 2;
-  }
-}
-
-.road .now {
-  border-bottom-color: var(--accent);
+.road .now::before {
+  border-color: var(--accent-strong);
+  background: var(--accent);
 }
 
 .road .now .name {
@@ -797,7 +580,7 @@ h1 {
   display: none;
 }
 
-.road .now .pill {
+.road .pill {
   margin-left: 8px;
   padding: 1px 7px;
   border: 1px solid var(--accent-strong);
@@ -807,60 +590,50 @@ h1 {
   text-transform: uppercase;
 }
 
-/* Team */
-
-.people {
-  display: grid;
-  gap: 24px;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-}
-
-.people li {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  column-gap: 16px;
-  align-items: center;
-}
-
-.avatar {
-  grid-row: span 2;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 56px;
-  height: 56px;
-  border: 1px solid var(--accent-strong);
-  border-radius: 50%;
-  background: var(--surface);
-  color: var(--accent-strong);
-  font-size: 22px;
-  font-weight: 700;
-}
-
-.people h3 {
-  align-self: end;
-  margin: 0;
-  font-size: 17px;
-}
-
-.people p {
-  align-self: start;
-  margin: 2px 0 0;
+.road-later {
+  margin: 28px 0 0;
   color: var(--muted);
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: 15px;
 }
 
-.team-foot {
-  margin: 32px 0 0;
-  color: var(--muted);
-  font-size: 14px;
+.road-later strong {
+  color: var(--fg);
+}
+
+@media (min-width: 760px) {
+  .road {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+    padding-top: 28px;
+  }
+
+  .road li {
+    padding: 0;
+  }
+
+  .road li::before {
+    top: -28px;
+    left: 0;
+  }
+
+  .road li::after {
+    content: "";
+    position: absolute;
+    top: -22px;
+    left: 16px;
+    right: -24px;
+    border-top: 1px solid var(--line);
+  }
+
+  .road li:last-child::after {
+    display: none;
+  }
 }
 
 /* Closing band + footer */
 
 .join {
-  padding: 72px 0;
+  padding: 56px 0;
   border-top: 1px solid var(--line);
   background:
     radial-gradient(ellipse 60% 120% at 85% 0%, rgb(45 212 191 / 0.12), transparent 70%),
@@ -888,25 +661,33 @@ h1 {
   font-size: 14px;
 }
 
-/* Subtle reveal on scroll; content stays visible without it. */
-@media (prefers-reduced-motion: no-preference) {
-  @supports (animation-timeline: view()) {
-    .problems li,
-    .card,
-    .steps li,
-    .points li,
-    .people li,
-    .road li {
-      animation: rise linear both;
-      animation-timeline: view();
-      animation-range: entry 0% entry 35%;
-    }
-  }
+
+/* Foot team line */
+
+.foot p {
+  margin: 0;
 }
 
-@keyframes rise {
-  from {
+.foot p + p {
+  margin-top: 4px;
+}
+
+/* Scroll reveal. Only hidden when JS marked <html> with .js-reveal (inline
+   script in layout) and motion is allowed; content is visible otherwise. */
+@media (prefers-reduced-motion: no-preference) {
+  .js-reveal [data-reveal] {
     opacity: 0;
-    transform: translateY(14px);
+    transform: translateY(16px);
+    transition:
+      opacity 0.5s ease-out,
+      transform 0.5s ease-out;
+    transition-delay: calc(var(--i, 0) * 80ms);
+    will-change: opacity, transform;
+  }
+
+  .js-reveal [data-reveal].is-visible {
+    opacity: 1;
+    transform: none;
+    will-change: auto;
   }
 }

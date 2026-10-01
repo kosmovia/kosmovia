@@ -12,7 +12,7 @@ export const viewport: Viewport = {
   ],
 };
 
-const themeScript = `try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark"){document.documentElement.setAttribute("data-theme",t)}}catch(e){}`;
+const themeScript = `try{var d=document.documentElement;d.classList.add("js-reveal");setTimeout(function(){if(!d.hasAttribute("data-rv"))d.classList.remove("js-reveal")},4000);var t=localStorage.getItem("theme");if(t==="light"||t==="dark"){document.documentElement.setAttribute("data-theme",t)}}catch(e){}`;
 
 export default function RootLayout({
   children,

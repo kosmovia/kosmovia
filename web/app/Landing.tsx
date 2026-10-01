@@ -1,10 +1,10 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import Reveal from "./Reveal";
 import Rings from "./Rings";
 import ThemeToggle from "./ThemeToggle";
 import type { Content } from "./content";
 import { en as deckEn, es as deckEs, section } from "./pitch/deck";
-import type { Mark } from "./pitch/deck";
 
 const GITHUB_URL = "https://github.com/kosmovia/kosmovia";
 
@@ -28,7 +28,7 @@ function Icon({ children }: { children: ReactNode }) {
   );
 }
 
-// Same order as the "solution" and "cases" cards in the deck.
+// Same order as the "solution" cards in the deck.
 const solutionIcons = [
   <Icon key="chat">
     <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12z" />
@@ -47,25 +47,6 @@ const solutionIcons = [
   </Icon>,
 ];
 
-const caseIcons = [
-  <Icon key="ticket">
-    <path d="M4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z" />
-    <path d="M14 6v12" strokeDasharray="2 2.5" />
-  </Icon>,
-  <Icon key="home">
-    <path d="M4 11l8-7 8 7" />
-    <path d="M6 10v9h12v-9" />
-    <path d="M10 19v-5h4v5" />
-  </Icon>,
-  <Icon key="bank">
-    <path d="M3 9l9-5 9 5" />
-    <path d="M5 9v9M10 9v9M14 9v9M19 9v9M3 20h18" />
-  </Icon>,
-  <Icon key="code">
-    <path d="M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14" />
-  </Icon>,
-];
-
 // Cards whose stage is not live yet show the phase label (see content.roadmap).
 const solutionStages: (string | undefined)[] = [
   undefined,
@@ -74,46 +55,19 @@ const solutionStages: (string | undefined)[] = [
   "D",
 ];
 
-function MarkIcon({ v }: { v: Mark["v"] }) {
-  const path =
-    v === "yes"
-      ? "M4.5 12.5l5 5L19.5 7"
-      : v === "no"
-        ? "M6 6l12 12M18 6L6 18"
-        : "M5 12h14";
-  return (
-    <svg
-      className={`mark mark-${v}`}
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path d={path} />
-    </svg>
-  );
+// Marks an element for the scroll reveal; --i staggers siblings by 80ms.
+function rv(i = 0) {
+  return {
+    "data-reveal": "",
+    style: { "--i": i } as CSSProperties,
+  };
 }
 
-function SectionHead({
-  id,
-  title,
-  intro,
-}: {
-  id: string;
-  title: string;
-  intro?: string;
-}) {
+function SectionHead({ id, title }: { id: string; title: string }) {
   return (
-    <header className="sec-head">
+    <header className="sec-head" {...rv()}>
       <span className="bar" aria-hidden="true" />
       <h2 id={id}>{title}</h2>
-      {intro && <p>{intro}</p>}
     </header>
   );
 }
@@ -129,26 +83,25 @@ export default function Landing({
   const deck = lang === "en" ? deckEn : deckEs;
 
   const cover = section(deck, "cover", "cover");
-  const problem = section(deck, "problem", "list");
   const solution = section(deck, "solution", "cards");
   const how = section(deck, "how", "steps");
-  const cases = section(deck, "cases", "cards");
-  const stellar = section(deck, "stellar", "list");
-  const compare = section(deck, "compare", "table");
   const road = section(deck, "roadmap", "roadmap");
-  const team = section(deck, "team", "team");
   const join = section(deck, "close", "close");
+
+  const later = roadmap.stages.filter((s) => !s.now && !s.soon);
+  const laterNames = later
+    .map((s) => s.name.split(" · ").slice(1).join(" · "))
+    .join(" · ");
 
   const links = [
     { href: "#solution", text: nav.solution },
     { href: "#how", text: nav.how },
-    { href: "#cases", text: nav.cases },
     { href: "#roadmap", text: nav.roadmap },
-    { href: "#team", text: nav.team },
   ];
 
   return (
     <div lang={lang} id="top">
+      <Reveal />
       <a className="skip" href="#main">
         {nav.skip}
       </a>
@@ -187,11 +140,11 @@ export default function Landing({
           <div className="wrap hero-in">
             <Rings />
             <div className="hero-text">
-              <p className="badge">{content.badge}</p>
-              <h1>{cover.title}</h1>
-              <p className="tagline">{cover.tagline}</p>
-              <p className="lead">{cover.sub}</p>
-              <p className="actions">
+              <p className="badge" {...rv(0)}>{content.badge}</p>
+              <h1 {...rv(1)}>{cover.title}</h1>
+              <p className="tagline" {...rv(2)}>{cover.tagline}</p>
+              <p className="lead" {...rv(3)}>{cover.sub}</p>
+              <p className="actions" {...rv(4)}>
                 <a className="btn btn-primary" href="#how">
                   {actions.how}
                 </a>
@@ -203,33 +156,17 @@ export default function Landing({
           </div>
         </section>
 
-        <section className="sec" id="problem" aria-labelledby="h-problem">
-          <div className="wrap">
-            <SectionHead id="h-problem" title={problem.title} />
-            <ul className="problems">
-              {problem.items.map((item, i) => (
-                <li key={item.text}>
-                  <span className="num" aria-hidden="true">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <p>{item.text}</p>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-
         <section className="sec" id="solution" aria-labelledby="h-solution">
           <div className="wrap">
             <SectionHead id="h-solution" title={solution.title} />
-            <ul className="cards cards-4">
+            <ul className="cards cards-4" role="list">
               {solution.items.map((card, i) => {
                 const stage = solutionStages[i];
                 const phase = stage
                   ? roadmap.stages.find((s) => s.key === stage)
                   : undefined;
                 return (
-                  <li key={card.head} className="card">
+                  <li key={card.head} className="card" {...rv(i)}>
                     <span className="card-icon">{solutionIcons[i]}</span>
                     <h3>{card.head}</h3>
                     {phase && <span className="phase">{phase.when}</span>}
@@ -244,9 +181,9 @@ export default function Landing({
         <section className="sec" id="how" aria-labelledby="h-how">
           <div className="wrap">
             <SectionHead id="h-how" title={how.title} />
-            <ol className="steps">
+            <ol className="steps" role="list">
               {how.items.map((item, i) => (
-                <li key={item.text}>
+                <li key={item.text} {...rv(i)}>
                   <span className="step-num" aria-hidden="true">
                     {i + 1}
                   </span>
@@ -260,152 +197,41 @@ export default function Landing({
           </div>
         </section>
 
-        <section className="sec" id="cases" aria-labelledby="h-cases">
-          <div className="wrap">
-            <SectionHead id="h-cases" title={cases.title} />
-            <ul className="cards cards-4">
-              {cases.items.map((card, i) => (
-                <li key={card.head} className="card">
-                  <span className="card-icon">{caseIcons[i]}</span>
-                  <h3>{card.head}</h3>
-                  <p>{card.text}</p>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-
-        <section className="sec" id="stellar" aria-labelledby="h-stellar">
-          <div className="wrap">
-            <SectionHead id="h-stellar" title={stellar.title} />
-            <ul className="points">
-              {stellar.items.map((item) => (
-                <li key={item.text}>
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.4"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                    focusable="false"
-                  >
-                    <path d="M4.5 12.5l5 5L19.5 7" />
-                  </svg>
-                  <span>{item.text}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-
-        <section className="sec" id="different" aria-labelledby="h-different">
-          <div className="wrap">
-            <SectionHead id="h-different" title={compare.title} />
-            <table className="cmp-table">
-              <caption className="sr-only">{compare.caption}</caption>
-              <thead>
-                <tr>
-                  <td />
-                  {compare.cols.map((col) => (
-                    <th key={col} scope="col">
-                      {col}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {compare.rows.map((row) => (
-                  <tr key={row.name} className={row.highlight ? "me" : undefined}>
-                    <th scope="row">{row.name}</th>
-                    {row.cells.map((cell, i) => (
-                      <td key={compare.cols[i]}>
-                        <span className="cell">
-                          <MarkIcon v={cell.v} />
-                          {cell.text}
-                        </span>
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <ul className="cmp-cards">
-              {compare.rows.map((row) => (
-                <li key={row.name} className={row.highlight ? "me" : undefined}>
-                  <h3>{row.name}</h3>
-                  <dl>
-                    {row.cells.map((cell, i) => (
-                      <div key={compare.cols[i]}>
-                        <dt>{compare.cols[i]}</dt>
-                        <dd>
-                          <MarkIcon v={cell.v} />
-                          {cell.text}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-
         <section className="sec" id="roadmap" aria-labelledby="h-roadmap">
           <div className="wrap">
-            <SectionHead
-              id="h-roadmap"
-              title={road.title}
-              intro={roadmap.intro}
-            />
-            <ol className="road">
-              {roadmap.stages.map((stage) => (
-                <li
-                  key={stage.key}
-                  className={
-                    stage.now ? "now" : stage.soon ? "soon" : undefined
-                  }
-                >
-                  <span className="name">
-                    {stage.name}
-                    {stage.now && (
-                      <span className="pill">{roadmap.nowLabel}</span>
-                    )}
-                  </span>
-                  <span className="what">{stage.what}</span>
-                  <span className="when">{stage.when}</span>
-                </li>
-              ))}
+            <SectionHead id="h-roadmap" title={road.title} />
+            <ol className="road" role="list">
+              {roadmap.stages
+                .filter((s) => s.now || s.soon)
+                .map((stage, i) => (
+                  <li
+                    key={stage.key}
+                    className={stage.now ? "now" : undefined}
+                    {...rv(i)}
+                  >
+                    <span className="name">
+                      {stage.name}
+                      {stage.now && (
+                        <span className="pill">{roadmap.nowLabel}</span>
+                      )}
+                    </span>
+                    <span className="when">{stage.when}</span>
+                  </li>
+                ))}
             </ol>
-          </div>
-        </section>
-
-        <section className="sec" id="team" aria-labelledby="h-team">
-          <div className="wrap">
-            <SectionHead id="h-team" title={team.title} />
-            <ul className="people">
-              {team.people.map((p) => (
-                <li key={p.name}>
-                  <span className="avatar" aria-hidden="true">
-                    {p.name.slice(0, 1)}
-                  </span>
-                  <h3>{p.name}</h3>
-                  <p>{p.role}</p>
-                </li>
-              ))}
-            </ul>
-            <p className="team-foot">{team.footer}</p>
+            {later.length > 0 && (
+              <p className="road-later" {...rv()}>
+                <strong>{later[0].when}:</strong> {laterNames}
+              </p>
+            )}
           </div>
         </section>
 
         <section className="join" id="join" aria-labelledby="h-join">
           <div className="wrap join-in">
-            <h2 id="h-join">{join.title}</h2>
-            <p>{join.text}</p>
-            <p className="actions">
+            <h2 id="h-join" {...rv(0)}>{join.title}</h2>
+            <p {...rv(1)}>{join.text}</p>
+            <p className="actions" {...rv(2)}>
               <a className="btn btn-primary" href={GITHUB_URL}>
                 {actions.github}
               </a>
@@ -415,7 +241,10 @@ export default function Landing({
       </main>
 
       <footer className="foot">
-        <div className="wrap">{content.footer}</div>
+        <div className="wrap">
+          <p>{content.footer}</p>
+          <p>{content.footerTeam}</p>
+        </div>
       </footer>
     </div>
   );
