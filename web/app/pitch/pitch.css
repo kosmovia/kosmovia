@@ -1,0 +1,1050 @@
+/*
+ * Pitch deck. Dark mode only: the dark tokens are forced on .deck regardless of
+ * the site theme. Slides are 16:9 and sized with container units, so everything
+ * inside is written in em (1em = 16px on a 1280px-wide slide).
+ */
+
+.deck {
+  --bg: #061314;
+  --surface: #0b1f21;
+  --line: #143235;
+  --fg: #f2fbfa;
+  --muted: #8fb3b0;
+  --accent: #2dd4bf;
+  --accent-strong: #14b8a6;
+  --glow: #5eead4;
+  --ring-opacity: 0.6;
+  --glow-opacity: 0.22;
+  --no: #f87171;
+
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 60% 50% at 88% 0%, rgb(45 212 191 / 0.1), transparent 70%),
+    radial-gradient(ellipse 50% 45% at 0% 100%, rgb(20 184 166 / 0.08), transparent 70%),
+    var(--bg);
+  color: var(--fg);
+  line-height: 1.4;
+  color-scheme: dark;
+}
+
+.deck .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.deck .slide:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -4px;
+  border-radius: 0;
+}
+
+.deck a:focus-visible,
+.deck button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* ---------- Stage and slides ---------- */
+
+.deck main.stage {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+.deck .slide {
+  grid-area: 1 / 1;
+  position: relative;
+  width: min(100vw, calc(100dvh * 16 / 9));
+  aspect-ratio: 16 / 9;
+  container-type: inline-size;
+  overflow: hidden;
+  visibility: hidden;
+  opacity: 0;
+}
+
+.deck .slide.active {
+  visibility: visible;
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .deck .slide.active {
+    animation: slide-in 200ms ease-out;
+  }
+}
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.deck .body {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 5em 6em 5.5em;
+  font-size: 1.25cqw;
+}
+
+.deck .body > * {
+  position: relative;
+  z-index: 1;
+}
+
+.deck .slide-title {
+  margin: 0;
+  font-size: 3em;
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.deck .slide-title::before {
+  content: "";
+  display: block;
+  width: 2.4em;
+  height: 0.2em;
+  margin-bottom: 0.7em;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.deck .slide-foot {
+  position: absolute;
+  right: 6em;
+  bottom: 2.4em;
+  left: 6em;
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 1em;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+/* ---------- Layouts ---------- */
+
+.deck .split {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.3fr);
+  align-items: center;
+  gap: 5em;
+}
+
+.deck .stack {
+  gap: 1.3em;
+}
+
+.deck .points {
+  display: grid;
+  gap: 1.5em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.deck .points li {
+  padding-left: 1.5em;
+  border-left: 2px solid var(--line);
+}
+
+.deck .points p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 1.6em;
+  line-height: 1.38;
+}
+
+.deck .points strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.deck .point-link {
+  display: inline-block;
+  margin-top: 0.3em;
+  color: var(--accent);
+  font-size: 1.3em;
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.deck .point-link:hover {
+  border-bottom-color: var(--accent);
+}
+
+.deck .cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.4em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.deck .cards li {
+  padding: 1.5em 1.8em;
+  border: 1px solid var(--line);
+  border-radius: 1em;
+  background: var(--surface);
+}
+
+.deck .cards h3 {
+  margin: 0 0 0.35em;
+  color: var(--fg);
+  font-size: 1.8em;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.deck .cards p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 1.35em;
+  line-height: 1.45;
+}
+
+.deck .steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  flex: 1;
+  align-content: center;
+  gap: 1.8em;
+  margin: 0;
+  padding: 0 0 2em;
+  list-style: none;
+}
+
+.deck .steps li {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1em;
+  padding-top: 1.3em;
+  border-top: 2px solid var(--line);
+}
+
+.deck .step-num {
+  display: grid;
+  place-items: center;
+  width: 2.6em;
+  height: 2.6em;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  color: var(--accent);
+  font-size: 1.6em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.deck .steps p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 1.5em;
+  line-height: 1.42;
+}
+
+.deck .steps strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+/* Comparison table */
+
+.deck .table-wrap {
+  margin-top: 0.4em;
+}
+
+.deck .compare {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  text-align: left;
+}
+
+.deck .compare thead th {
+  padding: 0 0.8em 0.8em;
+  color: var(--muted);
+  font-size: 1.15em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.deck .compare tbody th,
+.deck .compare tbody td {
+  padding: 0.7em 0.8em;
+  border-top: 1px solid var(--line);
+}
+
+.deck .compare tbody th {
+  width: 18%;
+  color: var(--fg);
+  font-size: 1.35em;
+  font-weight: 600;
+}
+
+.deck .compare tbody td {
+  color: var(--fg);
+  font-size: 1.3em;
+}
+
+.deck .compare tr.me th,
+.deck .compare tr.me td {
+  background: rgb(45 212 191 / 0.1);
+  border-top-color: var(--accent);
+  border-bottom: 1px solid var(--accent);
+  font-weight: 600;
+}
+
+.deck .compare tr.me th {
+  border-left: 1px solid var(--accent);
+  border-radius: 0.6em 0 0 0.6em;
+  color: var(--accent);
+}
+
+.deck .compare tr.me td:last-child {
+  border-right: 1px solid var(--accent);
+  border-radius: 0 0.6em 0.6em 0;
+}
+
+.deck .cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+  line-height: 1.25;
+}
+
+.deck .mark-icon {
+  flex: none;
+  width: 1.5em;
+  height: 1.5em;
+  padding: 0.25em;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+}
+
+.deck .mark-yes {
+  color: var(--accent);
+}
+
+.deck .mark-no {
+  color: var(--no);
+}
+
+.deck .mark-partial {
+  color: var(--muted);
+}
+
+/* Roadmap */
+
+.deck .slide-roadmap .slide-title {
+  font-size: 2.5em;
+}
+
+.deck .road {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.deck .road li {
+  display: grid;
+  grid-template-columns: 14em minmax(0, 1fr) 6.5em;
+  align-items: baseline;
+  gap: 1.5em;
+  padding: 0.55em 0 0.55em 1.1em;
+  border-bottom: 1px solid var(--line);
+  border-left: 3px solid var(--line);
+}
+
+.deck .road-name {
+  color: var(--muted);
+  font-size: 1.3em;
+  font-weight: 600;
+}
+
+.deck .road-what {
+  color: var(--muted);
+  font-size: 1.25em;
+  line-height: 1.35;
+}
+
+.deck .road-when {
+  color: var(--muted);
+  font-size: 1.25em;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.deck .road .soon {
+  border-left-color: var(--accent-strong);
+}
+
+.deck .road .soon .road-name,
+.deck .road .soon .road-when {
+  color: var(--fg);
+}
+
+.deck .road .soon .road-what {
+  color: var(--muted);
+}
+
+.deck .road .now .road-when {
+  display: none;
+}
+
+.deck .road .now {
+  border-left-color: var(--accent);
+  background: rgb(45 212 191 / 0.08);
+}
+
+.deck .road .now .road-name,
+.deck .road .now .road-when {
+  color: var(--accent);
+}
+
+.deck .road .now .road-what {
+  color: var(--fg);
+}
+
+.deck .road .later {
+  border-left-style: dashed;
+}
+
+.deck .pill {
+  margin-left: 0.7em;
+  padding: 0.1em 0.6em;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  font-size: 0.6em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  vertical-align: 0.15em;
+}
+
+/* Team */
+
+.deck .team {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1.8em;
+  margin: 0.5em 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.deck .team li {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3em;
+}
+
+.deck .avatar {
+  display: grid;
+  place-items: center;
+  width: 4.6em;
+  height: 4.6em;
+  margin-bottom: 0.7em;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 2em;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.deck .team h3 {
+  margin: 0;
+  font-size: 1.9em;
+  font-weight: 650;
+}
+
+.deck .team p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 1.25em;
+  line-height: 1.45;
+}
+
+.deck .team-footer {
+  margin: auto 0 0;
+  padding-top: 1.5em;
+  color: var(--accent);
+  font-size: 1.3em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* Cover and close, with the rings */
+
+.deck .portal {
+  position: absolute;
+  top: 50%;
+  right: -14em;
+  left: auto;
+  z-index: 0;
+  width: 62em;
+  transform: translateY(-50%);
+  -webkit-mask-image: radial-gradient(circle, #000 28%, transparent 66%);
+  mask-image: radial-gradient(circle, #000 28%, transparent 66%);
+  -webkit-mask-composite: source-over;
+  mask-composite: add;
+}
+
+.deck .cover-body {
+  justify-content: center;
+}
+
+.deck .cover-title {
+  margin: 0;
+  font-size: 8.5em;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.035em;
+}
+
+.deck .cover-tagline {
+  margin: 0.35em 0 0.6em;
+  color: var(--accent);
+  font-size: 2.4em;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.deck .cover-sub {
+  max-width: 24em;
+  margin: 0;
+  color: var(--muted);
+  font-size: 1.7em;
+  line-height: 1.4;
+}
+
+.deck .cover-meta {
+  position: absolute;
+  bottom: 2.4em;
+  left: 4em;
+  margin: 0;
+  color: var(--muted);
+  font-size: 1.1em;
+  letter-spacing: 0.03em;
+}
+
+.deck .close-body {
+  justify-content: center;
+}
+
+.deck .close-body .slide-title {
+  font-size: 4.2em;
+}
+
+.deck .close-body .slide-title::before {
+  width: 1.4em;
+  height: 0.12em;
+}
+
+.deck .close-text {
+  max-width: 26em;
+  margin: 0.8em 0 0;
+  color: var(--muted);
+  font-size: 1.6em;
+  line-height: 1.42;
+}
+
+.deck .close-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em 2em;
+  margin: 1.2em 0 0;
+  font-size: 1.4em;
+}
+
+.deck .close-links a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.deck .close-links a:hover {
+  border-bottom-color: var(--accent);
+}
+
+.deck .close-big {
+  margin: 1.6em 0 0;
+  font-size: 3.2em;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+/* ---------- Controls ---------- */
+
+.deck .controls {
+  position: fixed;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.deck .controls > *,
+.deck .controls a,
+.deck .controls button {
+  pointer-events: auto;
+}
+
+.deck .controls.top {
+  top: 12px;
+  right: 16px;
+  left: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.deck .top-right {
+  display: flex;
+  gap: 8px;
+}
+
+.deck .pill-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgb(11 31 33 / 0.9);
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.deck .pill-btn.round {
+  padding: 0;
+}
+
+.deck .pill-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.deck .controls.bottom {
+  top: auto;
+  right: auto;
+  bottom: 12px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transform: translateX(-50%);
+}
+
+.deck .nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: rgb(11 31 33 / 0.9);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.deck .nav-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.deck .nav-btn:disabled {
+  color: var(--muted);
+  opacity: 0.5;
+  cursor: default;
+}
+
+.deck .counter {
+  min-width: 4.6em;
+  color: var(--muted);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.deck .progress {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 5;
+  height: 3px;
+  background: var(--line);
+}
+
+.deck .progress span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .deck .progress span {
+    transition: width 200ms ease-out;
+  }
+}
+
+@media (max-width: 900px) {
+  .deck .btn-text {
+    display: none;
+  }
+
+  .deck .top-right .pill-btn {
+    padding: 0;
+  }
+}
+
+/* ---------- Narrow screens: vertical, scrollable slides ---------- */
+
+@media (max-width: 640px) {
+  .deck main.stage {
+    place-items: stretch;
+  }
+
+  .deck .slide {
+    width: 100%;
+    height: 100dvh;
+    aspect-ratio: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .deck .body {
+    position: relative;
+    inset: auto;
+    min-height: 100%;
+    padding: 76px 22px 100px;
+    font-size: 15px;
+  }
+
+  .deck .slide-title {
+    font-size: 2em;
+  }
+
+  .deck .split {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 1.6em;
+  }
+
+  .deck .points p {
+    font-size: 1.2em;
+  }
+
+  .deck .cards,
+  .deck .steps,
+  .deck .team {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1em;
+  }
+
+  .deck .cards h3 {
+    font-size: 1.35em;
+  }
+
+  .deck .cards p,
+  .deck .steps p,
+  .deck .team p {
+    font-size: 1.1em;
+  }
+
+  .deck .steps li {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 1em;
+    padding-top: 1em;
+  }
+
+  .deck .step-num {
+    flex: none;
+    font-size: 1.2em;
+  }
+
+  .deck .team li {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 1em;
+  }
+
+  .deck .team li p {
+    flex-basis: 100%;
+    padding-left: 0;
+  }
+
+  .deck .avatar {
+    width: 2.6em;
+    height: 2.6em;
+    margin: 0;
+    font-size: 1.5em;
+  }
+
+  .deck .team h3 {
+    font-size: 1.4em;
+  }
+
+  .deck .compare,
+  .deck .compare tbody,
+  .deck .compare tr,
+  .deck .compare th,
+  .deck .compare td {
+    display: block;
+  }
+
+  .deck .compare thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .deck .compare tbody tr {
+    margin-bottom: 0.9em;
+    padding: 0.4em 0.9em 0.7em;
+    border: 1px solid var(--line);
+    border-radius: 0.8em;
+    background: var(--surface);
+  }
+
+  .deck .compare tbody th,
+  .deck .compare tbody td {
+    width: auto;
+    padding: 0.3em 0;
+    border: 0;
+    background: none;
+    font-size: 1.05em;
+  }
+
+  .deck .compare tbody th {
+    font-size: 1.2em;
+  }
+
+  .deck .compare tr.me {
+    border-color: var(--accent);
+    background: rgb(45 212 191 / 0.1);
+  }
+
+  .deck .compare tr.me th,
+  .deck .compare tr.me td {
+    border: 0;
+    border-radius: 0;
+  }
+
+  .deck .compare td::before {
+    content: attr(data-label);
+    display: block;
+    color: var(--muted);
+    font-size: 0.8em;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .deck .road li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.2em;
+    padding-left: 0.9em;
+  }
+
+  .deck .road-name {
+    font-size: 1.15em;
+  }
+
+  .deck .road-what,
+  .deck .road-when {
+    font-size: 1em;
+    text-align: left;
+  }
+
+  .deck .road-when {
+    order: 1;
+  }
+
+  .deck .road-what {
+    order: 2;
+  }
+
+  .deck .cover-body {
+    justify-content: center;
+    padding-bottom: 110px;
+  }
+
+  .deck .cover-title {
+    font-size: 3.6em;
+  }
+
+  .deck .cover-tagline {
+    font-size: 1.5em;
+  }
+
+  .deck .cover-sub {
+    font-size: 1.2em;
+  }
+
+  .deck .cover-meta {
+    position: static;
+    margin-top: 2em;
+    font-size: 0.9em;
+  }
+
+  .deck .portal {
+    top: 22%;
+    right: -30%;
+    width: 130%;
+  }
+
+  .deck .close-body .slide-title {
+    font-size: 2.6em;
+  }
+
+  .deck .close-text {
+    font-size: 1.2em;
+  }
+
+  .deck .close-links {
+    font-size: 1.15em;
+    flex-direction: column;
+  }
+
+  .deck .close-big {
+    font-size: 1.9em;
+  }
+
+  .deck .slide-foot {
+    display: none;
+  }
+
+  .deck .controls.top {
+    top: 0;
+    right: 0;
+    left: 0;
+    padding: 12px 16px 16px;
+    background: linear-gradient(to bottom, var(--bg) 65%, transparent);
+  }
+
+  .deck .controls.bottom {
+    bottom: 10px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgb(6 19 20 / 0.94);
+    border: 1px solid var(--line);
+  }
+
+  .deck .point-link {
+    font-size: 1.1em;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* ---------- Print: every slide on its own landscape 16:9 page ---------- */
+
+@page {
+  size: 1280px 720px;
+  margin: 0;
+}
+
+@media print {
+  html,
+  body {
+    background: #061314 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .deck {
+    position: static;
+    overflow: visible;
+    background: none;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .deck main.stage {
+    position: static;
+    display: block;
+  }
+
+  .deck .slide {
+    position: relative;
+    display: block;
+    width: 1280px;
+    height: 720px;
+    aspect-ratio: auto;
+    overflow: hidden;
+    visibility: visible !important;
+    opacity: 1 !important;
+    animation: none !important;
+    break-after: page;
+    break-inside: avoid;
+    background:
+      radial-gradient(ellipse 60% 50% at 88% 0%, rgb(45 212 191 / 0.1), transparent 70%),
+      radial-gradient(ellipse 50% 45% at 0% 100%, rgb(20 184 166 / 0.08), transparent 70%),
+      #061314;
+  }
+
+  .deck .slide:last-child {
+    break-after: auto;
+  }
+
+  .deck .body {
+    position: absolute;
+    inset: 0;
+    padding: 5em 6em 5.5em;
+    font-size: 16px;
+  }
+
+  .deck .controls,
+  .deck .progress {
+    display: none !important;
+  }
+
+  .deck .rings {
+    animation: none !important;
+  }
+}
