@@ -34,7 +34,7 @@ Kosmovia es una plataforma de comunidades con wallet y pagos integrados en Stell
 El proyecto se construye por etapas largas, no todo junto. Lo que no es de la etapa actual, no se empieza.
 
 - **A · Comunidades + wallet (ahora)**
-- **B · Muro (oct 2026)**
+- **B · Explorar (oct 2026):** descubrir comunidades, perfiles y actividad en vivo, al estilo de Towns
 - **C · Pagos (nov 2026)**
 - **D · Empresas verificadas, KYC (dic 2026)**
 - 2027: **E** mini apps · **F** SDK abierto · **G** más allá de Bolivia
