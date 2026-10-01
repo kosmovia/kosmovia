@@ -34,10 +34,19 @@ Kosmovia es una plataforma de comunidades con wallet y pagos integrados en Stell
 El proyecto se construye por etapas largas, no todo junto. Lo que no es de la etapa actual, no se empieza.
 
 - **A · Comunidades + wallet (ahora)**
-- **B · Pagos**
-- **C · Empresas verificadas (KYC)**
-- Luego: **D** muro · **E** mini apps · **F** SDK abierto · **G** más allá de Bolivia
-- A, B y C son el compromiso; de la D en adelante no hay fecha: no prometer nada de eso, ni en los textos ni en el código
+- **B · Pagos (oct–nov 2026)**
+- **C · Empresas verificadas, KYC (nov–dic 2026)**
+- 2027: **D** muro · **E** mini apps · **F** SDK abierto · **G** más allá de Bolivia
+- A, B y C son el compromiso de 2026; de la D en adelante queda para 2027: no prometer más que eso, ni en los textos ni en el código
+
+## Diseño
+
+- Paleta turquesa, negro y blanco.
+- Oscuro: fondo `#061314`, superficie `#0B1F21`, línea `#143235`, texto `#F2FBFA`, secundario `#8FB3B0`, turquesa `#2DD4BF`, turquesa fuerte `#14B8A6`, brillo `#5EEAD4`.
+- Claro: fondo `#FFFFFF`, superficie `#F3F8F8`, línea `#DCE8E7`, texto `#0A1213`, secundario `#4B5F5E`, turquesa `#0F8F84`.
+- La landing tiene modo claro y oscuro, y está en inglés (`/`) y español (`/es`).
+- La dApp usa solo modo oscuro, con la misma paleta.
+- No usar el logo de Stellar como logo propio.
 
 ## Stack
 
