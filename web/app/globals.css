@@ -64,11 +64,16 @@ button:focus-visible {
   border-radius: 4px;
 }
 
-.theme-toggle {
+.controls {
   position: absolute;
   top: 16px;
   right: 16px;
   z-index: 2;
+  display: flex;
+  gap: 8px;
+}
+
+.control {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -79,10 +84,15 @@ button:focus-visible {
   border-radius: 999px;
   background: var(--surface);
   color: var(--fg);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
   cursor: pointer;
 }
 
-.theme-toggle:hover {
+.control:hover {
   border-color: var(--accent);
   color: var(--accent);
 }
@@ -286,8 +296,7 @@ footer {
   color: var(--accent);
 }
 
-.roadmap .now .name::after {
-  content: "now";
+.roadmap .now .pill {
   margin-left: 8px;
   padding: 1px 7px;
   border: 1px solid var(--accent);

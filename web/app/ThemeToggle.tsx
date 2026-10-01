@@ -4,7 +4,13 @@ import { useEffect, useState } from "react";
 
 type Theme = "light" | "dark";
 
-export default function ThemeToggle() {
+export default function ThemeToggle({
+  toLight,
+  toDark,
+}: {
+  toLight: string;
+  toDark: string;
+}) {
   const [theme, setTheme] = useState<Theme | null>(null);
 
   useEffect(() => {
@@ -29,12 +35,12 @@ export default function ThemeToggle() {
     } catch {}
   }
 
-  const label = `Switch to ${theme === "dark" ? "light" : "dark"} theme`;
+  const label = theme === "dark" ? toLight : toDark;
 
   return (
     <button
       type="button"
-      className="theme-toggle"
+      className="control"
       onClick={toggle}
       aria-label={label}
       title={label}

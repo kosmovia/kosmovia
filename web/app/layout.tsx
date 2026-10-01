@@ -1,11 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import ThemeToggle from "./ThemeToggle";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Kosmovia · Explore. Connect. Belong.",
-  description:
-    "Communities with a wallet and payments built in, on Stellar. Starting in Bolivia, built for the world.",
+  metadataBase: new URL("https://kosmovia.vercel.app"),
 };
 
 export const viewport: Viewport = {
@@ -28,7 +25,6 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
-        <ThemeToggle />
         {children}
       </body>
     </html>
