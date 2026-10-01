@@ -36,8 +36,9 @@ El proyecto se construye por etapas largas, no todo junto. Lo que no es de la et
 - **A · Comunidades + wallet (ahora)**
 - **B · Pagos (oct–nov 2026)**
 - **C · Empresas verificadas, KYC (nov–dic 2026)**
-- 2027: **D** muro · **E** mini apps · **F** SDK abierto · **G** más allá de Bolivia
-- A, B y C son el compromiso de 2026; de la D en adelante queda para 2027: no prometer más que eso, ni en los textos ni en el código
+- **D · Muro (dic 2026)**
+- 2027: **E** mini apps · **F** SDK abierto · **G** más allá de Bolivia
+- De la A a la D es el compromiso de 2026; de la E en adelante queda para 2027: no prometer más que eso, ni en los textos ni en el código
 
 ## Diseño
 

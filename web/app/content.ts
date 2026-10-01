@@ -54,7 +54,7 @@ export const en: Content = {
   roadmap: {
     title: "How we get there",
     intro:
-      "Bolivia first, then the world. Wallet, payments and verified businesses come first, in 2026; the rest follows in 2027.",
+      "Bolivia first, then the world. Wallet, payments, verified businesses and the feed come first, in 2026; the rest follows in 2027.",
     nowLabel: "now",
     stages: [
       {
@@ -82,7 +82,8 @@ export const en: Content = {
         key: "D",
         name: "D · Feed",
         what: "Posts, follows, Home and Explore",
-        when: "2027",
+        when: "Dec 2026",
+        soon: true,
       },
       {
         key: "E",
@@ -142,7 +143,7 @@ export const es: Content = {
   roadmap: {
     title: "Cómo llegamos",
     intro:
-      "Primero Bolivia, después el mundo. La wallet, los pagos y las empresas verificadas van primero, en 2026; lo demás sigue en 2027.",
+      "Primero Bolivia, después el mundo. La wallet, los pagos, las empresas verificadas y el muro van primero, en 2026; lo demás sigue en 2027.",
     nowLabel: "ahora",
     stages: [
       {
@@ -170,7 +171,8 @@ export const es: Content = {
         key: "D",
         name: "D · Muro",
         what: "Publicaciones, seguidores, Inicio y Explorar",
-        when: "2027",
+        when: "Dic 2026",
+        soon: true,
       },
       {
         key: "E",
