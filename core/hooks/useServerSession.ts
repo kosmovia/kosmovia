@@ -2,18 +2,21 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePollar } from "@pollar/react";
-import { signedFetch } from "../lib/auth-client.ts";
+import { fetchServerSession, reusableSession } from "../lib/session-client.ts";
+import { tokenStore } from "../lib/token-store.ts";
 
 export type ServerSession =
   | { step: "idle" }
   | { step: "checking" }
-  | { step: "ok"; address: string }
+  /** `supabase: false` = wallet verified, but the server can't mint Supabase tokens yet. */
+  | { step: "ok"; address: string; profileId?: string; supabase: boolean }
   | { step: "error"; message: string };
 
 /**
  * Proves to our own server who the user is (SEP-53 signature, see lib/auth.ts)
  * by calling POST /api/auth/session once per login. With Freighter this opens
- * one signature popup. Only call it under <PollarGate>.
+ * one signature popup. On success the Supabase token goes to lib/token-store
+ * (the data hooks read it from there). Only call it under <PollarGate>.
  */
 export function useServerSession(address: string | null, verified: boolean) {
   const { getClient } = usePollar();
@@ -22,17 +25,28 @@ export function useServerSession(address: string | null, verified: boolean) {
 
   const check = useCallback(async () => {
     if (!address) return;
+    const reuse = reusableSession(address);
+    if (reuse) {
+      setSession({ step: "ok", address: reuse.address, profileId: reuse.profileId, supabase: true });
+      return;
+    }
     setSession({ step: "checking" });
-    try {
-      const res = await signedFetch(getClient(), address, "/api/auth/session", { method: "POST" });
-      const body = (await res.json().catch(() => ({}))) as { address?: string; error?: string };
-      if (!res.ok || !body.address) {
-        setSession({ step: "error", message: body.error ?? "El servidor no pudo verificar tu sesión." });
-        return;
-      }
-      setSession({ step: "ok", address: body.address });
-    } catch (err) {
-      setSession({ step: "error", message: err instanceof Error ? err.message : "No se pudo firmar la sesión." });
+    tokenStore.setStatus("checking");
+    const result = await fetchServerSession(getClient(), address);
+    if (result.kind === "ok") {
+      tokenStore.set(result.session);
+      setSession({
+        step: "ok",
+        address: result.session.address,
+        profileId: result.session.profileId,
+        supabase: true,
+      });
+    } else if (result.kind === "unconfigured") {
+      tokenStore.setStatus("unconfigured", result.message);
+      setSession({ step: "ok", address: result.address, supabase: false });
+    } else {
+      tokenStore.setStatus("error", result.message);
+      setSession({ step: "error", message: result.message });
     }
   }, [address, getClient]);
 
