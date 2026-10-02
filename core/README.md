@@ -6,3 +6,14 @@ Trabajo separado de `app/` (Victor), `server/` (Roberto) y `web/` (landing): se 
 
 - Diseño técnico: [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md)
 - Nunca subir claves ni archivos `.env`.
+
+## Cómo correr la app
+
+```bash
+cd core
+npm install
+cp .env.example .env.local   # completa los valores; nunca subas .env.local
+npm run dev                  # http://localhost:3000
+```
+
+Otros comandos: `npm run build`, `npm run start`, `npm test`.
