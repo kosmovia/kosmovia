@@ -4,6 +4,7 @@ Dueño: Alejandro. Cuentas con wallet (Pollar o Freighter), perfil con avatar ge
 
 Trabajo separado de `app/` (Victor), `server/` (Roberto) y `web/` (landing): se integra cuando el equipo esté de acuerdo.
 
+- **Probar en tu PC (Roberto, Victor, Carla):** [docs/PROBAR-EN-TU-PC.md](docs/PROBAR-EN-TU-PC.md)
 - Diseño técnico: [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md)
 - Nunca subir claves ni archivos `.env`.
 
