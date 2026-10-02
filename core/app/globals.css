@@ -137,3 +137,83 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   margin: 0 auto;
   padding: 2rem 1rem 4rem;
 }
+
+/* ===== Avatares y formulario de perfil ===== */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.avatar {
+  display: inline-block;
+  flex: none;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--bg);
+  line-height: 0;
+}
+.avatar svg { display: block; width: 100%; height: 100%; }
+
+.profile-form { display: grid; gap: 1.5rem; margin-top: 1.5rem; }
+.field { display: grid; gap: 0.35rem; }
+.field label { font-weight: 600; }
+.field-hint { margin: 0; font-size: 0.875rem; }
+.field-prefix { position: relative; }
+.field-prefix > span {
+  position: absolute;
+  left: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+.field-prefix > input { padding-left: 1.9rem; }
+input[aria-invalid="true"] { border-color: var(--danger); }
+.form-actions { display: grid; gap: 0.5rem; justify-items: start; }
+
+.avatar-picker {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+}
+.avatar-picker-main { display: grid; gap: 1.5rem; }
+.avatar-picker-label { font-weight: 600; margin: 0 0 0.75rem; }
+.avatar-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
+.avatar-option {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 4px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  background: transparent;
+  cursor: pointer;
+}
+.avatar-option:hover { border-color: var(--accent-strong); }
+.avatar-option[aria-checked="true"] {
+  border-color: var(--glow);
+  box-shadow: 0 0 0 3px rgba(94, 234, 212, 0.25);
+}
+.avatar-option .avatar { width: 100% !important; height: 100% !important; }
+.avatar-shuffle { margin-top: 1rem; }
+.avatar-hint { margin: 0.5rem 0 0; font-size: 0.875rem; }
+.avatar-preview { order: -1; margin: 0; display: grid; justify-items: center; gap: 0.75rem; text-align: center; }
+.avatar-preview-img { border: 2px solid var(--line); }
+
+@media (min-width: 640px) {
+  .avatar-picker-main { grid-template-columns: minmax(0, 1fr) 200px; align-items: start; }
+  .avatar-preview { order: 0; position: sticky; top: 80px; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .avatar-option { transition: border-color 0.15s, box-shadow 0.15s; }
+}
+/* ===== Fin avatares ===== */
