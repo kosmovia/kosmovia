@@ -1,4 +1,4 @@
-// Sugerencias de @usuario con la temática de Kosmovia (espacio + un guiño a Bolivia).
+// Sugerencias de @usuario con la temática de Kosmovia: solo el espacio.
 // Puro y sin importaciones: corre en el navegador, en el servidor y bajo node --test.
 // Todo lo que sale cumple USERNAME_RE (^[a-z0-9_]{3,20}$).
 
@@ -20,10 +20,11 @@ export const PREFIJOS = [
   "eclipse",
   "aurora",
   "vega",
-  "andes",
-  "illimani",
-  "titikaka",
-  "sajama",
+  "orion",
+  "sirius",
+  "saturno",
+  "meteoro",
+  "titan",
 ] as const;
 
 /** Segunda parte: quién eres en la tripulación. */
@@ -43,9 +44,9 @@ export const ROLES = [
   "builder",
   "dreamer",
   "hacker",
-  "llama",
-  "condor",
-  "puma",
+  "comandante",
+  "orbiter",
+  "rover",
 ] as const;
 
 const USERNAME_RE = /^[a-z0-9_]{3,20}$/;
@@ -53,7 +54,7 @@ const USERNAME_RE = /^[a-z0-9_]{3,20}$/;
 const pick = <T,>(xs: readonly T[], rnd: () => number): T => xs[Math.floor(rnd() * xs.length)];
 const num = (rnd: () => number, digits: 2 | 3) => String(Math.floor(rnd() * 10 ** digits)).padStart(digits, "0");
 
-/** Un @usuario temático al azar, p. ej. "kosmocadet21", "nova_pilot07" o "condor_andes42". */
+/** Un @usuario temático al azar, p. ej. "kosmocadet21", "nova_pilot07" o "rover_orion42". */
 export function usernameAleatorio(rnd: () => number = Math.random): string {
   for (let i = 0; i < 20; i++) {
     const p = pick(PREFIJOS, rnd);
@@ -62,7 +63,7 @@ export function usernameAleatorio(rnd: () => number = Math.random): string {
     let name: string;
     if (forma === 0) name = `${p}${r}${num(rnd, 2)}`; // kosmocadet21
     else if (forma === 1) name = `${p}_${r}${num(rnd, 2)}`; // nova_pilot07
-    else if (forma === 2) name = `${r}_${p}${num(rnd, 2)}`; // condor_andes42
+    else if (forma === 2) name = `${r}_${p}${num(rnd, 2)}`; // rover_orion42
     else name = `${p}${r}${num(rnd, 3)}`; // astroscout314
     if (USERNAME_RE.test(name)) return name;
   }
