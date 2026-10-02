@@ -140,11 +140,10 @@ export default function Landing({
           <div className="wrap hero-in">
             <Rings />
             <div className="hero-text">
-              <p className="badge" {...rv(0)}>{content.badge}</p>
-              <h1 {...rv(1)}>{cover.title}</h1>
-              <p className="tagline" {...rv(2)}>{cover.tagline}</p>
-              <p className="lead" {...rv(3)}>{cover.sub}</p>
-              <p className="actions" {...rv(4)}>
+              <h1 {...rv(0)}>{cover.title}</h1>
+              <p className="tagline" {...rv(1)}>{cover.tagline}</p>
+              <p className="lead" {...rv(2)}>{cover.sub}</p>
+              <p className="actions" {...rv(3)}>
                 <a className="btn btn-primary" href="#how">
                   {actions.how}
                 </a>

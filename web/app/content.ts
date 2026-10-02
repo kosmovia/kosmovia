@@ -1,5 +1,4 @@
 export type Content = {
-  badge: string;
   nav: {
     label: string;
     skip: string;
@@ -32,7 +31,6 @@ export type Content = {
 };
 
 export const en: Content = {
-  badge: "Building in public · Stellar Elite Bolivia",
   nav: {
     label: "Main",
     skip: "Skip to content",
@@ -106,7 +104,6 @@ export const en: Content = {
 };
 
 export const es: Content = {
-  badge: "Construyendo en público · Stellar Elite Bolivia",
   nav: {
     label: "Principal",
     skip: "Saltar al contenido",
