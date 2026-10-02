@@ -2,19 +2,19 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 // @ts-ignore: Node necesita la extensión .ts al importar; Next la resuelve sin ella.
-import { AVATAR_PALETTE, AVATAR_STYLES, isValidAvatarSeed, pickStyle, randomSeed, renderAvatar, suggestions } from "../lib/avatar/generator.ts";
+import { AVATAR_PALETTE, AVATAR_STYLES, LEGACY_AVATAR_STYLES, isValidAvatarSeed, pickStyle, randomSeed, renderAvatar, suggestions } from "../lib/avatar/generator.ts";
 
 const ADDR = "GDEMOKOSMOVIATESTNETXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
 
 test("mismo seed y estilo dan el mismo SVG", () => {
-  for (const s of AVATAR_STYLES) {
+  for (const s of LEGACY_AVATAR_STYLES) {
     assert.equal(renderAvatar("abc", s), renderAvatar("abc", s));
   }
   assert.equal(renderAvatar("abc"), renderAvatar("abc", pickStyle("abc")));
 });
 
 test("seeds distintos dan SVG distintos", () => {
-  for (const s of AVATAR_STYLES) {
+  for (const s of LEGACY_AVATAR_STYLES) {
     const set = new Set(Array.from({ length: 20 }, (_, i) => renderAvatar(`seed-${i}`, s)));
     assert.equal(set.size, 20, `estilo ${s}`);
   }
@@ -37,7 +37,7 @@ test("randomSeed da valores distintos", () => {
 
 test("el SVG solo usa colores de la paleta y nada peligroso", () => {
   const allowed = new Set(AVATAR_PALETTE.map((c: string) => c.toLowerCase()));
-  for (const s of AVATAR_STYLES) {
+  for (const s of LEGACY_AVATAR_STYLES) {
     for (let i = 0; i < 25; i++) {
       const svg = renderAvatar(`GX${i}`, s);
       assert.match(svg, /^<svg [^>]*viewBox="0 0 256 256"/);
@@ -115,8 +115,8 @@ test("isValidAvatarSeed acepta lo que genera la app y rechaza el resto", () => {
   for (const s of suggestions(ADDR)) assert.equal(isValidAvatarSeed(s.seed), true);
 });
 
-test("la migración 0002 lista exactamente los estilos del generador", () => {
-  const sql = readFileSync(new URL("../supabase/migrations/0002_hardening.sql", import.meta.url), "utf8");
+test("la última migración de Supabase lista exactamente los estilos del generador", () => {
+  const sql = readFileSync(new URL("../supabase/migrations/0003_kosmonautas.sql", import.meta.url), "utf8");
   const found = /avatar_style in\s*\(([^)]*)\)/.exec(sql);
   assert.ok(found, "falta el CHECK de avatar_style");
   const listed = [...found![1].matchAll(/'([a-z]+)'/g)].map((m) => m[1]).sort();

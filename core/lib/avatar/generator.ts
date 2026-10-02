@@ -1,6 +1,9 @@
 // Generador de avatares de Kosmovia. Puro y determinista: misma semilla + mismo estilo = mismo SVG.
-// Sin importaciones (corre directo bajo node --experimental-strip-types y bajo Next).
+// Solo importa ./kosmonautas.ts (corre directo bajo node --experimental-strip-types y bajo Next).
 // Solo usa la paleta de la plataforma, con variaciones de opacidad.
+// "kosmonauta" es el generador por rasgos (pixel art); los otros 7 quedan para perfiles viejos.
+
+import { decodificar, svg as kosmonautaSvg } from "./kosmonautas.ts";
 
 export const AVATAR_STYLES = [
   "astronaut",
@@ -10,9 +13,15 @@ export const AVATAR_STYLES = [
   "nebula",
   "portal",
   "eclipse",
+  "kosmonauta",
 ] as const;
 
 export type AvatarStyle = (typeof AVATAR_STYLES)[number];
+
+type LegacyStyle = Exclude<AvatarStyle, "kosmonauta">;
+
+/** Los 7 estilos del primer generador (semilla + estilo). */
+export const LEGACY_AVATAR_STYLES = AVATAR_STYLES.filter((s): s is LegacyStyle => s !== "kosmonauta");
 
 export const AVATAR_STYLE_LABELS: Record<AvatarStyle, string> = {
   astronaut: "Astronauta",
@@ -22,6 +31,7 @@ export const AVATAR_STYLE_LABELS: Record<AvatarStyle, string> = {
   nebula: "Nebulosa",
   portal: "Portal",
   eclipse: "Eclipse",
+  kosmonauta: "Kosmonauta",
 };
 
 export interface AvatarSuggestion {
@@ -463,7 +473,7 @@ function eclipse(c: Ctx) {
   b.push(sparkle(bx, by, r.range(14, 19), C.w, 1));
 }
 
-const RENDERERS: Record<AvatarStyle, (c: Ctx) => void> = {
+const RENDERERS: Record<LegacyStyle, (c: Ctx) => void> = {
   astronaut,
   planet,
   constellation,
@@ -498,8 +508,8 @@ export function clampSeed(seed: unknown): string {
   return typeof seed === "string" ? seed.slice(0, AVATAR_SEED_MAX) : "";
 }
 
-export function pickStyle(seed: string): AvatarStyle {
-  return AVATAR_STYLES[hash32(`${clampSeed(seed)}#style`) % AVATAR_STYLES.length];
+export function pickStyle(seed: string): LegacyStyle {
+  return LEGACY_AVATAR_STYLES[hash32(`${clampSeed(seed)}#style`) % LEGACY_AVATAR_STYLES.length];
 }
 
 /**
@@ -511,7 +521,8 @@ export function pickStyle(seed: string): AvatarStyle {
  */
 export function renderAvatar(seedInput: string, styleInput?: AvatarStyle | string | null): string {
   const seed = clampSeed(seedInput);
-  const st: AvatarStyle = isAvatarStyle(styleInput) ? styleInput : pickStyle(seed);
+  if (styleInput === "kosmonauta") return kosmonautaSvg(decodificar(seed));
+  const st: LegacyStyle = isAvatarStyle(styleInput) && styleInput !== "kosmonauta" ? styleInput : pickStyle(seed);
   const r = makeRng(`${seed}|${st}`);
   const P = `kv${hash32(`${seed}|${st}`).toString(36)}`;
   const ctx: Ctx = { r, P, d: [], b: [] };
@@ -526,12 +537,12 @@ export function renderAvatar(seedInput: string, styleInput?: AvatarStyle | strin
 
 // Sugerencias estables a partir de la dirección. Con 6 o menos, cada una tiene un estilo distinto.
 export function suggestions(base: string, count = 6): AvatarSuggestion[] {
-  const offset = hash32(`${base}#offset`) % AVATAR_STYLES.length;
+  const offset = hash32(`${base}#offset`) % LEGACY_AVATAR_STYLES.length;
   const out: AvatarSuggestion[] = [];
   for (let i = 0; i < count; i++) {
     out.push({
       seed: `${base}:${i}`,
-      style: AVATAR_STYLES[(offset + i) % AVATAR_STYLES.length],
+      style: LEGACY_AVATAR_STYLES[(offset + i) % LEGACY_AVATAR_STYLES.length],
     });
   }
   return out;

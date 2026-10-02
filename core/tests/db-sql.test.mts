@@ -190,8 +190,9 @@ test("the migration keeps the tables, CHECKs, indexes, quotas and the community 
   }
 });
 
-test("the migration lists exactly the avatar styles of the generator", () => {
-  const listed = /avatar_style in\s*\(([^)]*)\)/.exec(code)?.[1] ?? "";
+test("the latest migration lists exactly the avatar styles of the generator", () => {
+  const latest = readFileSync(new URL("../db/migrations/0002_kosmonautas.sql", import.meta.url), "utf8");
+  const listed = /avatar_style in\s*\(([^)]*)\)/.exec(latest)?.[1] ?? "";
   const styles = [...listed.matchAll(/'([a-z]+)'/g)].map((m) => m[1]);
   assert.deepEqual([...styles].sort(), [...AVATAR_STYLES].sort());
 });
@@ -206,6 +207,15 @@ test("constraint names the error mapper relies on exist in the migration", () =>
   ]) {
     assert.ok(code.includes(name), name);
   }
+});
+
+test("0002 keeps one profile per Kosmonauta and maps the duplicate to avatar_taken", () => {
+  const latest = readFileSync(new URL("../db/migrations/0002_kosmonautas.sql", import.meta.url), "utf8");
+  assert.match(latest, /create unique index if not exists profiles_kosmonauta_key\s+on public\.profiles \(avatar_seed\) where avatar_style = 'kosmonauta'/);
+  assert.match(latest, /add constraint profiles_kosmonauta_code/);
+  const dup = classifyDbError({ code: "23505", constraint: "profiles_kosmonauta_key" });
+  assert.equal(dup.status, 409);
+  assert.equal(dup.code, "avatar_taken");
 });
 
 // ------------------------------------------------------------------- errors

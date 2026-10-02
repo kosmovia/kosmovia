@@ -1,5 +1,6 @@
 import { isChannelType, type ChannelType } from "./authz.ts";
 import { isAvatarStyle, isValidAvatarSeed } from "./avatar/generator.ts";
+import { esCodigoValido } from "./avatar/kosmonautas.ts";
 import { isUuid } from "./ids.ts";
 import { fromHandle } from "./mappers.ts";
 import { cleanMessage, communityNameError, slugError, USERNAME_RE } from "./validation.ts";
@@ -58,6 +59,7 @@ export function parseProfileCreate(body: unknown): Parsed<ProfileCreate> {
   if (style === null || (style !== undefined && !isAvatarStyle(style))) {
     return fail("Ese estilo de avatar no es válido. Elige otro.");
   }
+  if (style === "kosmonauta" && !esCodigoValido(seed)) return fail("Ese avatar no es válido. Elige otro.");
 
   return {
     ok: true,
@@ -102,6 +104,8 @@ export function parseProfileUpdate(body: unknown): Parsed<ProfileUpdate> {
     return fail("Ese estilo de avatar no es válido. Elige otro.");
   }
   if (style !== undefined) out.avatarStyle = style;
+  // Un Kosmonauta se guarda siempre con su código (estilo y semilla juntos).
+  if (style === "kosmonauta" && !esCodigoValido(seed)) return fail("Ese avatar no es válido. Elige otro.");
 
   const bio = optionalString(body, "bio");
   if (bio === null) return fail("Revisa tu bio.");

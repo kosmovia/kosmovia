@@ -6,6 +6,7 @@ import { apiRequest } from "../lib/api-client.ts";
 import { isApiBackend } from "../lib/backend.ts";
 import { fromHandle, isUniqueViolation, mapProfile, type ProfileRow } from "../lib/mappers.ts";
 import { isAvatarStyle, isValidAvatarSeed } from "../lib/avatar/generator.ts";
+import { esCodigoValido } from "../lib/avatar/kosmonautas.ts";
 import { USERNAME_RE } from "../lib/validation.ts";
 import { useSupabase } from "./useSupabase.ts";
 
@@ -29,6 +30,9 @@ function profileInputError(input: Partial<ProfileInput> & { bio?: string }): str
   if (input.avatarStyle !== undefined && !isAvatarStyle(input.avatarStyle)) {
     return "Ese estilo de avatar no es válido. Elige otro.";
   }
+  if (input.avatarStyle === "kosmonauta" && !esCodigoValido(input.avatarSeed)) {
+    return "Ese avatar no es válido. Elige otro.";
+  }
   if (input.displayName !== undefined && input.displayName.trim().length > DISPLAY_NAME_MAX) {
     return `El nombre debe tener ${DISPLAY_NAME_MAX} caracteres como máximo.`;
   }
@@ -46,6 +50,7 @@ function describeError(error: NonNullable<PgError>): string {
   if (isUniqueViolation(error)) {
     const text = `${error.message ?? ""} ${error.details ?? ""}`;
     if (/username/i.test(text)) return USERNAME_TAKEN;
+    if (/kosmonauta/i.test(text)) return "Ese Kosmonauta ya es de otra persona. Cambia al menos un rasgo.";
     return "Ya tienes un perfil creado.";
   }
   if (error.code === "23514") return "Revisa tu @usuario y tu nombre: no cumplen el formato.";

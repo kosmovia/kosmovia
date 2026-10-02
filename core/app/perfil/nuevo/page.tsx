@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState, type FormEvent } from "react";
-import { AvatarPicker } from "@/components/AvatarPicker";
-import { AVATAR_STYLE_LABELS, type AvatarSuggestion } from "@/lib/avatar/generator";
+import { KosmonautaPicker } from "@/components/KosmonautaPicker";
+import { atributos, decodificar } from "@/lib/avatar/kosmonautas";
 import { PollarGate } from "@/lib/pollar";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { useProfile } from "@/hooks/useProfile";
@@ -34,7 +34,7 @@ function ProfileForm({ address }: { address: string | null }) {
   const [username, setUsername] = useState("");
   const [touched, setTouched] = useState(false);
   const [displayName, setDisplayName] = useState("");
-  const [avatar, setAvatar] = useState<AvatarSuggestion | null>(null);
+  const [avatar, setAvatar] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -52,8 +52,8 @@ function ProfileForm({ address }: { address: string | null }) {
     const result = await create({
       username,
       displayName: displayName.trim() || username,
-      avatarSeed: avatar.seed,
-      avatarStyle: avatar.style,
+      avatarSeed: avatar,
+      avatarStyle: "kosmonauta",
     });
     setSaving(false);
     if (result.ok) router.push("/comunidades");
@@ -68,7 +68,7 @@ function ProfileForm({ address }: { address: string | null }) {
   return (
     <>
       <h1>Crear perfil</h1>
-      <p className="muted">Elige tu @usuario, tu nombre y un avatar generado para ti.</p>
+      <p className="muted">Elige tu @usuario, tu nombre y arma tu Kosmonauta.</p>
       {address === null ? (
         <p className="muted">
           <Link href="/">Entrar</Link> para usar tu wallet.
@@ -120,7 +120,7 @@ function ProfileForm({ address }: { address: string | null }) {
           />
         </div>
 
-        <AvatarPicker address={address ?? DEMO_ADDRESS} username={valid ? username : undefined} onChange={setAvatar} />
+        <KosmonautaPicker address={address ?? DEMO_ADDRESS} onChange={setAvatar} />
 
         <div className="form-actions">
           <button type="submit" className="btn btn-primary" disabled={!canSubmit} aria-describedby="profile-submit-note">
@@ -128,7 +128,17 @@ function ProfileForm({ address }: { address: string | null }) {
           </button>
           <p id="profile-submit-note" className="muted field-hint">
             {note}
-            {avatar ? <span className="visually-hidden"> Avatar elegido: {AVATAR_STYLE_LABELS[avatar.style]}.</span> : null}
+            {avatar ? (
+              <span className="visually-hidden">
+                {" "}
+                Avatar elegido:{" "}
+                {atributos(decodificar(avatar))
+                  .slice(0, -1)
+                  .map((a) => `${a.trait_type} ${a.value}`)
+                  .join(", ")}
+                .
+              </span>
+            ) : null}
           </p>
           {submitError ? (
             <p className="field-hint error" role="alert">

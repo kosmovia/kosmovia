@@ -158,6 +158,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   line-height: 0;
 }
 .avatar svg { display: block; width: 100%; height: 100%; }
+.avatar-pixel { border-radius: 22%; image-rendering: pixelated; }
 
 .profile-form { display: grid; gap: 1.5rem; margin-top: 1.5rem; }
 .field { display: grid; gap: 0.35rem; }
@@ -176,44 +177,100 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
 input[aria-invalid="true"] { border-color: var(--danger); }
 .form-actions { display: grid; gap: 0.5rem; justify-items: start; }
 
-.avatar-picker {
+/* Generador de Kosmonautas (registro) */
+.gen {
+  margin: 0;
+  min-width: 0;
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: minmax(0, 1fr);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 1.25rem;
 }
-.avatar-picker-main { display: grid; gap: 1.5rem; }
-.avatar-picker-label { font-weight: 600; margin: 0 0 0.75rem; }
-.avatar-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
-.avatar-option {
-  display: grid;
-  place-items: center;
+@media (min-width: 760px) {
+  .gen { grid-template-columns: 280px minmax(0, 1fr); }
+  .gen-suggest { grid-column: 1 / -1; }
+}
+
+.gen-preview { display: grid; gap: 1rem; align-content: start; justify-items: center; }
+.gen-canvas {
+  width: 100%;
+  max-width: 280px;
   aspect-ratio: 1;
-  min-width: 44px;
-  min-height: 44px;
-  padding: 4px;
-  border-radius: 50%;
   border: 2px solid var(--line);
-  background: transparent;
+  border-radius: var(--radius);
+  overflow: hidden;
+  image-rendering: pixelated;
+}
+.gen-canvas svg, .gen-suggest-item svg { display: block; width: 100%; height: 100%; }
+
+.gen-traits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: center;
+}
+.gen-traits li {
+  display: grid;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  font-size: 0.75rem;
+  line-height: 1.3;
+  text-align: center;
+}
+.gen-traits strong { color: var(--glow); font-size: 0.85rem; }
+
+.gen-controls { display: grid; gap: 0.5rem; align-content: start; }
+.gen-row {
+  display: grid;
+  grid-template-columns: 6.5rem 44px minmax(0, 1fr) 44px 44px;
+  align-items: center;
+  gap: 0.4rem;
+}
+.gen-row-label { font-weight: 600; }
+@media (max-width: 479px) {
+  .gen { padding: 1rem; }
+  .gen-row { grid-template-columns: 4.75rem 44px minmax(0, 1fr) 44px 44px; gap: 0.3rem; }
+  .gen-row-value small { display: none; }
+}
+.gen-row-value { text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gen-arrow, .gen-lock { padding: 0; font-size: 1.25rem; }
+.gen-lock[aria-pressed="true"] { border-color: var(--accent); background: var(--line); }
+.gen-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+.gen-hint { font-size: 0.875rem; margin: 0; }
+
+.gen-suggest-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.gen-suggest-head h3 { margin: 0; font-size: 1rem; }
+.gen-suggest-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+@media (min-width: 760px) {
+  .gen-suggest-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+.gen-suggest-item {
+  padding: 0;
+  aspect-ratio: 1;
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: none;
   cursor: pointer;
 }
-.avatar-option:hover { border-color: var(--accent-strong); }
-.avatar-option[aria-checked="true"] {
-  border-color: var(--glow);
-  box-shadow: 0 0 0 3px rgba(94, 234, 212, 0.25);
-}
-.avatar-option .avatar { width: 100% !important; height: 100% !important; }
-.avatar-shuffle { margin-top: 1rem; }
-.avatar-hint { margin: 0.5rem 0 0; font-size: 0.875rem; }
-.avatar-preview { order: -1; margin: 0; display: grid; justify-items: center; gap: 0.75rem; text-align: center; }
-.avatar-preview-img { border: 2px solid var(--line); }
-
-@media (min-width: 640px) {
-  .avatar-picker-main { grid-template-columns: minmax(0, 1fr) 200px; align-items: start; }
-  .avatar-preview { order: 0; position: sticky; top: 80px; }
-}
+.gen-suggest-item:hover { border-color: var(--accent-strong); }
+.gen-suggest-item[aria-pressed="true"] { border-color: var(--glow); box-shadow: 0 0 0 3px rgba(94, 234, 212, 0.25); }
+.gen > legend { float: left; width: 100%; font-weight: 600; margin: 0 0 0.25rem; padding: 0; }
 
 @media (prefers-reduced-motion: no-preference) {
-  .avatar-option { transition: border-color 0.15s, box-shadow 0.15s; }
+  .gen-suggest-item { transition: border-color 0.15s; }
 }
 /* ===== Fin avatares ===== */

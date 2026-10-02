@@ -63,13 +63,18 @@ El **chat en tiempo real** usa Supabase Realtime sobre `messages`, filtrado por 
 
 ## 4. Avatar al crear la cuenta
 
-- **Generador propio** en SVG, a partir de una semilla. Solo usa la paleta de Kosmovia: `#061314`, `#0B1F21`, `#14B8A6`, `#2DD4BF`, `#5EEAD4` y `#F2FBFA`.
-- **Temas:** astronauta con casco y visor, planeta con anillos, constelación, cohete, nebulosa y portal de anillos, sobre un fondo de estrellas.
+- **Kosmonautas:** pixel art de 24×24 armado por capas, solo con colores de la paleta (`lib/avatar/kosmonautas.ts`).
+  - **Rasgos:** fondo, traje, casco, ojos, boca, visor y accesorio, con 5 a 7 opciones cada uno.
+  - **Rareza:** por ahora todos son Común; Raro y Épico vendrán después.
 - **Al registrarse:**
-  - se muestran **6 sugerencias** generadas desde la dirección de la wallet;
-  - el botón **"Aleatorio"** genera otras;
-  - el usuario elige una.
-- **Se guarda solo `avatar_seed` y `avatar_style`.** El SVG se vuelve a dibujar igual en cualquier lado, sin ocupar almacenamiento.
+  - el usuario elige cada rasgo con flechas, o usa **"Aleatorio"**;
+  - el **candado** deja fijo un rasgo para que Aleatorio no lo cambie;
+  - hay **6 sugerencias** desde la dirección de la wallet y un botón "Otras".
+- **Se guarda solo el código de rasgos** en `avatar_seed` (por ejemplo `k1.3.0.1.4.2.0.5`), con `avatar_style = 'kosmonauta'`. El SVG se vuelve a dibujar igual en cualquier lado.
+  - Opciones nuevas van siempre al final de su lista: el código usa la posición.
+  - Cada combinación es de una sola persona (índice único `profiles_kosmonauta_key`).
+  - Los 7 estilos del primer generador siguen funcionando para perfiles viejos.
+- **Los rasgos ya salen en el formato de OpenSea** (`attributes: [{trait_type, value}]`), listos para el NFT.
 - **Después de la etapa A:** acuñar el avatar como NFT en testnet con SEP-50 (contratos `non_fungible` de OpenZeppelin), a cargo de Roberto.
 
 ## 5. Conectar X (nivel de confianza 1)
