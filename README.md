@@ -38,7 +38,7 @@ Bolivia first, then the world. Stages A to D are what we commit to for October 2
 
 | When | Tools and protocols |
 | --- | --- |
-| Oct 2026 (A–D) | Next.js on Vercel · Pollar SDK (sign-in, USDC wallet, sponsored fees) · Firebase (database) · Stellar testnet with USDC · Soroban contracts for escrow and split payments · a KYC provider for businesses (to be chosen) |
+| Oct 2026 (A–D) | Next.js on Vercel · Pollar SDK (sign-in, USDC wallet, sponsored fees) · Postgres (Render for testing, Supabase next) · Stellar testnet with USDC · Soroban contracts for escrow and split payments · a KYC provider for businesses (to be chosen) |
 | 2027 | Mini apps: sandboxed iframe + our own TypeScript SDK · Scale: mainnet, cash on-ramps (SEP-24), PWA |
 
 Free tools only, testnet until the team decides otherwise.
@@ -58,6 +58,7 @@ Built in the Stellar Elite Bolivia (TechRebel) program.
 | --- | --- | --- |
 | `web` | Alejandro and Victor | Landing + web app, deployed on Vercel |
 | `app` | Victor | Victor — the dApp (web client: login, communities, chat, wallet). Victor's landing can replace web/ through a PR. |
+| `core` | Alejandro | Stage A working end to end on testnet: Pollar login (Google, email, Freighter), profiles with Kosmonauta avatars, communities and chat, X verification. Its API and database are what `app` will plug into. |
 | `server` | Roberto and Alejandro | Backend services |
 | `contracts` | Roberto | Soroban contracts (Rust): escrow and split payments |
 | `design` | Carla | Brand assets and Figma exports |
