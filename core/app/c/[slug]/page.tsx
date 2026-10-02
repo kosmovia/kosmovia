@@ -26,7 +26,7 @@ export default function Page() {
   const slug = params.slug;
   const { configured, blocker, community, members, myRole, loading, notFound, error, reload } = useCommunity(slug);
   const { join } = useCommunities();
-  const { channels } = useChannels(myRole ? (community?.id ?? null) : null);
+  const { channels } = useChannels(myRole ? (community?.id ?? null) : null, community?.slug);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
 
@@ -82,7 +82,7 @@ export default function Page() {
               className="btn btn-primary"
               onClick={async () => {
                 setJoinError(null);
-                const result = await join(community.id);
+                const result = await join(community.id, community.slug);
                 if (result.ok) await reload();
                 else setJoinError(result.error);
               }}

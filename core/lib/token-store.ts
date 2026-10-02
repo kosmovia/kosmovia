@@ -1,8 +1,11 @@
 /**
- * In-memory holder of the Supabase session token (browser). The Supabase
+ * In-memory holder of the session (browser). With the Supabase backend the
  * client asks it for the token on every request; when less than 5 minutes
  * remain it calls the registered refresher (which re-runs POST
- * /api/auth/session). Nothing is persisted: a reload signs in again.
+ * /api/auth/session). With the api backend `token` is "" (the real session is
+ * the httpOnly cookie) and this only tracks who is logged in and until when.
+ * Nothing is persisted: a reload signs in again (api backend: it first tries the
+ * cookie, see lib/session-client.ts).
  */
 
 export interface StoredSession {
@@ -82,6 +85,10 @@ export function createTokenStore(now: () => number = Date.now) {
       return () => {
         listeners.delete(listener);
       };
+    },
+    /** Re-runs the registered refresher now (api backend: a 401 means the cookie is gone or expired). */
+    refreshNow(): Promise<StoredSession | null> {
+      return refresh();
     },
     /** Valid token or null. Refreshes first when <5 min are left. */
     async getToken(): Promise<string | null> {

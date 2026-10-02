@@ -1,7 +1,12 @@
 import { requireSignedAddress } from "../../../../lib/auth.ts";
+import { serverBackend } from "../../../../lib/backend.ts";
+import { dbErrorCode } from "../../../../lib/db/errors.ts";
+import { dbConfigured } from "../../../../lib/db/pool.ts";
+import * as repo from "../../../../lib/db/repo.ts";
+import { profileIdFromWallet } from "../../../../lib/ids.ts";
 import { clientIp, takeAll, tooManyRequests } from "../../../../lib/rate-limit.ts";
 import { xLimits } from "../../../../lib/x-limits.ts";
-import { persistXVerification } from "../../../../lib/x-persist.ts";
+import { persistXVerification, type PersistResult } from "../../../../lib/x-persist.ts";
 import { MIN_SECRET_LENGTH, verifyXPost, VERIFY_ERRORS } from "../../../../lib/x-verify.ts";
 
 export const runtime = "nodejs";
@@ -71,11 +76,7 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: result.error, code: result.code }, { status: result.status });
   }
 
-  const saved = await persistXVerification({
-    wallet: auth.address,
-    handle: result.handle,
-    verifiedAt: result.verifiedAt,
-  });
+  const saved = await persistResult({ wallet: auth.address, handle: result.handle, verifiedAt: result.verifiedAt });
   if (saved.persisted) {
     return Response.json({ handle: result.handle, verifiedAt: result.verifiedAt, persisted: true });
   }
@@ -88,4 +89,28 @@ export async function POST(request: Request): Promise<Response> {
     persisted: false,
     persistReason: saved.reason,
   });
+}
+
+/**
+ * Where the verified account is saved: with KOSMOVIA_DATA_BACKEND=api straight
+ * into Postgres through the repo (x_handle, x_verified_at, trust_level = 1,
+ * never 2; a handle already taken is a unique violation -> x_taken); otherwise
+ * through the Supabase `kosmovia_verifier` role.
+ */
+async function persistResult(opts: { wallet: string; handle: string; verifiedAt: string }): Promise<PersistResult> {
+  if (serverBackend() !== "api") return persistXVerification(opts);
+  if (!dbConfigured()) return { persisted: false, reason: "not_configured" };
+  try {
+    return await repo.persistXVerification({
+      profileId: profileIdFromWallet(opts.wallet),
+      wallet: opts.wallet,
+      handle: opts.handle,
+      verifiedAt: opts.verifiedAt,
+    });
+  } catch (err) {
+    // 23505 on lower(x_handle): that X account belongs to another profile.
+    if (dbErrorCode(err) === "23505") return { persisted: false, reason: "x_taken" };
+    console.warn(`x.persist.failed backend=api code=${dbErrorCode(err)}`);
+    return { persisted: false, reason: "error" };
+  }
 }

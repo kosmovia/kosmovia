@@ -16,7 +16,9 @@ export type ServerSession =
  * Proves to our own server who the user is (SEP-53 signature, see lib/auth.ts)
  * by calling POST /api/auth/session once per login. With Freighter this opens
  * one signature popup. On success the Supabase token goes to lib/token-store
- * (the data hooks read it from there). Only call it under <PollarGate>.
+ * (the data hooks read it from there). With the api backend there is no token:
+ * the server sets an httpOnly cookie, and on a reload the cookie is tried first
+ * so the wallet is not asked to sign again. Only call it under <PollarGate>.
  */
 export function useServerSession(address: string | null, verified: boolean) {
   const { getClient } = usePollar();
@@ -32,7 +34,7 @@ export function useServerSession(address: string | null, verified: boolean) {
     }
     setSession({ step: "checking" });
     tokenStore.setStatus("checking");
-    const result = await fetchServerSession(getClient(), address);
+    const result = await fetchServerSession(getClient(), address, { allowCookie: true });
     if (result.kind === "ok") {
       tokenStore.set(result.session);
       setSession({

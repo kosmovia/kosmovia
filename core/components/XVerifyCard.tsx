@@ -10,7 +10,7 @@ import { useProfile } from "../hooks/useProfile.ts";
 
 const NOT_SAVED: Record<PersistReason, string> = {
   no_profile: "Verificamos tu cuenta, pero todavía no tienes perfil donde guardarla. Crea tu perfil y vuelve a verificar.",
-  not_configured: "Verificamos tu cuenta, pero el servidor aún no puede guardarla en tu perfil (falta configurar Supabase).",
+  not_configured: "Verificamos tu cuenta, pero el servidor aún no puede guardarla en tu perfil (falta configurar la base de datos).",
   error: "Verificamos tu cuenta, pero no se pudo guardar en tu perfil. Intenta verificar de nuevo en un momento.",
 };
 

@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { User } from "../types/index.ts";
+import { apiRequest } from "../lib/api-client.ts";
+import { isApiBackend } from "../lib/backend.ts";
 import { fromHandle, isUniqueViolation, mapProfile, type ProfileRow } from "../lib/mappers.ts";
 import { isAvatarStyle, isValidAvatarSeed } from "../lib/avatar/generator.ts";
 import { USERNAME_RE } from "../lib/validation.ts";
@@ -52,24 +54,31 @@ function describeError(error: NonNullable<PgError>): string {
 
 /** Own profile: read, create and update. */
 export function useProfile() {
-  const { client, session, blocker } = useSupabase();
+  const { client, session, blocker, configured } = useSupabase();
+  const api = isApiBackend();
   const profileId = session?.profileId ?? null;
   const [profile, setProfile] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!client || !profileId) {
+    if (!configured || !profileId) {
       setProfile(null);
       return;
     }
     setLoading(true);
     setError(null);
-    const { data, error: err } = await client.from("profiles").select("*").eq("id", profileId).maybeSingle();
-    if (err) setError("No se pudo cargar tu perfil.");
-    else setProfile(data ? mapProfile(data as ProfileRow) : null);
+    if (api) {
+      const res = await apiRequest<{ profile: ProfileRow | null }>("/api/profile");
+      if (!res.ok) setError(res.status === 503 ? res.error : "No se pudo cargar tu perfil.");
+      else setProfile(res.data.profile ? mapProfile(res.data.profile) : null);
+    } else if (client) {
+      const { data, error: err } = await client.from("profiles").select("*").eq("id", profileId).maybeSingle();
+      if (err) setError("No se pudo cargar tu perfil.");
+      else setProfile(data ? mapProfile(data as ProfileRow) : null);
+    }
     setLoading(false);
-  }, [client, profileId]);
+  }, [api, configured, client, profileId]);
 
   useEffect(() => {
     void load();
@@ -77,11 +86,30 @@ export function useProfile() {
 
   const create = useCallback(
     async (input: ProfileInput): Promise<ProfileResult> => {
-      if (!client || !session) return { ok: false, error: blocker ?? "Entra con tu wallet para continuar." };
+      if (!configured || !session) return { ok: false, error: blocker ?? "Entra con tu wallet para continuar." };
       const username = fromHandle(input.username);
       if (!USERNAME_RE.test(username)) return { ok: false, error: "Revisa tu @usuario." };
       const invalid = profileInputError(input);
       if (invalid) return { ok: false, error: invalid };
+
+      if (api) {
+        // The server takes the id and wallet from the session cookie, not from here.
+        const res = await apiRequest<{ profile: ProfileRow }>("/api/profile", {
+          method: "POST",
+          body: {
+            username,
+            displayName: input.displayName.trim(),
+            avatarSeed: input.avatarSeed,
+            avatarStyle: input.avatarStyle,
+          },
+        });
+        if (!res.ok) return { ok: false, error: res.error };
+        const mapped = mapProfile(res.data.profile);
+        setProfile(mapped);
+        return { ok: true, profile: mapped };
+      }
+
+      if (!client) return { ok: false, error: blocker ?? "Entra con tu wallet para continuar." };
       const { data, error: err } = await client
         .from("profiles")
         .insert({
@@ -99,14 +127,34 @@ export function useProfile() {
       setProfile(mapped);
       return { ok: true, profile: mapped };
     },
-    [client, session, blocker],
+    [api, configured, client, session, blocker],
   );
 
   const update = useCallback(
     async (input: Partial<ProfileInput> & { bio?: string }): Promise<ProfileResult> => {
-      if (!client || !session) return { ok: false, error: blocker ?? "Entra con tu wallet para continuar." };
+      if (!configured || !session) return { ok: false, error: blocker ?? "Entra con tu wallet para continuar." };
       const invalid = profileInputError(input);
       if (invalid) return { ok: false, error: invalid };
+
+      if (api) {
+        const body: Record<string, string> = {};
+        if (input.username !== undefined) {
+          const username = fromHandle(input.username);
+          if (!USERNAME_RE.test(username)) return { ok: false, error: "Revisa tu @usuario." };
+          body.username = username;
+        }
+        if (input.displayName !== undefined) body.displayName = input.displayName.trim();
+        if (input.avatarSeed !== undefined) body.avatarSeed = input.avatarSeed;
+        if (input.avatarStyle !== undefined) body.avatarStyle = input.avatarStyle;
+        if (input.bio !== undefined) body.bio = input.bio.trim();
+        const res = await apiRequest<{ profile: ProfileRow }>("/api/profile", { method: "PATCH", body });
+        if (!res.ok) return { ok: false, error: res.error };
+        const mapped = mapProfile(res.data.profile);
+        setProfile(mapped);
+        return { ok: true, profile: mapped };
+      }
+
+      if (!client) return { ok: false, error: blocker ?? "Entra con tu wallet para continuar." };
       const patch: Record<string, string> = {};
       if (input.username !== undefined) {
         const username = fromHandle(input.username);
@@ -128,7 +176,7 @@ export function useProfile() {
       setProfile(mapped);
       return { ok: true, profile: mapped };
     },
-    [client, session, blocker],
+    [api, configured, client, session, blocker],
   );
 
   return { profile, loading, error, blocker, reload: load, create, update };

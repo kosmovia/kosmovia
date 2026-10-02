@@ -6,19 +6,24 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --test \"tests/*.test.mts\""
+    "test": "node --test \"tests/*.test.mts\"",
+    "db:migrate": "node --env-file-if-exists=.env.local scripts/db-migrate.mjs",
+    "db:check": "node --env-file-if-exists=.env.local scripts/db-check.mjs",
+    "smoke:api": "node --env-file-if-exists=.env.local scripts/smoke-api.mjs"
   },
   "dependencies": {
     "@pollar/core": "^0.11.3",
     "@pollar/react": "^0.11.3",
     "@supabase/supabase-js": "^2.117.2",
     "next": "^16.3.5",
+    "pg": "^8.23.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
     "@stellar/stellar-base": "^15.0.0",
     "@types/node": "^22.20.3",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
     "typescript": "^7.0.2"
   }

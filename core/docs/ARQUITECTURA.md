@@ -116,6 +116,18 @@ Resumen de lo que protege cada pieza (detalle en `supabase/README.md` y `docs/PO
 - **Verificación de X.** El servidor escribe `x_handle`, `x_verified_at` y `trust_level = 1` con el rol `kosmovia_verifier` (JWT de 2 minutos, permisos por columna, nunca nivel 2), sin `service_role`. Un índice único hace que una cuenta de X pertenezca a un solo perfil.
 - **Secretos.** Las claves privadas viven solo en variables de entorno del servidor; los logs no imprimen direcciones, firmas, tokens ni claves.
 
+## 8 bis. Modo "api" (Postgres plano, para pruebas)
+
+Además de Supabase hay un segundo camino de datos, pensado para probar la etapa A en una base Postgres común (la de pruebas de Roberto en Render). Se elige con `KOSMOVIA_DATA_BACKEND=api` (servidor) y `NEXT_PUBLIC_KOSMOVIA_DATA_BACKEND=api` (navegador); sin ellas todo sigue como en Supabase.
+
+- **Sesión:** la misma prueba SEP-53, pero `POST /api/auth/session` pone una cookie `httpOnly` `kosmovia_session` (JWT HS256 con `SESSION_SECRET`, 12 horas) en vez de devolver un token. `lib/session-cookie.ts`.
+- **Datos:** el navegador llama a rutas REST (`/api/profile`, `/api/communities`, `/api/communities/[slug]/...`, `/api/channels/[id]/messages`); el servidor usa `pg` con consultas parametrizadas (`lib/db/`). Sin RLS, la autorización (miembro, owner/admin, autor = sesión) se hace en el servidor con `lib/authz.ts`; las cuotas siguen siendo triggers de la base.
+- **Chat:** sin Realtime, consulta cada 2,5 s con la pestaña visible.
+- **Esquema:** `db/migrations/0001_stage_a.sql` (`npm run db:migrate`).
+- Cómo aplicarlo, probarlo y volver a Supabase: `db/README.md`.
+
+Variables nuevas: `KOSMOVIA_DATA_BACKEND` · `NEXT_PUBLIC_KOSMOVIA_DATA_BACKEND` · `DATABASE_URL` · `SESSION_SECRET` (y `DATABASE_SSL`, opcional).
+
 ## 9. Orden de trabajo
 
 1. Estructura de `core/` y este documento.

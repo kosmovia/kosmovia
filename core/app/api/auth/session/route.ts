@@ -1,6 +1,15 @@
 import { requireSignedAddress } from "../../../../lib/auth.ts";
+import { serverBackend } from "../../../../lib/backend.ts";
 import { profileIdFromWallet } from "../../../../lib/ids.ts";
 import { readJwtConfig, signSessionJwt } from "../../../../lib/jwt.ts";
+import {
+  isSecureContext,
+  readSessionSecret,
+  requireSession,
+  SESSION_TTL_SECONDS,
+  sessionSetCookie,
+  signSessionCookie,
+} from "../../../../lib/session-cookie.ts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,17 +19,23 @@ const NO_STORE = { "Cache-Control": "no-store" };
 /**
  * POST /api/auth/session
  *
- * Verifies the SEP-53 proof in the `x-kosmovia-proof` header, then mints the
- * Supabase session JWT (ES256, 1 hour). `sub` is a UUID v5 of the wallet, so no
- * database lookup is needed and `profiles.id` uses that same id. The address
- * comes from the signature, never from the body.
+ * Verifies the SEP-53 proof in the `x-kosmovia-proof` header. The address comes
+ * from the signature, never from the body. Then, by backend:
  *
- * Without SUPABASE_JWT_PRIVATE_KEY / SUPABASE_JWT_KEY_ID it answers 503 with
- * code "supabase_not_configured" and still returns the verified address.
+ * - supabase (default): mints the Supabase session JWT (ES256, 1 hour) and
+ *   returns it in the body. `sub` is a UUID v5 of the wallet, so no database
+ *   lookup is needed. Without SUPABASE_JWT_PRIVATE_KEY / SUPABASE_JWT_KEY_ID it
+ *   answers 503 "supabase_not_configured" and still returns the address.
+ * - api (KOSMOVIA_DATA_BACKEND=api): sets the httpOnly `kosmovia_session`
+ *   cookie (HS256, 12 hours, lib/session-cookie.ts) and returns
+ *   `{ address, profileId, expiresAt, backend: "api" }`: no token in the body.
+ *   Without SESSION_SECRET (32+ bytes) it answers 503 "session_not_configured".
  */
 export async function POST(request: Request): Promise<Response> {
   const auth = requireSignedAddress(request);
   if (!auth.ok) return auth.response;
+
+  if (serverBackend() === "api") return issueCookieSession(auth.address);
 
   const config = readJwtConfig();
   if (!config.ok) {
@@ -55,4 +70,46 @@ export async function POST(request: Request): Promise<Response> {
       { status: 503, headers: NO_STORE },
     );
   }
+}
+
+function issueCookieSession(address: string): Response {
+  const secret = readSessionSecret();
+  if (!secret) {
+    return Response.json(
+      {
+        address,
+        error: "Falta configurar SESSION_SECRET (32 caracteres o más) en el servidor: no se pudo emitir la sesión.",
+        code: "session_not_configured",
+      },
+      { status: 503, headers: NO_STORE },
+    );
+  }
+  const { token, expiresAt } = signSessionCookie({ secret, wallet: address });
+  return Response.json(
+    { address, profileId: profileIdFromWallet(address), expiresAt, backend: "api" },
+    {
+      headers: {
+        ...NO_STORE,
+        "Set-Cookie": sessionSetCookie(token, SESSION_TTL_SECONDS, isSecureContext()),
+      },
+    },
+  );
+}
+
+/**
+ * GET /api/auth/session (api backend only)
+ *
+ * Reads the cookie back: lets a page reload keep its session without asking the
+ * wallet to sign again. 401 when there is no valid cookie.
+ */
+export async function GET(request: Request): Promise<Response> {
+  if (serverBackend() !== "api") {
+    return Response.json({ error: "No encontrado.", code: "backend_disabled" }, { status: 404, headers: NO_STORE });
+  }
+  const session = requireSession(request);
+  if (!session.ok) return session.response;
+  return Response.json(
+    { address: session.wallet, profileId: session.profileId, expiresAt: session.expiresAt, backend: "api" },
+    { headers: NO_STORE },
+  );
 }

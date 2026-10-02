@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Message, User } from "../types/index.ts";
+import { apiRequest } from "../lib/api-client.ts";
+import { isApiBackend } from "../lib/backend.ts";
 import {
   AUTHOR_COLUMNS,
   capMessages,
@@ -25,21 +27,36 @@ export { PAGE_SIZE };
 /** Authors remembered per hook instance, at most (oldest forgotten first). */
 const MAX_CACHED_AUTHORS = 500;
 
+/** api backend: how often the open tab asks for new messages. */
+export const POLL_INTERVAL_MS = 2_500;
+/** After a failed poll the wait grows up to this, and snaps back on success. */
+const POLL_MAX_BACKOFF_MS = 10_000;
+/** Every this many polls the newest page is fetched instead of `after=`, a safety net for a lost cursor. */
+const POLL_FULL_REFRESH_EVERY = 20;
+
+/** What the api backend returns per message: the row plus its slim author, so no author lookups are needed. */
+type WireMessage = MessageRow & { author: AuthorRow };
+
 export type SendResult = { ok: true } | { ok: false; error: string };
 
 /**
- * Messages of a channel: the newest page, live inserts via Realtime, "load
- * older" pagination, and sending.
+ * Messages of a channel: the newest page, live updates, "load older"
+ * pagination, and sending.
  *
+ * - supabase backend: live inserts arrive through Realtime.
+ * - api backend: there is no push, so the open tab polls
+ *   GET /api/channels/[id]/messages?after=<newest id> every 2.5 s while it is
+ *   visible (paused when hidden, one immediate poll when it comes back).
  * - Memory is bounded: at most MAX_WINDOW (200) messages, growing by one page
  *   per "Cargar anteriores" up to MAX_LOADED_HISTORY; live inserts push the
  *   oldest out once the cap is reached.
- * - Messages are fetched without any author columns, and each author profile
- *   (only id, username, display_name, avatar_seed, avatar_style) is fetched
- *   once and cached by id, in batches, instead of once per message.
+ * - supabase: messages are fetched without any author columns, and each author
+ *   profile (only id, username, display_name, avatar_seed, avatar_style) is
+ *   fetched once and cached by id, in batches. api: the server joins the slim author.
  */
 export function useMessages(channelId: string | null) {
-  const { client, session, blocker } = useSupabase();
+  const { client, session, blocker, configured } = useSupabase();
+  const api = isApiBackend();
   const hasSession = session !== null;
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
@@ -102,13 +119,20 @@ export function useMessages(channelId: string | null) {
     return out;
   }, []);
 
+  const fromWire = useCallback((rows: WireMessage[]): Message[] => {
+    return rows.map((row) => mapMessage(row, mapAuthor(row.author)));
+  }, []);
+
   useEffect(() => {
     commit([]);
     capRef.current = MAX_WINDOW;
     setHasMore(false);
     setError(null);
-    if (!client || !hasSession || !channelId) return;
+    if (!configured || !hasSession || !channelId) return;
     let cancelled = false;
+
+    if (api) return startPolling();
+    if (!client) return;
 
     (async () => {
       setLoading(true);
@@ -157,12 +181,113 @@ export function useMessages(channelId: string | null) {
       cancelled = true;
       void client.removeChannel(channel);
     };
-  }, [client, hasSession, channelId, loadAuthors, toMessages, commit]);
+
+    /** api backend: first page, then poll while the tab is visible. */
+    function startPolling(): () => void {
+      const base = `/api/channels/${encodeURIComponent(channelId as string)}/messages`;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let loaded = false;
+      let polling = false;
+      let failures = 0;
+      let polls = 0;
+
+      const schedule = (delay: number) => {
+        clearTimeout(timer);
+        if (cancelled || document.hidden) return;
+        timer = setTimeout(() => void tick(), delay);
+      };
+
+      /** Merges rows we don't have yet. Quiet when there is nothing new, so an idle channel doesn't re-render. */
+      const absorb = (rows: WireMessage[]) => {
+        const known = new Set(listRef.current.map((m) => m.id));
+        const fresh = fromWire(rows).filter((m) => !known.has(m.id));
+        if (fresh.length === 0) return;
+        const merged = mergeMessages(listRef.current, fresh);
+        const capped = capMessages(merged, capRef.current);
+        if (capped.length < merged.length) setHasMore(true);
+        commit(capped);
+      };
+
+      const pollOnce = async (): Promise<boolean> => {
+        polls += 1;
+        const newest = listRef.current[listRef.current.length - 1];
+        const query =
+          newest && polls % POLL_FULL_REFRESH_EVERY !== 0
+            ? `after=${encodeURIComponent(newest.id)}&limit=100`
+            : `limit=${PAGE_SIZE}`;
+        const res = await apiRequest<{ messages: WireMessage[] }>(`${base}?${query}`);
+        if (cancelled) return true;
+        if (!res.ok) {
+          // Not a member (any more) or the channel is gone: retrying won't fix it.
+          if (res.status === 403 || res.status === 404) setError(res.error);
+          return false;
+        }
+        absorb(res.data.messages);
+        return true;
+      };
+
+      const tick = async () => {
+        if (cancelled || polling || !loaded) return;
+        polling = true;
+        const ok = await pollOnce();
+        polling = false;
+        failures = ok ? 0 : failures + 1;
+        schedule(Math.min(POLL_INTERVAL_MS * 2 ** Math.min(failures, 3), POLL_MAX_BACKOFF_MS));
+      };
+
+      const onVisibility = () => {
+        clearTimeout(timer);
+        if (!document.hidden && loaded) void tick();
+      };
+      document.addEventListener("visibilitychange", onVisibility);
+
+      (async () => {
+        setLoading(true);
+        const res = await apiRequest<{ messages: WireMessage[] }>(`${base}?limit=${PAGE_SIZE}`);
+        if (cancelled) return;
+        if (!res.ok) {
+          setError(res.status === 403 ? res.error : "No se pudieron cargar los mensajes.");
+          setLoading(false);
+          return;
+        }
+        commit(capMessages(mergeMessages(listRef.current, fromWire(res.data.messages)), capRef.current));
+        setHasMore(res.data.messages.length === PAGE_SIZE);
+        setLoading(false);
+        loaded = true;
+        schedule(POLL_INTERVAL_MS);
+      })();
+
+      return () => {
+        cancelled = true;
+        clearTimeout(timer);
+        document.removeEventListener("visibilitychange", onVisibility);
+      };
+    }
+  }, [api, configured, client, hasSession, channelId, loadAuthors, toMessages, fromWire, commit]);
 
   const loadOlder = useCallback(async (): Promise<void> => {
-    if (!client || !hasSession || !channelId || loadingOlder || !hasMore) return;
+    if (!configured || !hasSession || !channelId || loadingOlder || !hasMore) return;
     const oldest = listRef.current[0];
     if (!oldest) return;
+
+    if (api) {
+      setLoadingOlder(true);
+      const res = await apiRequest<{ messages: WireMessage[] }>(
+        `/api/channels/${encodeURIComponent(channelId)}/messages?before=${encodeURIComponent(oldest.id)}&limit=${PAGE_SIZE}`,
+      );
+      if (!res.ok) {
+        setError("No se pudieron cargar los mensajes anteriores.");
+        setLoadingOlder(false);
+        return;
+      }
+      capRef.current = Math.min(capRef.current + PAGE_SIZE, MAX_LOADED_HISTORY);
+      commit(capMessages(mergeMessages(listRef.current, fromWire(res.data.messages)), capRef.current));
+      setHasMore(res.data.messages.length === PAGE_SIZE && capRef.current < MAX_LOADED_HISTORY);
+      setLoadingOlder(false);
+      return;
+    }
+
+    if (!client) return;
     const filter = olderThanFilter(oldest);
     if (!filter) {
       setHasMore(false);
@@ -190,13 +315,27 @@ export function useMessages(channelId: string | null) {
     commit(capMessages(mergeMessages(listRef.current, toMessages(rows)), capRef.current));
     setHasMore(rows.length === PAGE_SIZE && capRef.current < MAX_LOADED_HISTORY);
     setLoadingOlder(false);
-  }, [client, hasSession, channelId, loadingOlder, hasMore, loadAuthors, toMessages, commit]);
+  }, [api, configured, client, hasSession, channelId, loadingOlder, hasMore, loadAuthors, toMessages, fromWire, commit]);
 
   const send = useCallback(
     async (raw: string): Promise<SendResult> => {
-      if (!client || !session || !channelId) return { ok: false, error: blocker ?? "Entra con tu wallet para continuar." };
+      if (!configured || !session || !channelId) return { ok: false, error: blocker ?? "Entra con tu wallet para continuar." };
       const content = cleanMessage(raw);
       if (!content) return { ok: false, error: "El mensaje debe tener entre 1 y 2000 caracteres." };
+
+      if (api) {
+        // The author is the session's profile: the server ignores anything else.
+        const res = await apiRequest<{ message: WireMessage }>(
+          `/api/channels/${encodeURIComponent(channelId)}/messages`,
+          { method: "POST", body: { content } },
+        );
+        if (!res.ok) return { ok: false, error: res.error };
+        // The next poll returns this same row again: the id-based merge drops it.
+        commit(capMessages(mergeMessages(listRef.current, fromWire([res.data.message])), capRef.current));
+        return { ok: true };
+      }
+
+      if (!client) return { ok: false, error: blocker ?? "Entra con tu wallet para continuar." };
       const { data, error: err } = await client
         .from("messages")
         .insert({ channel_id: channelId, author_id: session.profileId, content })
@@ -219,7 +358,7 @@ export function useMessages(channelId: string | null) {
       }
       return { ok: true };
     },
-    [client, session, channelId, blocker, loadAuthors, toMessages, commit],
+    [api, configured, client, session, channelId, blocker, loadAuthors, toMessages, fromWire, commit],
   );
 
   return { messages, loading, loadingOlder, hasMore, error, blocker, send, loadOlder };
