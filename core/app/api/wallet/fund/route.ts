@@ -1,5 +1,6 @@
 import { requireSignedAddress } from "../../../../lib/auth.ts";
-import { POLLAR_SERVER_API } from "../../../../lib/pollar-config.ts";
+import { fundWallet } from "../../../../lib/fund.ts";
+import { clientIp, tooManyRequests } from "../../../../lib/rate-limit.ts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,6 +16,10 @@ export const dynamic = "force-dynamic";
  * The address funded is the one that survived signature verification, never one
  * sent in the body. Testnet only: any key that isn't `sec_testnet_` is refused.
  * See docs/POLLAR-NOTES.md (endpoint fund vs activate is not fully confirmed).
+ *
+ * Abuse guards (lib/fund.ts, in memory and best-effort): wallets already funded
+ * are answered locally, concurrent calls for one wallet share one Pollar call,
+ * and attempts are capped per wallet (3/hour) and per IP (10/hour) with a 429.
  */
 export async function POST(request: Request): Promise<Response> {
   const auth = requireSignedAddress(request);
@@ -34,34 +39,9 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  let res: Response;
-  try {
-    res = await fetch(`${POLLAR_SERVER_API}/v1/wallets/fund`, {
-      method: "POST",
-      headers: { "x-pollar-api-key": secret, "Content-Type": "application/json" },
-      body: JSON.stringify({ publicKey: auth.address }),
-      cache: "no-store",
-      signal: AbortSignal.timeout(15_000),
-    });
-  } catch {
-    return Response.json({ error: "No se pudo contactar a Pollar.", code: "pollar_unreachable" }, { status: 502 });
+  const outcome = await fundWallet({ address: auth.address, ip: clientIp(request), secret });
+  if (outcome.status === 429) {
+    return tooManyRequests(outcome.retryAfterSeconds ?? 60, String(outcome.body.error));
   }
-
-  // 200 funded; 409 "already funded, safe to ignore".
-  if (res.ok || res.status === 409) {
-    return Response.json({ address: auth.address, funded: true, alreadyFunded: res.status === 409 });
-  }
-  if (res.status === 402) {
-    return Response.json(
-      { error: "La wallet de fondeo de la app no tiene XLM suficiente (cárgala con Friendbot).", code: "funding_wallet_empty" },
-      { status: 503 },
-    );
-  }
-  if (res.status === 404) {
-    return Response.json(
-      { error: "Esta dirección no es una wallet creada por la app en Pollar.", code: "not_app_wallet" },
-      { status: 404 },
-    );
-  }
-  return Response.json({ error: "Pollar no pudo activar la cuenta.", code: "pollar_error" }, { status: 502 });
+  return Response.json(outcome.body, { status: outcome.status });
 }

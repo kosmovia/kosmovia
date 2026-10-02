@@ -38,3 +38,23 @@ Cuando exista el proyecto de Supabase. Hacen falta dos usuarios de prueba (A y B
 
 ## Token
 - [ ] Un token vencido, con otra `kid` o firmado con otra clave devuelve 401 de PostgREST.
+
+## Cuotas (0002_hardening.sql)
+- [ ] A crea 3 comunidades seguidas (permitido). La 4ª falla con `quota_exceeded:communities_per_day`. Con 10 en total falla con `communities_total`.
+- [ ] B envía 20 mensajes en un minuto (permitido). El 21º falla con `quota_exceeded:messages_per_minute`. Con 500 en una hora falla con `messages_per_hour`.
+- [ ] Dos inserts simultáneos de B justo en el límite: solo uno pasa (advisory lock).
+- [ ] Una comunidad con 50 canales: el 51º falla con `quota_exceeded:channels_per_community`.
+
+## Perfil (0002)
+- [ ] `avatar_seed` con más de 64 caracteres, con espacios o con `"><script>` falla (23514). `avatar_style` = `hack` falla.
+- [ ] Dos perfiles con el mismo `x_handle` (aunque cambie mayúsculas) fallan con 23505.
+
+## Verificador (rol `kosmovia_verifier`)
+Con un JWT de 2 minutos con `role: kosmovia_verifier` (firmado con la clave de sesiones), contra PostgREST:
+- [ ] `PATCH profiles?id=eq.<A>&wallet=eq.<wallet de A>&select=id` con `{ "x_handle": "ana", "x_verified_at": "...", "trust_level": 1 }` devuelve la fila (permitido).
+- [ ] Lo mismo con `"trust_level": 2` falla (42501). Con un perfil que ya es nivel 2 falla.
+- [ ] Cambiar `username`, `bio`, `avatar_seed` o `wallet` falla (permiso por columna).
+- [ ] Leer `profiles?select=bio` o `select=trust_level` falla (solo `id, wallet`); leer otras tablas (`messages`, `members`) falla.
+- [ ] Un segundo perfil con el mismo `x_handle` devuelve 409 (23505).
+- [ ] Si el PATCH da "permission denied" por usar `trust_level` dentro de la política, concede `select (trust_level)` al rol y anótalo aquí.
+- [ ] Si PostgREST rechaza el token por el rol: revisa `grant kosmovia_verifier to authenticator;` y que la clave importada esté como Current.

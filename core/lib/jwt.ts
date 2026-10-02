@@ -49,6 +49,16 @@ export function normalizePem(raw: string): string {
   return raw.trim().replace(/^["']|["']$/g, "").replace(/\\n/g, "\n");
 }
 
+/** Header + claims -> compact ES256 JWS. Private: callers build the claims. */
+function signCompact(claims: object, privateKeyPem: string, keyId: string): string {
+  const header = { alg: "ES256", typ: "JWT", kid: keyId };
+  const signingInput = `${b64url(JSON.stringify(header))}.${b64url(JSON.stringify(claims))}`;
+  const key = createPrivateKey(normalizePem(privateKeyPem));
+  // JWS wants raw r||s (IEEE P1363), not DER.
+  const signature = sign("sha256", Buffer.from(signingInput), { key, dsaEncoding: "ieee-p1363" });
+  return `${signingInput}.${b64url(signature)}`;
+}
+
 export function signSessionJwt(opts: SignOptions): SignedSession {
   const nowSec = Math.floor((opts.now ?? Date.now()) / 1000);
   const claims: SessionClaims = {
@@ -60,13 +70,56 @@ export function signSessionJwt(opts: SignOptions): SignedSession {
     exp: nowSec + (opts.ttlSeconds ?? JWT_TTL_SECONDS),
     iss: JWT_ISSUER,
   };
-  const header = { alg: "ES256", typ: "JWT", kid: opts.keyId };
-  const signingInput = `${b64url(JSON.stringify(header))}.${b64url(JSON.stringify(claims))}`;
-  const key = createPrivateKey(normalizePem(opts.privateKeyPem));
-  // JWS wants raw r||s (IEEE P1363), not DER.
-  const signature = sign("sha256", Buffer.from(signingInput), { key, dsaEncoding: "ieee-p1363" });
   return {
-    token: `${signingInput}.${b64url(signature)}`,
+    token: signCompact(claims, opts.privateKeyPem, opts.keyId),
+    expiresAt: claims.exp * 1000,
+    claims,
+  };
+}
+
+// ----------------------------------------------------------------- verifier
+
+/**
+ * The Postgres role the server uses, and only the server, to write the result
+ * of an X verification (supabase/migrations/0002_hardening.sql). It is NOT
+ * `authenticated`: it can read profiles.id/wallet and update x_handle,
+ * x_verified_at and trust_level (never to 2), nothing else. No service_role.
+ */
+export const VERIFIER_ROLE = "kosmovia_verifier";
+export const VERIFIER_TTL_SECONDS = 2 * 60;
+export const VERIFIER_SUB = "00000000-0000-0000-0000-000000000000";
+
+export interface VerifierClaims {
+  sub: string;
+  role: typeof VERIFIER_ROLE;
+  aud: string;
+  iat: number;
+  exp: number;
+  iss: string;
+}
+
+export interface VerifierSignOptions {
+  privateKeyPem: string;
+  keyId: string;
+  /** Epoch ms, injectable for tests. */
+  now?: number;
+  ttlSeconds?: number;
+}
+
+/** A 2-minute ES256 token with `role: kosmovia_verifier`, signed with the same key as the sessions. */
+export function signVerifierJwt(opts: VerifierSignOptions): { token: string; expiresAt: number; claims: VerifierClaims } {
+  const nowSec = Math.floor((opts.now ?? Date.now()) / 1000);
+  const claims: VerifierClaims = {
+    // Nil UUID: matches no profile, and still casts cleanly if a function reads `sub` as a uuid.
+    sub: VERIFIER_SUB,
+    role: VERIFIER_ROLE,
+    aud: JWT_AUDIENCE,
+    iat: nowSec,
+    exp: nowSec + (opts.ttlSeconds ?? VERIFIER_TTL_SECONDS),
+    iss: JWT_ISSUER,
+  };
+  return {
+    token: signCompact(claims, opts.privateKeyPem, opts.keyId),
     expiresAt: claims.exp * 1000,
     claims,
   };

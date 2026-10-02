@@ -8,14 +8,13 @@ import { useChannels } from "@/hooks/useChannels";
 import { useCommunities } from "@/hooks/useCommunities";
 import { useCommunity } from "@/hooks/useCommunity";
 import { useMessages } from "@/hooks/useMessages";
-import { isAvatarStyle } from "@/lib/avatar/generator";
 import type { User } from "@/types";
 
 function UserAvatar({ user, size }: { user: User; size: number }) {
   return (
     <Avatar
-      seed={user.avatarSeed ?? user.wallet}
-      style={isAvatarStyle(user.avatarStyle) ? user.avatarStyle : undefined}
+      seed={user.avatarSeed || user.wallet || user.id}
+      style={user.avatarStyle}
       size={size}
       username={user.username}
     />
@@ -166,16 +165,19 @@ function ChatPanel({
   canAdmin: boolean;
   topic?: string;
 }) {
-  const { messages, loading, error, send } = useMessages(channelId);
+  const { messages, loading, loadingOlder, hasMore, error, send, loadOlder } = useMessages(channelId);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const endRef = useRef<HTMLLIElement>(null);
   const readOnly = announcement && !canAdmin;
 
+  // Scroll to the bottom only when the NEWEST message changes: loading older
+  // history prepends messages and must not yank the view down.
+  const newestId = messages.length > 0 ? messages[messages.length - 1].id : null;
   useEffect(() => {
     endRef.current?.scrollIntoView?.({ block: "end" });
-  }, [messages.length]);
+  }, [newestId]);
 
   const submit = async () => {
     if (sending || readOnly) return;
@@ -212,6 +214,13 @@ function ChatPanel({
         style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: "0.75rem", maxHeight: "50vh", overflowY: "auto" }}
         aria-live="polite"
       >
+        {hasMore ? (
+          <li style={{ textAlign: "center" }}>
+            <button type="button" className="btn" onClick={() => void loadOlder()} disabled={loadingOlder}>
+              {loadingOlder ? "Cargando…" : "Cargar anteriores"}
+            </button>
+          </li>
+        ) : null}
         {messages.map((m) => (
           <li key={m.id} style={{ display: "flex", gap: "0.5rem" }}>
             <UserAvatar user={m.author} size={32} />

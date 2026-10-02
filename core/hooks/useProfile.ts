@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { User } from "../types/index.ts";
 import { fromHandle, isUniqueViolation, mapProfile, type ProfileRow } from "../lib/mappers.ts";
+import { isAvatarStyle, isValidAvatarSeed } from "../lib/avatar/generator.ts";
 import { USERNAME_RE } from "../lib/validation.ts";
 import { useSupabase } from "./useSupabase.ts";
 
@@ -13,6 +14,26 @@ export interface ProfileInput {
   displayName: string;
   avatarSeed: string;
   avatarStyle: string;
+}
+
+const DISPLAY_NAME_MAX = 40;
+const BIO_MAX = 280;
+
+/** Client-side mirror of the CHECKs in 0001/0002 (avatar seed and style, name and bio length). */
+function profileInputError(input: Partial<ProfileInput> & { bio?: string }): string | null {
+  if (input.avatarSeed !== undefined && !isValidAvatarSeed(input.avatarSeed)) {
+    return "Ese avatar no es válido. Elige otro.";
+  }
+  if (input.avatarStyle !== undefined && !isAvatarStyle(input.avatarStyle)) {
+    return "Ese estilo de avatar no es válido. Elige otro.";
+  }
+  if (input.displayName !== undefined && input.displayName.trim().length > DISPLAY_NAME_MAX) {
+    return `El nombre debe tener ${DISPLAY_NAME_MAX} caracteres como máximo.`;
+  }
+  if (input.bio !== undefined && input.bio.trim().length > BIO_MAX) {
+    return `La bio debe tener ${BIO_MAX} caracteres como máximo.`;
+  }
+  return null;
 }
 
 export type ProfileResult = { ok: true; profile: User } | { ok: false; error: string };
@@ -59,6 +80,8 @@ export function useProfile() {
       if (!client || !session) return { ok: false, error: blocker ?? "Entra con tu wallet para continuar." };
       const username = fromHandle(input.username);
       if (!USERNAME_RE.test(username)) return { ok: false, error: "Revisa tu @usuario." };
+      const invalid = profileInputError(input);
+      if (invalid) return { ok: false, error: invalid };
       const { data, error: err } = await client
         .from("profiles")
         .insert({
@@ -82,6 +105,8 @@ export function useProfile() {
   const update = useCallback(
     async (input: Partial<ProfileInput> & { bio?: string }): Promise<ProfileResult> => {
       if (!client || !session) return { ok: false, error: blocker ?? "Entra con tu wallet para continuar." };
+      const invalid = profileInputError(input);
+      if (invalid) return { ok: false, error: invalid };
       const patch: Record<string, string> = {};
       if (input.username !== undefined) {
         const username = fromHandle(input.username);

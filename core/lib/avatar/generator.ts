@@ -479,12 +479,39 @@ export function isAvatarStyle(value: unknown): value is AvatarStyle {
   return typeof value === "string" && (AVATAR_STYLES as readonly string[]).includes(value);
 }
 
-export function pickStyle(seed: string): AvatarStyle {
-  return AVATAR_STYLES[hash32(`${seed}#style`) % AVATAR_STYLES.length];
+/** Longest seed that is ever used (matches profiles_avatar_seed_safe in 0002_hardening.sql). */
+export const AVATAR_SEED_MAX = 64;
+
+/** Characters a stored seed may contain (also enforced by the database CHECK). */
+export const AVATAR_SEED_RE = /^[A-Za-z0-9:_.-]{1,64}$/;
+
+/** True for a seed the database would accept. */
+export function isValidAvatarSeed(value: unknown): value is string {
+  return typeof value === "string" && AVATAR_SEED_RE.test(value);
 }
 
-export function renderAvatar(seed: string, style?: AvatarStyle): string {
-  const st: AvatarStyle = isAvatarStyle(style) ? style : pickStyle(seed);
+/**
+ * Whatever came from the database or a URL, as a seed: a string of at most 64
+ * characters. It is only ever fed to the hash/RNG, never written into markup.
+ */
+export function clampSeed(seed: unknown): string {
+  return typeof seed === "string" ? seed.slice(0, AVATAR_SEED_MAX) : "";
+}
+
+export function pickStyle(seed: string): AvatarStyle {
+  return AVATAR_STYLES[hash32(`${clampSeed(seed)}#style`) % AVATAR_STYLES.length];
+}
+
+/**
+ * Deterministic SVG for a seed and style. Defensive on purpose, because the
+ * result is injected with dangerouslySetInnerHTML: the seed is truncated to 64
+ * characters, an unknown style falls back to `pickStyle(seed)`, and neither
+ * value is ever interpolated into the markup (the only dynamic text is the
+ * id prefix `kv` + base36 digits, derived from a hash).
+ */
+export function renderAvatar(seedInput: string, styleInput?: AvatarStyle | string | null): string {
+  const seed = clampSeed(seedInput);
+  const st: AvatarStyle = isAvatarStyle(styleInput) ? styleInput : pickStyle(seed);
   const r = makeRng(`${seed}|${st}`);
   const P = `kv${hash32(`${seed}|${st}`).toString(36)}`;
   const ctx: Ctx = { r, P, d: [], b: [] };

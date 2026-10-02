@@ -1,4 +1,5 @@
 import { createHash, verify as verifySignature } from "node:crypto";
+import { isCanonicalSignature } from "./ed25519-guards.ts";
 import { ed25519PublicKeyFrom } from "./strkey.ts";
 import { authMessage, normalizeRoute, PROOF_HEADER } from "./auth-message.ts";
 
@@ -41,14 +42,16 @@ function decodeSignature(signature: string): Buffer | null {
 export function verifySep53(opts: { address: string; message: string; signature: string }): boolean {
   if (!G_ADDRESS.test(opts.address)) return false;
   const sig = decodeSignature(opts.signature);
-  if (!sig) return false;
+  // Non-canonical S (>= L) or R: a second valid spelling of a signature. Refuse it.
+  if (!sig || !isCanonicalSignature(sig)) return false;
   const payload = Buffer.concat([
     Buffer.from(SEP53_PREFIX, "utf8"),
     Buffer.from(opts.message, "utf8"),
   ]);
   const digest = createHash("sha256").update(payload).digest();
   try {
-    // The address *is* the public key once out of its base32 envelope.
+    // The address *is* the public key once out of its base32 envelope. This
+    // throws for degenerate keys (identity, small order, non-canonical y).
     return verifySignature(null, digest, ed25519PublicKeyFrom(opts.address), sig);
   } catch {
     return false;

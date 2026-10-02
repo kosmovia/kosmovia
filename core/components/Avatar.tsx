@@ -2,7 +2,8 @@ import { renderAvatar, type AvatarStyle } from "@/lib/avatar/generator";
 
 export interface AvatarProps {
   seed: string;
-  style?: AvatarStyle;
+  /** Cualquier valor: uno que no sea un estilo conocido se ignora y se elige uno desde la semilla. */
+  style?: AvatarStyle | string | null;
   /** Lado en píxeles (se dibuja en círculo). */
   size?: number;
   /** Para el texto accesible: "Avatar de @usuario". */
@@ -11,6 +12,8 @@ export interface AvatarProps {
 }
 
 export function Avatar({ seed, style, size = 64, username, className }: AvatarProps) {
+  // renderAvatar recorta la semilla a 64 caracteres y descarta estilos desconocidos;
+  // nada de seed ni style llega al marcado (se usa con dangerouslySetInnerHTML).
   const svg = renderAvatar(seed, style);
   const handle = username ? (username.startsWith("@") ? username : `@${username}`) : null;
   return (

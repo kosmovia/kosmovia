@@ -97,9 +97,26 @@ La API de X dejó de ser gratis en febrero de 2026: leer un perfil cuesta USD 0,
 
 ## 7. Variables de entorno (nombres, nunca valores)
 
-`NEXT_PUBLIC_POLLAR_PUBLISHABLE_KEY` · `POLLAR_SECRET_KEY` · `NEXT_PUBLIC_SUPABASE_URL` · `NEXT_PUBLIC_SUPABASE_ANON_KEY` · `SUPABASE_JWT_PRIVATE_KEY` · `SUPABASE_JWT_KEY_ID`
+`NEXT_PUBLIC_POLLAR_PUBLISHABLE_KEY` · `POLLAR_SECRET_KEY` · `NEXT_PUBLIC_SUPABASE_URL` · `NEXT_PUBLIC_SUPABASE_ANON_KEY` · `SUPABASE_JWT_PRIVATE_KEY` · `SUPABASE_JWT_KEY_ID` · `X_CHALLENGE_SECRET`
 
-## 8. Orden de trabajo
+- `X_CHALLENGE_SECRET` (solo servidor, mínimo 16 caracteres): clave del HMAC que deriva el código que el usuario publica en X. Sin ella, `/api/x/challenge` y `/api/x/verify` responden 503.
+- `POLLAR_SECRET_KEY` (solo servidor, solo `sec_testnet_...`): solo hace falta con el modo de fondeo DEFERRED.
+- `SUPABASE_JWT_PRIVATE_KEY` y `SUPABASE_JWT_KEY_ID` firman dos tokens: la sesión del usuario (1 hora) y el del verificador de X (2 minutos, rol `kosmovia_verifier`).
+- Nunca se usa la `service_role` de Supabase.
+
+## 8. Seguridad
+
+Resumen de lo que protege cada pieza (detalle en `supabase/README.md` y `docs/POLLAR-NOTES.md`):
+
+- **Identidad.** Cada ruta de la API exige una prueba SEP-53 firmada, atada a método y ruta, de 2 minutos. Antes de verificar la firma ed25519 se rechazan las claves degeneradas (punto identidad, puntos de orden pequeño, codificaciones no canónicas) y las firmas con S no canónica (`lib/ed25519-guards.ts`): sin esto, una "dirección" que sea el punto identidad aceptaba una firma constante para cualquier mensaje.
+- **Abuso de la API.** Límites en memoria (`lib/rate-limit.ts`): fondeo 3 por hora por wallet y 10 por IP, con wallets ya fondeadas recordadas y llamadas simultáneas deduplicadas; verificación de X 10 por hora por wallet; código de X 20 por hora por wallet. Son best-effort en serverless; el limitador persistente (tabla de Supabase o Vercel KV) es el siguiente paso.
+- **Escrituras directas a Supabase.** Cuotas atómicas en la base (`0002_hardening.sql`): 3 comunidades por 24 h y 10 en total por perfil, 20 mensajes por minuto y 500 por hora por autor, 50 canales por comunidad.
+- **Avatares.** CHECK de `avatar_seed` (hasta 64 caracteres seguros) y de `avatar_style` (lista del generador). El cliente recorta la semilla a 64 caracteres, ignora un estilo desconocido y nunca interpola semilla ni estilo en el SVG (se inyecta con `dangerouslySetInnerHTML`).
+- **Chat.** Solo se guardan en memoria los últimos 200 mensajes por canal (el historial se pide de a 50 con "Cargar anteriores", con un tope de 1.000), y de cada autor solo se traen `id, username, display_name, avatar_seed, avatar_style`, una vez por autor.
+- **Verificación de X.** El servidor escribe `x_handle`, `x_verified_at` y `trust_level = 1` con el rol `kosmovia_verifier` (JWT de 2 minutos, permisos por columna, nunca nivel 2), sin `service_role`. Un índice único hace que una cuenta de X pertenezca a un solo perfil.
+- **Secretos.** Las claves privadas viven solo en variables de entorno del servidor; los logs no imprimen direcciones, firmas, tokens ni claves.
+
+## 9. Orden de trabajo
 
 1. Estructura de `core/` y este documento.
 2. Login con Pollar y Freighter, wallet patrocinada y saldo.

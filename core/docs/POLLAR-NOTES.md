@@ -45,6 +45,18 @@ Una cuenta `C...` no tiene una clave ed25519 que sirva de dirección, así que `
 
 Cualquiera de las dos cambia el formato del header; habrá que subir la versión del mensaje (`kosmovia-auth:v2`).
 
+## Límites contra abuso (en memoria, best-effort)
+
+`POST /api/wallet/fund` llama a Pollar con nuestra clave secreta y gasta XLM de la wallet de fondeo, así que no puede ser un endpoint sin freno. `lib/fund.ts` pone delante de Pollar, además de la firma SEP-53:
+
+- **Wallets ya fondeadas:** si Pollar contestó 200 o 409 para una wallet, se recuerda (LRU de 5.000) y las llamadas siguientes se contestan sin tocar Pollar.
+- **Deduplicado en vuelo:** varias llamadas simultáneas de la misma wallet comparten una sola petición a Pollar.
+- **Límite por wallet y por IP:** 3 intentos por hora por wallet y 10 por hora por IP (ventana deslizante, LRU de 5.000 claves). Al pasarse: 429 con `Retry-After` y código `rate_limited`.
+
+Lo mismo, más liviano, en `/api/x/verify` (10 por hora por wallet, 30 por IP; solo cuentan las peticiones bien formadas, que son las que llegan a X) y en `/api/x/challenge` (20 por hora por wallet, 60 por IP).
+
+**Limitación importante:** todo esto vive en la memoria de cada instancia. En serverless (Vercel) cada instancia caliente tiene su propia copia y un arranque en frío la reinicia, así que los límites frenan el abuso pero no garantizan un tope. Seguimiento: un limitador persistente (una tabla en Supabase o Vercel KV) con la misma interfaz que `lib/rate-limit.ts`. La IP sale de `x-real-ip` / `x-forwarded-for`, que Vercel pone por su cuenta; fuera de Vercel se pueden falsificar y solo debilitan el límite por IP, no el de wallet.
+
 ## Saldos y fondos de prueba
 
 - Los saldos salen de Horizon testnet (`https://horizon-testnet.stellar.org`), en cadenas decimales, sin floats. USDC se reconoce por el emisor de Circle en testnet.

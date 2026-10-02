@@ -4,13 +4,22 @@ import test from "node:test";
 
 import {
   asRole,
+  AUTHOR_COLUMNS,
+  capMessages,
   fromHandle,
   isUniqueViolation,
+  mapAuthor,
   mapChannel,
   mapCommunity,
   mapMessage,
   mapProfile,
+  MAX_LOADED_HISTORY,
+  MAX_WINDOW,
   mergeMessages,
+  MESSAGE_COLUMNS,
+  olderThanFilter,
+  PAGE_SIZE,
+  quotaMessage,
   toHandle,
 } from "../lib/mappers.ts";
 import { createTokenStore, REFRESH_MARGIN_MS, type StoredSession } from "../lib/token-store.ts";
@@ -168,4 +177,82 @@ test("token store: a failed refresh near expiry yields no token; expired never r
   assert.equal(await store.getToken(), null);
   store.clear();
   assert.equal(store.getSnapshot().status, "idle");
+});
+
+// ---------- Endurecimiento: ventana de mensajes, paginación, autores ----------
+
+const mkMessage = (n: number) => ({
+  id: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
+  channelId: "c",
+  author: mapProfile(profileRow),
+  content: String(n),
+  createdAt: `2026-10-01T10:${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}Z`,
+});
+
+test("capMessages keeps the newest MAX_WINDOW messages, oldest first", () => {
+  assert.equal(MAX_WINDOW, 200);
+  const all = Array.from({ length: 260 }, (_, i) => mkMessage(i));
+  const capped = capMessages(mergeMessages([], all));
+  assert.equal(capped.length, 200);
+  assert.equal(capped[0].content, "60");
+  assert.equal(capped[199].content, "259");
+  // Under the cap nothing changes (same array).
+  const few = mergeMessages([], all.slice(0, 5));
+  assert.equal(capMessages(few), few);
+  assert.equal(capMessages(all, 10).length, 10);
+});
+
+test("a live insert at the cap pushes out the oldest, a page of history grows the cap", () => {
+  let list = capMessages(mergeMessages([], Array.from({ length: 200 }, (_, i) => mkMessage(100 + i))), MAX_WINDOW);
+  list = capMessages(mergeMessages(list, [mkMessage(300)]), MAX_WINDOW);
+  assert.equal(list.length, 200);
+  assert.equal(list[0].content, "101");
+  assert.equal(list[199].content, "300");
+  // "Cargar anteriores": the cap grows by a page so the loaded page stays.
+  const older = Array.from({ length: PAGE_SIZE }, (_, i) => mkMessage(50 + i));
+  list = capMessages(mergeMessages(list, older), MAX_WINDOW + PAGE_SIZE);
+  assert.equal(list.length, 250);
+  assert.equal(list[0].content, "50");
+  assert.ok(MAX_LOADED_HISTORY >= MAX_WINDOW + PAGE_SIZE);
+});
+
+test("olderThanFilter builds a keyset filter and refuses anything that is not timestamp + uuid", () => {
+  const cursor = { createdAt: "2026-10-01T10:00:09.123456+00:00", id: "0b1c2d3e-0000-4000-8000-123456789abc" };
+  assert.equal(
+    olderThanFilter(cursor),
+    'created_at.lt."2026-10-01T10:00:09.123456+00:00",and(created_at.eq."2026-10-01T10:00:09.123456+00:00",id.lt.0b1c2d3e-0000-4000-8000-123456789abc)',
+  );
+  assert.ok(olderThanFilter({ createdAt: "2026-10-01T10:00:09Z", id: cursor.id }));
+  for (const bad of [
+    { createdAt: 'x"),or(id.gt.0', id: cursor.id },
+    { createdAt: cursor.createdAt, id: "1),or(id.gt.0" },
+    { createdAt: "", id: cursor.id },
+    { createdAt: cursor.createdAt, id: "not-a-uuid" },
+  ]) {
+    assert.equal(olderThanFilter(bad), null);
+  }
+});
+
+test("mapAuthor maps only the slim author columns", () => {
+  const a = mapAuthor({ id: "p1", username: "ana", display_name: "", avatar_seed: "s", avatar_style: "rocket" });
+  assert.deepEqual(a, {
+    id: "p1",
+    username: "@ana",
+    displayName: "ana",
+    wallet: "",
+    avatarSeed: "s",
+    avatarStyle: "rocket",
+  });
+  assert.equal(AUTHOR_COLUMNS, "id,username,display_name,avatar_seed,avatar_style");
+  assert.ok(!MESSAGE_COLUMNS.includes("*") && !AUTHOR_COLUMNS.includes("*"));
+});
+
+test("quotaMessage recognises the quota triggers of 0002_hardening.sql", () => {
+  assert.match(quotaMessage({ message: "quota_exceeded:messages_per_minute" }) ?? "", /muy rápido/);
+  assert.match(quotaMessage({ message: "quota_exceeded:communities_per_day" }) ?? "", /3 comunidades/);
+  assert.match(quotaMessage({ message: "quota_exceeded:communities_total" }) ?? "", /10 comunidades/);
+  assert.match(quotaMessage({ message: "quota_exceeded:channels_per_community" }) ?? "", /50 canales/);
+  assert.match(quotaMessage({ message: "quota_exceeded:something_new" }) ?? "", /límite/);
+  assert.equal(quotaMessage({ message: "new row violates row-level security policy" }), null);
+  assert.equal(quotaMessage(null), null);
 });

@@ -15,6 +15,17 @@ export interface ProfileRow {
   created_at?: string;
 }
 
+/** Only what a chat bubble needs from an author: no wallet, bio, trust level or X handle. */
+export const AUTHOR_COLUMNS = "id,username,display_name,avatar_seed,avatar_style";
+
+export interface AuthorRow {
+  id: string;
+  username: string;
+  display_name: string | null;
+  avatar_seed: string | null;
+  avatar_style: string | null;
+}
+
 export interface CommunityRow {
   id: string;
   slug: string;
@@ -74,6 +85,18 @@ export function mapProfile(row: ProfileRow): User {
   };
 }
 
+/** A message author from the slim AUTHOR_COLUMNS select (`wallet` stays empty: it is not fetched). */
+export function mapAuthor(row: AuthorRow): User {
+  return {
+    id: row.id,
+    username: toHandle(row.username),
+    displayName: row.display_name || row.username,
+    wallet: "",
+    avatarSeed: row.avatar_seed ?? undefined,
+    avatarStyle: row.avatar_style ?? undefined,
+  };
+}
+
 export function mapChannel(row: ChannelRow): Channel {
   return {
     id: row.id,
@@ -119,6 +142,50 @@ export function mergeMessages(list: Message[], incoming: Message[]): Message[] {
   return [...byId.values()].sort((a, b) =>
     a.createdAt === b.createdAt ? (a.id < b.id ? -1 : 1) : a.createdAt < b.createdAt ? -1 : 1,
   );
+}
+
+/** Messages kept in memory per channel: the newest ones. */
+export const MAX_WINDOW = 200;
+/** Page size of the first load and of every "Cargar anteriores". */
+export const PAGE_SIZE = 50;
+/** Hard ceiling of messages in memory, however many pages the user loads. */
+export const MAX_LOADED_HISTORY = 1_000;
+
+export const MESSAGE_COLUMNS = "id,channel_id,author_id,content,created_at";
+
+/** Keeps the newest `max` messages of a list sorted oldest first (what mergeMessages returns). */
+export function capMessages(list: Message[], max: number = MAX_WINDOW): Message[] {
+  return list.length > max ? list.slice(list.length - max) : list;
+}
+
+const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}[T ][0-9:.]+(?:Z|[+-]\d{2}(?::?\d{2})?)?$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * PostgREST `or()` expression for "strictly older than this message" with the
+ * same (created_at, id) order the list uses, so rows sharing a timestamp are
+ * neither skipped nor repeated. Null when the cursor does not look like a
+ * timestamp and a UUID (it only ever interpolates values that passed those checks).
+ */
+export function olderThanFilter(cursor: { createdAt: string; id: string }): string | null {
+  if (!ISO_TIMESTAMP.test(cursor.createdAt) || !UUID.test(cursor.id)) return null;
+  const at = `"${cursor.createdAt}"`;
+  return `created_at.lt.${at},and(created_at.eq.${at},id.lt.${cursor.id})`;
+}
+
+const QUOTA_MESSAGES: Record<string, string> = {
+  messages_per_minute: "Vas muy rápido: espera un momento antes de enviar más mensajes.",
+  messages_per_hour: "Llegaste al máximo de mensajes por hora. Intenta de nuevo más tarde.",
+  communities_per_day: "Ya creaste 3 comunidades en las últimas 24 horas. Intenta de nuevo más tarde.",
+  communities_total: "Llegaste al máximo de 10 comunidades por perfil.",
+  channels_per_community: "Esta comunidad ya tiene el máximo de 50 canales.",
+};
+
+/** Spanish message for a quota trigger of 0002_hardening.sql (`quota_exceeded:<kind>`), else null. */
+export function quotaMessage(error: { message?: string } | null | undefined): string | null {
+  const found = /quota_exceeded:([a-z_]+)/.exec(error?.message ?? "");
+  if (!found) return null;
+  return QUOTA_MESSAGES[found[1]] ?? "Llegaste a un límite de uso. Intenta de nuevo más tarde.";
 }
 
 /** Postgres unique violation, as PostgREST reports it. */

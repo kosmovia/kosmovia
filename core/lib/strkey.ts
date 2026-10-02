@@ -1,4 +1,5 @@
 import { createPublicKey, type KeyObject } from "node:crypto";
+import { isAcceptablePublicKey } from "./ed25519-guards.ts";
 
 /**
  * A Stellar `G…` address is an ed25519 public key in a checksummed base32
@@ -82,10 +83,18 @@ export function decodeStellarPublicKey(address: string): Buffer {
  */
 const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
 
-/** A `G…` address as a key object `crypto.verify` can use. */
+/**
+ * A `G…` address as a key object `crypto.verify` can use. Throws for keys that
+ * are not worth verifying against (non-canonical or small-order points, see
+ * ed25519-guards.ts): with those, a constant signature verifies for any message.
+ */
 export function ed25519PublicKeyFrom(address: string): KeyObject {
+  const raw = decodeStellarPublicKey(address);
+  if (!isAcceptablePublicKey(raw)) {
+    throw new Error("La dirección es una clave degenerada (punto de orden pequeño o no canónico)");
+  }
   return createPublicKey({
-    key: Buffer.concat([ED25519_SPKI_PREFIX, decodeStellarPublicKey(address)]),
+    key: Buffer.concat([ED25519_SPKI_PREFIX, raw]),
     format: "der",
     type: "spki",
   });

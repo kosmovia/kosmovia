@@ -1,4 +1,7 @@
 import { requireSignedAddress } from "../../../../lib/auth.ts";
+import { clientIp, takeAll, tooManyRequests } from "../../../../lib/rate-limit.ts";
+import { xLimits } from "../../../../lib/x-limits.ts";
+import { persistXVerification } from "../../../../lib/x-persist.ts";
 import { MIN_SECRET_LENGTH, verifyXPost, VERIFY_ERRORS } from "../../../../lib/x-verify.ts";
 
 export const runtime = "nodejs";
@@ -7,6 +10,8 @@ export const dynamic = "force-dynamic";
 /** Request bodies here are one short URL: anything bigger is refused. */
 const MAX_BODY_BYTES = 2_048;
 
+const X_TAKEN_MESSAGE = "Esa cuenta de X ya está vinculada a otro perfil";
+
 /**
  * POST /api/x/verify  { url }
  *
@@ -14,8 +19,15 @@ const MAX_BODY_BYTES = 2_048;
  * the author must own the handle in the URL and the text must hold this
  * wallet's current code. See lib/x-verify.ts for the URL and SSRF rules.
  *
- * Success: `{ handle, verifiedAt }`. Failure: `{ error, code }` with code one
- * of bad_url, not_found, code_missing, author_mismatch, x_unreachable.
+ * On success it also writes `x_handle`, `x_verified_at` and `trust_level = 1`
+ * to the caller's profile through the `kosmovia_verifier` role (lib/x-persist.ts,
+ * no service_role). Success: `{ handle, verifiedAt, persisted }`, with
+ * `persistReason` (no_profile | not_configured | error) when `persisted` is
+ * false. A handle already linked to another profile answers 409 `x_taken`.
+ * Failure: `{ error, code }` with code one of bad_url, not_found, code_missing,
+ * author_mismatch, x_unreachable, rate_limited, x_taken.
+ *
+ * Limits (in memory, best-effort): 10/hour per wallet, 30/hour per IP.
  */
 export async function POST(request: Request): Promise<Response> {
   const auth = requireSignedAddress(request);
@@ -41,17 +53,39 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: VERIFY_ERRORS.bad_url.error, code: "bad_url" }, { status: 400 });
   }
 
+  // Only well-formed requests spend the budget, since only they reach X.
+  const denied = takeAll([
+    [xLimits.verifyWallet, auth.address],
+    [xLimits.verifyIp, clientIp(request)],
+  ]);
+  if (denied) {
+    return tooManyRequests(
+      denied.retryAfterSeconds,
+      "Demasiados intentos de verificar. Espera un momento e intenta de nuevo.",
+    );
+  }
+
   const result = await verifyXPost({ url, wallet: auth.address, secret });
   if (!result.ok) {
     console.warn(`x.verify.failed code=${result.code}`);
     return Response.json({ error: result.error, code: result.code }, { status: result.status });
   }
 
-  // TODO(data-layer): persist here, as the signed wallet (auth.address), through
-  // the Supabase layer: profiles.x_handle = result.handle,
-  // profiles.x_verified_at = result.verifiedAt, profiles.trust_level = 1
-  // (never lowering a higher level). Decide there whether one x_handle may be
-  // claimed by several wallets (a unique index on lower(x_handle) says no).
-  // Until then the result only lives in the browser for this visit.
-  return Response.json({ handle: result.handle, verifiedAt: result.verifiedAt });
+  const saved = await persistXVerification({
+    wallet: auth.address,
+    handle: result.handle,
+    verifiedAt: result.verifiedAt,
+  });
+  if (saved.persisted) {
+    return Response.json({ handle: result.handle, verifiedAt: result.verifiedAt, persisted: true });
+  }
+  if (saved.reason === "x_taken") {
+    return Response.json({ error: X_TAKEN_MESSAGE, code: "x_taken" }, { status: 409 });
+  }
+  return Response.json({
+    handle: result.handle,
+    verifiedAt: result.verifiedAt,
+    persisted: false,
+    persistReason: saved.reason,
+  });
 }

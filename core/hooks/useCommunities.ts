@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Community } from "../types/index.ts";
-import { isUniqueViolation, mapCommunity, type CommunityRow } from "../lib/mappers.ts";
+import { isUniqueViolation, mapCommunity, quotaMessage, type CommunityRow } from "../lib/mappers.ts";
 import { communityNameError, slugError } from "../lib/validation.ts";
 import { useSupabase } from "./useSupabase.ts";
 
@@ -69,7 +69,7 @@ export function useCommunities() {
       if (err) {
         if (isUniqueViolation(err)) return { ok: false, error: "Ese enlace ya está en uso" };
         if (err.code === "23503") return { ok: false, error: "Crea tu perfil antes de crear una comunidad." };
-        return { ok: false, error: "No se pudo crear la comunidad. Intenta de nuevo." };
+        return { ok: false, error: quotaMessage(err) ?? "No se pudo crear la comunidad. Intenta de nuevo." };
       }
       const community = mapCommunity(data as CommunityRow);
       setAll((prev) => [community, ...prev]);

@@ -6,8 +6,19 @@ import { usePollar } from "@pollar/react";
 import { PollarGate } from "../lib/pollar.tsx";
 import { usePollarAuth } from "../hooks/usePollarAuth.ts";
 import { signedFetch } from "../lib/auth-client.ts";
+import { useProfile } from "../hooks/useProfile.ts";
 
-/** Card "Conectar X" on /perfil: get a code, post it on X, paste the link, verify. */
+const NOT_SAVED: Record<PersistReason, string> = {
+  no_profile: "Verificamos tu cuenta, pero todavía no tienes perfil donde guardarla. Crea tu perfil y vuelve a verificar.",
+  not_configured: "Verificamos tu cuenta, pero el servidor aún no puede guardarla en tu perfil (falta configurar Supabase).",
+  error: "Verificamos tu cuenta, pero no se pudo guardar en tu perfil. Intenta verificar de nuevo en un momento.",
+};
+
+/**
+ * Card "Conectar X" on /perfil: get a code, post it on X, paste the link, verify.
+ * The result is saved to the profile by the server; on load the card reflects
+ * the profile's `x_handle` (through useProfile).
+ */
 export function XVerifyCard() {
   return (
     <PollarGate>
@@ -17,7 +28,8 @@ export function XVerifyCard() {
 }
 
 type Challenge = { code: string; text: string; intentUrl: string; expiresAt: number };
-type Verified = { handle: string; verifiedAt: string };
+type PersistReason = "no_profile" | "not_configured" | "error";
+type Verified = { handle: string; verifiedAt: string; persisted?: boolean; persistReason?: PersistReason };
 type Notice = { kind: "error" | "info"; text: string } | null;
 type CallResult<T> = { ok: true; data: T } | { ok: false; message: string };
 
@@ -33,6 +45,7 @@ function CheckIcon() {
 function XVerifyInner() {
   const { user, isLoading } = usePollarAuth();
   const { getClient } = usePollar();
+  const { profile, reload: reloadProfile } = useProfile();
   const address = user?.address ?? null;
 
   const [challenge, setChallenge] = useState<Challenge | null>(null);
@@ -75,6 +88,7 @@ function XVerifyInner() {
     setBusy(null);
     if (!res.ok) return setNotice({ kind: "error", text: res.message });
     setVerified(res.data);
+    if (res.data.persisted) void reloadProfile();
   }
 
   async function copyCode() {
@@ -111,16 +125,33 @@ function XVerifyInner() {
     );
   }
 
-  if (verified) {
+  // Fresh result of this visit first; otherwise what the profile already has saved.
+  const savedHandle = profile?.xHandle ?? null;
+  const shown: Verified | null = verified ?? (savedHandle ? { handle: savedHandle, verifiedAt: "", persisted: true } : null);
+
+  if (shown) {
+    const saved = shown.persisted === true;
     return (
       <section className="card" style={{ display: "grid", gap: "0.75rem" }} aria-labelledby="x-title">
         <h2 id="x-title" style={{ margin: 0, fontSize: "1.1rem" }}>Conectar X</h2>
         <p role="status" style={{ margin: 0, display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--glow)" }}>
           <CheckIcon />
           <span>
-            <strong>@{verified.handle}</strong> verificado
+            <strong>@{shown.handle}</strong> verificado{saved ? " y guardado en tu perfil" : ""}
           </span>
         </p>
+        {!saved && (
+          <>
+            <p className="muted" style={{ margin: 0, fontSize: "0.875rem" }}>
+              {NOT_SAVED[shown.persistReason ?? "error"]}
+            </p>
+            <div>
+              <button type="button" className="btn" onClick={() => setVerified(null)}>
+                Verificar de nuevo
+              </button>
+            </div>
+          </>
+        )}
         {explainer}
       </section>
     );
