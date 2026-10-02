@@ -11,6 +11,7 @@ const HOUR = 60 * MINUTE;
 
 export const API_LIMITS = {
   profileWrite: { max: 20, windowMs: 10 * MINUTE },
+  usernameSuggest: { max: 60, windowMs: 10 * MINUTE },
   communityCreate: { max: 10, windowMs: HOUR },
   communityJoin: { max: 60, windowMs: HOUR },
   channelCreate: { max: 20, windowMs: HOUR },
@@ -27,6 +28,7 @@ const limiters = Object.fromEntries(
 
 const MESSAGES: Record<LimitKind, string> = {
   profileWrite: "Demasiados cambios de perfil. Espera un momento e intenta de nuevo.",
+  usernameSuggest: "Pediste muchas sugerencias seguidas. Espera un momento e intenta de nuevo.",
   communityCreate: "Creaste muchas comunidades seguidas. Espera un momento e intenta de nuevo.",
   communityJoin: "Demasiados intentos de unirte. Espera un momento e intenta de nuevo.",
   channelCreate: "Creaste muchos canales seguidos. Espera un momento e intenta de nuevo.",

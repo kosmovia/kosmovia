@@ -274,3 +274,27 @@ input[aria-invalid="true"] { border-color: var(--danger); }
   .gen-suggest-item { transition: border-color 0.15s; }
 }
 /* ===== Fin avatares ===== */
+
+/* ===== Sugerencias de @usuario y editor de perfil ===== */
+.name-suggest { display: grid; gap: 0.5rem; margin-top: 0.25rem; }
+.name-suggest-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.name-chip {
+  min-height: 36px;
+  padding: 0 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--glow);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.name-chip:hover { border-color: var(--accent-strong); }
+.name-suggest-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+.profile-edit { display: grid; gap: 1rem; margin: 1rem 0; }
+.profile-head { display: flex; align-items: center; gap: 1rem; }
+.profile-head-name { margin: 0; font-size: 1.25rem; font-weight: 700; }
+.profile-head-user { margin: 0; }
+.profile-section { display: grid; gap: 0.75rem; }
+.profile-section h2 { font-size: 1.1rem; margin: 0; }

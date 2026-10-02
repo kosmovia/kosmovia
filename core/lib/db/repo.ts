@@ -37,6 +37,12 @@ async function one<T = Record<string, unknown>>(query: q.Query | null): Promise<
 export const getProfileById = (id: string) => one<ProfileRow>(q.profileById(id));
 export const getProfileByUsername = (username: string) => one<ProfileRow>(q.profileByUsername(username));
 
+export async function takenUsernames(names: string[]): Promise<Set<string>> {
+  if (names.length === 0) return new Set();
+  const rows = await run<{ username: string }>(q.takenUsernames(names));
+  return new Set(rows.map((r) => r.username));
+}
+
 /** id and wallet come from the session, never from the body. */
 export const createProfile = (p: q.NewProfile) => one<ProfileRow>(q.insertProfile(p));
 

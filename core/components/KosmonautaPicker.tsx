@@ -11,6 +11,8 @@ import {
   azarFijo,
   codificar,
   combinaciones,
+  decodificar,
+  esCodigoValido,
   hash32,
   rects,
   siguiente,
@@ -21,6 +23,8 @@ import {
 export interface KosmonautaPickerProps {
   /** Dirección de la wallet: de aquí salen el avatar inicial y las 6 sugerencias (estables). */
   address: string;
+  /** Código de un Kosmonauta para empezar desde él (p. ej. el actual al editar). */
+  initial?: string;
   /** Recibe el código a guardar (avatarSeed, con avatarStyle "kosmonauta"). */
   onChange?: (code: string) => void;
 }
@@ -42,16 +46,19 @@ function sugerenciasDe(rnd: () => number): Seleccion[] {
   return Array.from({ length: COUNT }, () => aleatorio(undefined, {}, rnd));
 }
 
-export function KosmonautaPicker({ address, onChange }: KosmonautaPickerProps) {
+export function KosmonautaPicker({ address, initial, onChange }: KosmonautaPickerProps) {
   const inicial = useMemo(() => sugerenciasDe(azarFijo(hash32(address))), [address]);
   const [sugerencias, setSugerencias] = useState<Seleccion[]>(inicial);
-  const [sel, setSel] = useState<Seleccion>(inicial[0]);
+  const [sel, setSel] = useState<Seleccion>(() => (esCodigoValido(initial) ? decodificar(initial) : inicial[0]));
   const [candados, setCandados] = useState<Partial<Record<Categoria, boolean>>>({});
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
-  // Si cambia la wallet, se vuelve a sus sugerencias.
+  // Si cambia la wallet (no en el primer render), se vuelve a sus sugerencias.
+  const prevInicial = useRef(inicial);
   useEffect(() => {
+    if (prevInicial.current === inicial) return;
+    prevInicial.current = inicial;
     setSugerencias(inicial);
     setSel(inicial[0]);
   }, [inicial]);

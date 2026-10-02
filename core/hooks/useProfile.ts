@@ -7,6 +7,7 @@ import { isApiBackend } from "../lib/backend.ts";
 import { fromHandle, isUniqueViolation, mapProfile, type ProfileRow } from "../lib/mappers.ts";
 import { isAvatarStyle, isValidAvatarSeed } from "../lib/avatar/generator.ts";
 import { esCodigoValido } from "../lib/avatar/kosmonautas.ts";
+import { cooldownMessage } from "../lib/cooldowns.ts";
 import { USERNAME_RE } from "../lib/validation.ts";
 import { useSupabase } from "./useSupabase.ts";
 
@@ -47,6 +48,8 @@ export type ProfileResult = { ok: true; profile: User } | { ok: false; error: st
 type PgError = { code?: string; message?: string; details?: string } | null;
 
 function describeError(error: NonNullable<PgError>): string {
+  const cooldown = cooldownMessage(error);
+  if (cooldown) return cooldown;
   if (isUniqueViolation(error)) {
     const text = `${error.message ?? ""} ${error.details ?? ""}`;
     if (/username/i.test(text)) return USERNAME_TAKEN;

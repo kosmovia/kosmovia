@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState, type FormEvent } from "react";
 import { KosmonautaPicker } from "@/components/KosmonautaPicker";
+import { UsernameSuggestions } from "@/components/UsernameSuggestions";
 import { atributos, decodificar } from "@/lib/avatar/kosmonautas";
 import { PollarGate } from "@/lib/pollar";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
@@ -102,8 +103,16 @@ function ProfileForm({ address }: { address: string | null }) {
             className={showError ? "field-hint error" : "field-hint muted"}
             role={showError ? "alert" : undefined}
           >
-            {showError ? error : "De 3 a 20 caracteres: minúsculas, números y guion bajo."}
+            {showError ? error : "De 3 a 20 caracteres: minúsculas, números y guion bajo. Podrás cambiarlo una vez cada 24 horas."}
           </p>
+          <UsernameSuggestions
+            canAskServer={address !== null}
+            onPick={(u) => {
+              setUsername(u);
+              setTouched(true);
+            }}
+            onFirst={(u) => setUsername((cur) => cur || u)}
+          />
         </div>
 
         <div className="field">

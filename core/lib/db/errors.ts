@@ -1,4 +1,5 @@
 import { quotaMessage } from "../mappers.ts";
+import { cooldownMessage } from "../cooldowns.ts";
 
 /**
  * Turns a database error into the HTTP answer the client understands, without
@@ -24,6 +25,9 @@ export function classifyDbError(err: unknown): ApiFailure {
   // quota_exceeded:* raised by the triggers (SQLSTATE P0001).
   const quota = e.code === "P0001" ? quotaMessage(e) : null;
   if (quota) return { status: 429, code: "quota_exceeded", error: quota };
+  // cooldown:* raised by profiles_change_cooldown (0003_cambios_perfil.sql).
+  const cooldown = e.code === "P0001" ? cooldownMessage(e) : null;
+  if (cooldown) return { status: 429, code: "cooldown", error: cooldown };
 
   if (e.code === "23505") {
     const c = e.constraint ?? "";

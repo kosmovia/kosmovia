@@ -15,6 +15,8 @@ export interface User {
   avatarStyle?: string;
   trustLevel?: 0 | 1 | 2; // 0 wallet · 1 social · 2 empresa
   xHandle?: string;
+  usernameChangedAt?: string; // ISO; se puede cambiar 1 vez cada 24 h
+  avatarChangedAt?: string; // ISO; se puede cambiar 1 vez cada 3 días
 }
 
 export interface Channel {

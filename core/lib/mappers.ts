@@ -13,6 +13,8 @@ export interface ProfileRow {
   x_handle: string | null;
   x_verified_at?: string | null;
   created_at?: string;
+  username_changed_at?: string | null;
+  avatar_changed_at?: string | null;
 }
 
 /** Only what a chat bubble needs from an author: no wallet, bio, trust level or X handle. */
@@ -82,6 +84,8 @@ export function mapProfile(row: ProfileRow): User {
     avatarStyle: row.avatar_style ?? undefined,
     trustLevel: trust,
     xHandle: row.x_handle ?? undefined,
+    usernameChangedAt: row.username_changed_at ?? undefined,
+    avatarChangedAt: row.avatar_changed_at ?? undefined,
   };
 }
 

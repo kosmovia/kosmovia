@@ -16,7 +16,7 @@ export interface Query {
 }
 
 const PROFILE_COLUMNS =
-  "p.id, p.wallet, p.username, p.display_name, p.avatar_seed, p.avatar_style, p.bio, p.trust_level, p.x_handle, p.x_verified_at, p.created_at";
+  "p.id, p.wallet, p.username, p.display_name, p.avatar_seed, p.avatar_style, p.bio, p.trust_level, p.x_handle, p.x_verified_at, p.created_at, p.username_changed_at, p.avatar_changed_at";
 const COMMUNITY_COLUMNS = "c.id, c.slug, c.name, c.icon, c.description, c.owner_id, c.created_at";
 const CHANNEL_COLUMNS = "ch.id, ch.community_id, ch.name, ch.topic, ch.type";
 
@@ -44,6 +44,12 @@ export const profileByUsername = (username: string): Query => ({
   values: [username],
 });
 
+/** Which of these usernames (already lowercase) are taken. */
+export const takenUsernames = (names: string[]): Query => ({
+  text: "select lower(p.username) as username from public.profiles p where lower(p.username) = any($1::text[])",
+  values: [names],
+});
+
 export interface NewProfile {
   id: string;
   wallet: string;
@@ -58,7 +64,8 @@ export const insertProfile = (p: NewProfile): Query => ({
   text:
     "insert into public.profiles (id, wallet, username, display_name, avatar_seed, avatar_style) " +
     "values ($1, $2, $3, $4, $5, $6) " +
-    "returning id, wallet, username, display_name, avatar_seed, avatar_style, bio, trust_level, x_handle, x_verified_at, created_at",
+    "returning id, wallet, username, display_name, avatar_seed, avatar_style, bio, trust_level, x_handle, x_verified_at, created_at, " +
+      "username_changed_at, avatar_changed_at",
   values: [p.id, p.wallet, p.username, p.displayName, p.avatarSeed, p.avatarStyle],
 });
 
@@ -93,7 +100,8 @@ export function updateProfile(id: string, patch: ProfilePatch): Query | null {
   return {
     text:
       `update public.profiles set ${sets.join(", ")} where id = $1 ` +
-      "returning id, wallet, username, display_name, avatar_seed, avatar_style, bio, trust_level, x_handle, x_verified_at, created_at",
+      "returning id, wallet, username, display_name, avatar_seed, avatar_style, bio, trust_level, x_handle, x_verified_at, created_at, " +
+      "username_changed_at, avatar_changed_at",
     values,
   };
 }
