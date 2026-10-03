@@ -107,7 +107,7 @@ export default function Page() {
   const canAdmin = myRole === "owner" || myRole === "admin";
 
   return (
-    <>
+    <div className="page-wide">
       <h1>{community.name}</h1>
       {community.description ? <p className="muted">{community.description}</p> : null}
       <div style={{ display: "grid", gap: "1rem", gridTemplateColumns: "minmax(0,1fr)" }}>
@@ -150,7 +150,7 @@ export default function Page() {
           </ul>
         </section>
       </div>
-    </>
+    </div>
   );
 }
 

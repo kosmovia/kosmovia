@@ -32,6 +32,7 @@ function ProfileForm({ address }: { address: string | null }) {
   const userId = useId();
   const nameId = useId();
   const { create, blocker } = useProfile();
+  const [step, setStep] = useState<1 | 2>(1);
   const [username, setUsername] = useState("");
   const [touched, setTouched] = useState(false);
   const [displayName, setDisplayName] = useState("");
@@ -42,7 +43,13 @@ function ProfileForm({ address }: { address: string | null }) {
   const error = usernameError(username);
   const showError = touched && error !== null;
   const valid = USERNAME_RE.test(username);
+  const canAdvance = valid;
   const canSubmit = valid && avatar !== null && address !== null && blocker === null && !saving;
+
+  const goNext = () => {
+    setTouched(true);
+    if (canAdvance) setStep(2);
+  };
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -76,85 +83,116 @@ function ProfileForm({ address }: { address: string | null }) {
         </p>
       ) : null}
 
+      <div className="stepper">
+        <div className="stepper-step" data-state={step === 1 ? "active" : "done"}>
+          <div className="stepper-bar" />
+          <span className="stepper-label">1. Usuario</span>
+        </div>
+        <div className="stepper-step" data-state={step === 2 ? "active" : "pending"}>
+          <div className="stepper-bar" />
+          <span className="stepper-label">2. Kosmonauta</span>
+        </div>
+      </div>
+
       <form className="profile-form" onSubmit={onSubmit} noValidate>
-        <div className="field">
-          <label htmlFor={userId}>@usuario</label>
-          <div className="field-prefix">
-            <span aria-hidden="true">@</span>
-            <input
-              id={userId}
-              name="username"
-              type="text"
-              autoComplete="off"
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              maxLength={30}
-              placeholder="tu_usuario"
-              value={username}
-              aria-invalid={showError}
-              aria-describedby={`${userId}-hint`}
-              onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/^@/, ""))}
-              onBlur={() => setTouched(true)}
-            />
-          </div>
-          <p
-            id={`${userId}-hint`}
-            className={showError ? "field-hint error" : "field-hint muted"}
-            role={showError ? "alert" : undefined}
-          >
-            {showError ? error : "De 3 a 20 caracteres: minúsculas, números y guion bajo. Podrás cambiarlo una vez cada 24 horas."}
-          </p>
-          <UsernameSuggestions
-            canAskServer={address !== null}
-            onPick={(u) => {
-              setUsername(u);
-              setTouched(true);
-            }}
-            onFirst={(u) => setUsername((cur) => cur || u)}
-          />
-        </div>
+        {step === 1 ? (
+          <>
+            <div className="field">
+              <label htmlFor={userId}>@usuario</label>
+              <div className="field-prefix">
+                <span aria-hidden="true">@</span>
+                <input
+                  id={userId}
+                  name="username"
+                  type="text"
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  maxLength={30}
+                  placeholder="tu_usuario"
+                  value={username}
+                  aria-invalid={showError}
+                  aria-describedby={`${userId}-hint`}
+                  onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/^@/, ""))}
+                  onBlur={() => setTouched(true)}
+                />
+              </div>
+              <p
+                id={`${userId}-hint`}
+                className={showError ? "field-hint error" : "field-hint muted"}
+                role={showError ? "alert" : undefined}
+              >
+                {showError ? error : "De 3 a 20 caracteres: minúsculas, números y guion bajo. Podrás cambiarlo una vez cada 24 horas."}
+              </p>
+              <UsernameSuggestions
+                canAskServer={address !== null}
+                onPick={(u) => {
+                  setUsername(u);
+                  setTouched(true);
+                }}
+                onFirst={(u) => setUsername((cur) => cur || u)}
+              />
+            </div>
 
-        <div className="field">
-          <label htmlFor={nameId}>Nombre visible</label>
-          <input
-            id={nameId}
-            name="displayName"
-            type="text"
-            autoComplete="off"
-            maxLength={40}
-            placeholder="Cómo te verán los demás"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-          />
-        </div>
+            <div className="field">
+              <label htmlFor={nameId}>Nombre visible</label>
+              <input
+                id={nameId}
+                name="displayName"
+                type="text"
+                autoComplete="off"
+                maxLength={40}
+                placeholder="Cómo te verán los demás"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+              />
+            </div>
 
-        <KosmonautaPicker address={address ?? DEMO_ADDRESS} onChange={setAvatar} />
+            <div className="form-actions">
+              <button type="button" className="btn btn-primary" disabled={!canAdvance} onClick={goNext}>
+                Siguiente
+              </button>
+              {showError ? (
+                <p className="field-hint error" role="alert">
+                  {error}
+                </p>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          <>
+            <KosmonautaPicker address={address ?? DEMO_ADDRESS} onChange={setAvatar} />
 
-        <div className="form-actions">
-          <button type="submit" className="btn btn-primary" disabled={!canSubmit} aria-describedby="profile-submit-note">
-            {saving ? "Guardando…" : "Crear perfil"}
-          </button>
-          <p id="profile-submit-note" className="muted field-hint">
-            {note}
-            {avatar ? (
-              <span className="visually-hidden">
-                {" "}
-                Avatar elegido:{" "}
-                {atributos(decodificar(avatar))
-                  .slice(0, -1)
-                  .map((a) => `${a.trait_type} ${a.value}`)
-                  .join(", ")}
-                .
-              </span>
-            ) : null}
-          </p>
-          {submitError ? (
-            <p className="field-hint error" role="alert">
-              {submitError}
+            <div className="form-actions" style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem" }}>
+              <button type="button" className="btn btn-ghost" onClick={() => setStep(1)}>
+                Atrás
+              </button>
+              <button type="submit" className="btn btn-primary" disabled={!canSubmit} aria-describedby="profile-submit-note">
+                {saving ? "Guardando…" : "Crear perfil"}
+              </button>
+            </div>
+            <p id="profile-submit-note" className="muted field-hint">
+              {note}
+              {avatar ? (
+                <span className="visually-hidden">
+                  {" "}
+                  Avatar elegido:{" "}
+                  {atributos(decodificar(avatar))
+                    .slice(0, -1)
+                    .map((a) => `${a.trait_type} ${a.value}`)
+                    .join(", ")}
+                  .
+                </span>
+              ) : null}
             </p>
-          ) : null}
-        </div>
+            {submitError ? (
+              <p className="field-hint error" role="alert">
+                {submitError}
+              </p>
+            ) : null}
+          </>
+        )}
       </form>
     </>
   );

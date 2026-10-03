@@ -63,7 +63,7 @@ export default function Page() {
   const loggedIn = blocker === null;
 
   return (
-    <>
+    <div className="page-wide">
       <h1>Comunidades</h1>
       <p className="muted">Descubre comunidades, únete o crea la tuya.</p>
 
@@ -123,24 +123,31 @@ export default function Page() {
         </p>
       ) : null}
       {!loading && !error && all.length === 0 ? <p className="muted">Todavía no hay comunidades.</p> : null}
-      <ul style={{ listStyle: "none", padding: 0, display: "grid", gap: "0.75rem" }}>
+      <ul className="community-grid">
         {all.map((c) => (
-          <li key={c.id} className="card">
-            <strong>
-              <Link href={`/c/${c.slug}`}>{c.name}</Link>
-            </strong>
-            {c.description ? <p className="muted" style={{ margin: "0.25rem 0 0.5rem" }}>{c.description}</p> : null}
-            {mineIds.has(c.id) ? (
-              <span className="muted">Eres miembro · </span>
-            ) : loggedIn ? (
-              <button type="button" className="btn" disabled={joining === c.id} onClick={() => onJoin(c.id)}>
-                {joining === c.id ? "Uniéndote…" : "Unirme"}
-              </button>
-            ) : null}{" "}
-            <Link href={`/c/${c.slug}`}>Abrir</Link>
+          <li key={c.id} className="card card-interactive community-card">
+            <div className="community-card-head">
+              <span className="community-badge" aria-hidden="true">
+                {c.name.trim().charAt(0).toUpperCase() || "?"}
+              </span>
+              <strong className="community-card-name">
+                <Link href={`/c/${c.slug}`}>{c.name}</Link>
+              </strong>
+            </div>
+            {c.description ? <p className="muted community-card-desc">{c.description}</p> : null}
+            <div className="community-card-actions">
+              {mineIds.has(c.id) ? (
+                <span className="muted">Eres miembro</span>
+              ) : loggedIn ? (
+                <button type="button" className="btn" disabled={joining === c.id} onClick={() => onJoin(c.id)}>
+                  {joining === c.id ? "Uniéndote…" : "Unirme"}
+                </button>
+              ) : null}
+              <Link href={`/c/${c.slug}`}>Abrir</Link>
+            </div>
           </li>
         ))}
       </ul>
-    </>
+    </div>
   );
 }

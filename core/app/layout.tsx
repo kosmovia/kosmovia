@@ -3,6 +3,8 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { Providers } from "../components/Providers";
 import { LoginHeaderSession } from "../components/LoginHeaderSession";
+import { Sidebar } from "../components/Sidebar";
+import { SidebarUser } from "../components/SidebarUser";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -10,35 +12,29 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-const links = [
-  { href: "/", label: "Entrar" },
-  { href: "/perfil/nuevo", label: "Crear perfil" },
-  { href: "/wallet", label: "Wallet" },
-  { href: "/comunidades", label: "Comunidades" },
-  { href: "/perfil", label: "Perfil" },
-];
-
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="es">
       <body>
         <Providers>
-          <header className="app-header">
-            <Link href="/" className="wordmark">
-              Kosmovia
-            </Link>
-            <div className="header-slot" aria-label="Sesión">
-              <LoginHeaderSession />
-            </div>
-          </header>
-          <nav className="app-nav" aria-label="Principal">
-            {links.map((l) => (
-              <Link key={l.href} href={l.href}>
-                {l.label}
+          <div className="app-shell">
+            <header className="app-topbar">
+              <Link href="/" className="wordmark">
+                Kosmovia
               </Link>
-            ))}
-          </nav>
-          <main className="page">{children}</main>
+              <div className="header-slot" aria-label="Sesión">
+                <LoginHeaderSession />
+              </div>
+            </header>
+            <div className="app-body">
+              <aside className="sidebar sidebar-desktop">
+                <Sidebar />
+                <SidebarUser />
+              </aside>
+              <main className="main-content">{children}</main>
+            </div>
+            <Sidebar className="sidebar sidebar-mobile" />
+          </div>
         </Providers>
       </body>
     </html>
