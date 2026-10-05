@@ -380,12 +380,14 @@ export class ApiWalletService implements IWalletService {
     const me = myAddress();
     if (!client) throw new ApiError('Pollar no está listo.');
 
-    // A quién: @usuario o dirección G…. Los cobros B2B a un #canal siguen en modo demo.
+    // A quién: @usuario (con o sin @, igual que la vista previa) o dirección G….
+    // Los cobros B2B a un #canal siguen en modo demo.
     const raw = input.to.trim();
+    const handle = raw.replace(/^@/, '').toLowerCase();
     let destination: string;
     if (ADDRESS_RE.test(raw.toUpperCase())) destination = raw.toUpperCase();
-    else if (raw.startsWith('@')) {
-      const { profile } = await call<{ profile: ProfileRow }>(`/api/profiles/${encodeURIComponent(raw.slice(1).toLowerCase())}`);
+    else if (HANDLE_RE.test(handle)) {
+      const { profile } = await call<{ profile: ProfileRow }>(`/api/profiles/${encodeURIComponent(handle)}`);
       destination = profile.wallet;
     } else throw new ApiError('Por ahora solo se puede pagar a un @usuario o a una dirección G….');
     if (destination === me) throw new ApiError('No puedes enviarte a ti mismo.');
