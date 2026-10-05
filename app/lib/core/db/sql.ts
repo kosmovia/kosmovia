@@ -28,7 +28,7 @@ const AUTHOR_JSON =
   "json_build_object('id', a.id, 'username', a.username, 'display_name', a.display_name, 'avatar_seed', a.avatar_seed, 'avatar_style', a.avatar_style)";
 
 /** What a message row looks like on the wire: MessageRow + the slim author. */
-const MESSAGE_SELECT = `m.id, m.channel_id, m.author_id, m.content, ${isoUs("m.created_at")} as created_at, ${AUTHOR_JSON} as author`;
+const MESSAGE_SELECT = `m.id, m.channel_id, m.author_id, m.content, ${isoUs("m.created_at")} as created_at, ${isoUs("m.edited_at")} as edited_at, ${AUTHOR_JSON} as author`;
 
 export const MESSAGE_FROM = "from public.messages m join public.profiles a on a.id = m.author_id";
 
@@ -172,6 +172,16 @@ export const updateCommunityImage = (slug: string, ownerId: string, image: strin
   values: [slug, ownerId, image],
 });
 
+/** Owner o admin: la condición de rol de la sesión va en el WHERE. Cero filas = no permitido (o no existe). */
+export const updateCommunityDescription = (slug: string, profileId: string, description: string): Query => ({
+  text:
+    "update public.communities c set description = $3 where c.slug = $1 " +
+    "and exists (select 1 from public.members m where m.community_id = c.id and m.profile_id = $2::uuid " +
+    "and m.role in ('owner', 'admin')) " +
+    "returning c.id, c.slug, c.name, c.icon, c.description, c.owner_id, c.created_at, c.image",
+  values: [slug, profileId, description],
+});
+
 /** Always as 'member'; joining twice is not an error. */
 export const joinCommunity = (communityId: string, profileId: string): Query => ({
   text:
@@ -258,6 +268,15 @@ export const deleteChannel = (channelId: string, profileId: string): Query => ({
   values: [channelId, profileId],
 });
 
+/** Cambia el tema de un canal solo si quien llama es owner o admin de su comunidad. Cero filas = no permitido (o no existe). */
+export const updateChannelTopic = (channelId: string, profileId: string, topic: string | null): Query => ({
+  text:
+    "update public.channels ch set topic = $3 where ch.id = $1 " +
+    "and exists (select 1 from public.members m where m.community_id = ch.community_id and m.profile_id = $2::uuid " +
+    "and m.role in ('owner', 'admin')) returning ch.id, ch.community_id, ch.name, ch.topic, ch.type",
+  values: [channelId, profileId, topic],
+});
+
 /** The channel plus the caller's role in its community (null when not a member), in one round trip. */
 export const channelWithRole = (channelId: string, profileId: string): Query => ({
   text:
@@ -335,10 +354,53 @@ export const insertMessage = (channelId: string, authorId: string, content: stri
     "select ch.id, $2::uuid, $3 from public.channels ch " +
     "join public.members mem on mem.community_id = ch.community_id and mem.profile_id = $2::uuid " +
     "where ch.id = $1 and (ch.type = 'text' or mem.role in ('owner', 'admin')) " +
-    "returning id, channel_id, author_id, content, created_at) " +
-    `select m.id, m.channel_id, m.author_id, m.content, ${isoUs("m.created_at")} as created_at, ${AUTHOR_JSON} as author ` +
+    "returning id, channel_id, author_id, content, created_at, edited_at) " +
+    `select m.id, m.channel_id, m.author_id, m.content, ${isoUs("m.created_at")} as created_at, ${isoUs("m.edited_at")} as edited_at, ${AUTHOR_JSON} as author ` +
     "from ins m join public.profiles a on a.id = m.author_id",
   values: [channelId, authorId, content],
+});
+
+/** The message (inside its channel) plus the caller's role in the channel's community (null when not a member). */
+export const messageWithRole = (channelId: string, messageId: string, profileId: string): Query => ({
+  text:
+    "select m.id, m.author_id, ch.community_id, mem.role " +
+    "from public.messages m join public.channels ch on ch.id = m.channel_id " +
+    "left join public.members mem on mem.community_id = ch.community_id and mem.profile_id = $3 " +
+    "where m.id = $2 and m.channel_id = $1",
+  values: [channelId, messageId, profileId],
+});
+
+/**
+ * Edits a message's content and stamps edited_at, only if the caller is its
+ * author and still a member (the same rule as canEditMessage). Zero rows back
+ * = not allowed (or it no longer exists).
+ */
+export const updateMessage = (channelId: string, messageId: string, authorId: string, content: string): Query => ({
+  text:
+    "with upd as (" +
+    "update public.messages m set content = $4, edited_at = now() " +
+    "from public.channels ch " +
+    "where m.id = $2 and m.channel_id = $1 and ch.id = m.channel_id and m.author_id = $3::uuid " +
+    "and exists (select 1 from public.members mem where mem.community_id = ch.community_id and mem.profile_id = $3::uuid) " +
+    "returning m.id, m.channel_id, m.author_id, m.content, m.created_at, m.edited_at) " +
+    `select m.id, m.channel_id, m.author_id, m.content, ${isoUs("m.created_at")} as created_at, ${isoUs("m.edited_at")} as edited_at, ${AUTHOR_JSON} as author ` +
+    "from upd m join public.profiles a on a.id = m.author_id",
+  values: [channelId, messageId, authorId, content],
+});
+
+/**
+ * Hard-deletes a message if the caller is a member and either its author or
+ * owner/admin/moderator of the community (the same rule as canDeleteMessage).
+ * Zero rows back = not allowed (or it no longer exists).
+ */
+export const deleteMessage = (channelId: string, messageId: string, profileId: string): Query => ({
+  text:
+    "delete from public.messages m using public.channels ch " +
+    "where m.id = $2 and m.channel_id = $1 and ch.id = m.channel_id " +
+    "and exists (select 1 from public.members mem where mem.community_id = ch.community_id and mem.profile_id = $3::uuid " +
+    "and (m.author_id = $3::uuid or mem.role in ('owner', 'admin', 'moderator'))) " +
+    "returning m.id",
+  values: [channelId, messageId, profileId],
 });
 
 // ----------------------------------------------------------------- payments

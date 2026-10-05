@@ -188,6 +188,17 @@ export function parseMessageCreate(body: unknown): Parsed<{ content: string }> {
   return { ok: true, value: { content } };
 }
 
+/** Body de PATCH /api/channels/[id]: `{ topic }` (texto recortado, 0..TOPIC_MAX; vacío = sin tema, null). */
+export function parseChannelUpdate(body: unknown): Parsed<{ topic: string | null }> {
+  if (!isRecord(body) || typeof body.topic !== "string") return fail("Escribe el tema del canal.");
+  const topic = body.topic.trim();
+  if (topic.length > TOPIC_MAX) return fail(`El tema debe tener ${TOPIC_MAX} caracteres como máximo.`);
+  return { ok: true, value: { topic: topic === "" ? null : topic } };
+}
+
+/** Body de PATCH .../messages/[messageId]: las mismas reglas que al publicar (1..2000 caracteres). */
+export const parseMessageEdit = parseMessageCreate;
+
 export interface MessagesQuery {
   before?: string;
   after?: string;
@@ -242,4 +253,12 @@ export function cleanUsernameParam(raw: string): string | null {
   }
   const s = fromHandle(decoded);
   return USERNAME_RE.test(s) ? s : null;
+}
+
+/** Descripción de la comunidad en PATCH /api/communities/[slug]: texto recortado, 0..DESCRIPTION_MAX; vacío = ''. */
+export function parseCommunityDescription(value: unknown): Parsed<string> {
+  if (typeof value !== "string") return fail("Escribe la descripción de la comunidad.");
+  const description = value.trim();
+  if (description.length > DESCRIPTION_MAX) return fail(`La descripción debe tener ${DESCRIPTION_MAX} caracteres como máximo.`);
+  return { ok: true, value: description };
 }

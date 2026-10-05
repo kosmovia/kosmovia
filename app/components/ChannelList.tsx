@@ -4,6 +4,7 @@ import React from 'react';
 import { Community, User } from '../types';
 import { AvatarFace } from './AvatarFace';
 import { CommunityCard } from './CommunityCard';
+import { IconGear } from './Icons';
 
 interface ChannelListProps {
   community: Community;
@@ -15,6 +16,8 @@ interface ChannelListProps {
   /** Dueño o admin de la comunidad activa. */
   isOwner?: boolean;
   onOpenSettings?: () => void;
+  /** Dueño o admin: abre "Configurar canal" (descripción y borrar). */
+  onOpenChannelSettings?: (channelId: string) => void;
   onNotice?: (text: string) => void;
 }
 
@@ -27,6 +30,7 @@ export function ChannelList({
   onOpenCreateChannel,
   isOwner = false,
   onOpenSettings,
+  onOpenChannelSettings,
   onNotice,
 }: ChannelListProps) {
   return (
@@ -58,15 +62,27 @@ export function ChannelList({
         {community.channels.map((channel) => {
           const isActive = channel.id === activeChannelId;
           return (
-            <button
-              key={channel.id}
-              type="button"
-              className={`channel-item-btn ${isActive ? 'active' : ''}`}
-              onClick={() => onSelectChannel(channel.id)}
-            >
-              <span className="channel-hash">#</span>
-              <span>{channel.name}</span>
-            </button>
+            <div key={channel.id} className="kv-channel-item">
+              <button
+                type="button"
+                className={`channel-item-btn ${isActive ? 'active' : ''}`}
+                onClick={() => onSelectChannel(channel.id)}
+              >
+                <span className="channel-hash">#</span>
+                <span>{channel.name}</span>
+              </button>
+              {isOwner && onOpenChannelSettings ? (
+                <button
+                  type="button"
+                  className="kv-channel-gear"
+                  onClick={() => onOpenChannelSettings(channel.id)}
+                  aria-label={`Configurar el canal ${channel.name}`}
+                  title="Configurar canal"
+                >
+                  <IconGear size={14} />
+                </button>
+              ) : null}
+            </div>
           );
         })}
       </div>

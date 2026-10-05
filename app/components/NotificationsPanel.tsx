@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { WalletTransaction } from '../types';
+import { IconClose } from './Icons';
 
 /**
  * Notificaciones de pagos en el panel derecho (como Miembros): queda abierto
@@ -12,13 +13,12 @@ export function NotificationsPanel({ transactions, onClose }: { transactions: Wa
   return (
     <aside className="member-sidebar kv-docked-panel" aria-label="Notificaciones de pagos">
       <div className="kv-panel-head">
-        <span className="member-section-header" style={{ padding: 0 }}>
-          Notificaciones
-        </span>
+        <span className="kv-panel-title">Notificaciones</span>
         <button type="button" className="wallet-close-btn" onClick={onClose} aria-label="Cerrar notificaciones">
-          ✕
+          <IconClose size={18} />
         </button>
       </div>
+      <div className="kv-panel-body">
       <div className="wallet-tx-list">
         {recent.length === 0 ? (
           <p className="wallet-empty-text">Todavía no hay pagos. Cuando envíes o recibas dinero, aparece aquí.</p>
@@ -49,6 +49,7 @@ export function NotificationsPanel({ transactions, onClose }: { transactions: Wa
             </div>
           ))
         )}
+      </div>
       </div>
     </aside>
   );

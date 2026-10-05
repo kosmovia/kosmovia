@@ -3,6 +3,10 @@ import {
   canAssignRole,
   canCreateChannel,
   canDeleteChannel,
+  canDeleteMessage,
+  canEditChannel,
+  canEditCommunityDescription,
+  canEditMessage,
   canPostInChannel,
   canReadCommunity,
   roleOf,
@@ -97,6 +101,20 @@ export const createCommunity = (c: q.NewCommunity) => one<CommunityRow>(q.insert
 export const setCommunityImage = (slug: string, ownerId: string, image: string | null) =>
   one<CommunityRow>(q.updateCommunityImage(slug, ownerId, image));
 
+/** Cambia la descripción ('' la quita): owner/admin. Regla pura y de nuevo dentro del UPDATE. */
+export async function setCommunityDescription(
+  slug: string,
+  profileId: string,
+  description: string,
+): Promise<Guarded<CommunityRow> | { ok: false; notFound: true }> {
+  const community = await getCommunityBySlug(slug);
+  if (!community) return { ok: false, notFound: true };
+  const decision = canEditCommunityDescription(await getRole(community.id, profileId));
+  if (!decision.allowed) return { ok: false, denied: decision };
+  const row = await one<CommunityRow>(q.updateCommunityDescription(slug, profileId, description));
+  return row ? { ok: true, value: row } : { ok: false, denied: FORBIDDEN };
+}
+
 /** Borra la comunidad con todo lo suyo; false si quien llama no es el dueño (o no existe). */
 export async function deleteCommunity(slug: string, ownerId: string): Promise<boolean> {
   return (await one(q.deleteCommunity(slug, ownerId))) !== null;
@@ -173,6 +191,20 @@ export async function deleteChannel(channelId: string, profileId: string): Promi
   return row ? { ok: true, value: true } : { ok: false, denied: FORBIDDEN };
 }
 
+/** Cambia el tema del canal (null lo quita): owner/admin. Regla pura y de nuevo dentro del UPDATE. */
+export async function updateChannelTopic(
+  channelId: string,
+  profileId: string,
+  topic: string | null,
+): Promise<Guarded<ChannelRow> | { ok: false; notFound: true }> {
+  const access = await getChannelAccess(channelId, profileId);
+  if (!access.found) return { ok: false, notFound: true };
+  const decision = canEditChannel(access.role);
+  if (!decision.allowed) return { ok: false, denied: decision };
+  const row = await one<ChannelRow>(q.updateChannelTopic(channelId, profileId, topic));
+  return row ? { ok: true, value: row } : { ok: false, denied: FORBIDDEN };
+}
+
 // ----------------------------------------------------------------- messages
 
 export type MessageWire = {
@@ -181,6 +213,8 @@ export type MessageWire = {
   author_id: string;
   content: string;
   created_at: string;
+  /** null = nunca se editó. */
+  edited_at: string | null;
   author: AuthorRow;
 };
 
@@ -249,6 +283,37 @@ export async function postMessage(
     return { ok: false, denied: { allowed: false, status: 403, code: "forbidden", error: "No puedes escribir en este canal." } };
   }
   return { ok: true, value: row };
+}
+
+type MessageAccess = { id: string; author_id: string; community_id: string; role: string | null };
+
+/** Edita el mensaje: solo su autor. Regla pura y de nuevo dentro del UPDATE. `content` ya viene validado. */
+export async function editMessage(
+  channelId: string,
+  messageId: string,
+  profileId: string,
+  content: string,
+): Promise<Guarded<MessageWire> | { ok: false; notFound: true }> {
+  const msg = await one<MessageAccess>(q.messageWithRole(channelId, messageId, profileId));
+  if (!msg) return { ok: false, notFound: true };
+  const decision = canEditMessage(roleOf(msg.role), msg.author_id, profileId);
+  if (!decision.allowed) return { ok: false, denied: decision };
+  const row = await one<MessageWire>(q.updateMessage(channelId, messageId, profileId, content));
+  return row ? { ok: true, value: row } : { ok: false, denied: FORBIDDEN };
+}
+
+/** Borra el mensaje: su autor u owner/admin/moderator. Regla pura y de nuevo dentro del DELETE. */
+export async function removeMessage(
+  channelId: string,
+  messageId: string,
+  profileId: string,
+): Promise<Guarded<true> | { ok: false; notFound: true }> {
+  const msg = await one<MessageAccess>(q.messageWithRole(channelId, messageId, profileId));
+  if (!msg) return { ok: false, notFound: true };
+  const decision = canDeleteMessage(roleOf(msg.role), msg.author_id, profileId);
+  if (!decision.allowed) return { ok: false, denied: decision };
+  const row = await one(q.deleteMessage(channelId, messageId, profileId));
+  return row ? { ok: true, value: true } : { ok: false, denied: FORBIDDEN };
 }
 
 // ----------------------------------------------------------------- payments

@@ -16,8 +16,12 @@ interface CommunitySettingsModalProps {
   myRole: MyRole;
   currentUserId: string;
   onSaveImage: (image: string | null) => Promise<boolean>;
+  /** Dueño o admin: guarda la descripción de la comunidad; "" la quita. */
+  onSaveDescription: (description: string) => Promise<boolean>;
   onChangeRole: (profileId: string, role: AssignableRole) => Promise<boolean>;
   onDeleteChannel: (channelId: string) => Promise<boolean>;
+  /** Guarda la descripción (tema) de un canal; "" la quita. */
+  onSaveChannelTopic: (channelId: string, topic: string) => Promise<boolean>;
   onDeleteCommunity: () => Promise<boolean>;
 }
 
@@ -25,7 +29,7 @@ const ROLE_LABEL: Record<string, string> = { owner: 'Dueño', admin: 'Admin', mo
 
 /**
  * Configuración de la comunidad (dueño o admin), con el estilo de los modales:
- * Foto · Roles · Canales · Borrar (solo el dueño). El servidor vuelve a revisar
+ * General (descripción y foto) · Roles · Canales · Borrar (solo el dueño). El servidor vuelve a revisar
  * cada permiso; aquí solo se muestran las opciones que tu rol puede usar.
  */
 export function CommunitySettingsModal({
@@ -35,27 +39,35 @@ export function CommunitySettingsModal({
   myRole,
   currentUserId,
   onSaveImage,
+  onSaveDescription,
   onChangeRole,
   onDeleteChannel,
+  onSaveChannelTopic,
   onDeleteCommunity,
 }: CommunitySettingsModalProps) {
   const isOwner = myRole === 'owner';
-  const [tab, setTab] = useState<'photo' | 'roles' | 'channels' | 'delete'>('photo');
+  const [tab, setTab] = useState<'general' | 'roles' | 'channels' | 'delete'>('general');
   const [image, setImage] = useState<string | null>(community.image ?? null);
+  const [description, setDescription] = useState(community.description ?? '');
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmChannel, setConfirmChannel] = useState<string | null>(null);
   const [confirmName, setConfirmName] = useState('');
+  // Descripciones en edición (canal -> texto); sin entrada = sin cambios.
+  const [topicDrafts, setTopicDrafts] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!isOpen) return;
     setImage(community.image ?? null);
-    setTab('photo');
+    setDescription(community.description ?? '');
+    setTab('general');
     setConfirmChannel(null);
     setConfirmName('');
-  }, [isOpen, community.id, community.image]);
+    setTopicDrafts({});
+  }, [isOpen, community.id, community.image, community.description]);
 
   if (!isOpen) return null;
   const photoChanged = (image ?? null) !== (community.image ?? null);
+  const descriptionChanged = description.trim() !== (community.description ?? '');
 
   /** Qué roles puede darle tu rol a esta persona (vacío = no puedes cambiarla). */
   const optionsFor = (member: User): AssignableRole[] => {
@@ -73,7 +85,7 @@ export function CommunitySettingsModal({
   };
 
   const tabs: { id: typeof tab; label: string }[] = [
-    { id: 'photo', label: 'Foto' },
+    { id: 'general', label: 'General' },
     { id: 'roles', label: 'Roles' },
     { id: 'channels', label: 'Canales' },
     ...(isOwner ? [{ id: 'delete' as const, label: 'Borrar' }] : []),
@@ -107,20 +119,58 @@ export function CommunitySettingsModal({
           ))}
         </div>
 
-        {tab === 'photo' && (
+        {tab === 'general' && (
           <div className="modal-body">
-            <CommunityPhotoPicker name={community.name} value={image} onChange={setImage} />
-            <div className="modal-actions">
-              <button type="button" className="btn-secondary" onClick={onClose}>
-                Cerrar
-              </button>
+            <div className="form-group">
+              <label className="form-label" htmlFor="kv-community-desc">
+                Descripción
+              </label>
+              <textarea
+                id="kv-community-desc"
+                className="form-textarea"
+                rows={3}
+                maxLength={280}
+                placeholder="Cuenta de qué trata la comunidad (opcional)"
+                value={description}
+                disabled={busy !== null}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+              <span className="form-hint kv-field-count" aria-live="polite">
+                {description.length}/280
+              </span>
+            </div>
+            <div className="modal-actions kv-actions-inline">
               <button
                 type="button"
                 className="btn-primary"
-                disabled={!photoChanged || busy !== null}
-                onClick={() => void run('photo', () => onSaveImage(image))}
+                disabled={!descriptionChanged || busy !== null}
+                onClick={() => void run('description', () => onSaveDescription(description.trim()))}
               >
-                {busy === 'photo' ? 'Guardando…' : 'Guardar foto'}
+                {busy === 'description' ? 'Guardando…' : 'Guardar descripción'}
+              </button>
+            </div>
+
+            {isOwner ? (
+              <>
+                <hr className="kv-settings-sep" />
+                <CommunityPhotoPicker name={community.name} value={image} onChange={setImage} />
+                <div className="modal-actions kv-actions-inline">
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={!photoChanged || busy !== null}
+                    onClick={() => void run('photo', () => onSaveImage(image))}
+                  >
+                    {busy === 'photo' ? 'Guardando…' : 'Guardar foto'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p className="settings-tab-desc">Solo el dueño cambia la foto de la comunidad.</p>
+            )}
+            <div className="modal-actions">
+              <button type="button" className="btn-secondary" onClick={onClose}>
+                Cerrar
               </button>
             </div>
           </div>
@@ -173,14 +223,19 @@ export function CommunitySettingsModal({
 
         {tab === 'channels' && (
           <div className="modal-body">
-            <p className="settings-tab-desc">Borrar un canal borra todos sus mensajes. #general no se puede borrar.</p>
+            <p className="settings-tab-desc">
+              Cambia la descripción de cada canal (aparece junto a su nombre). Borrar un canal borra todos sus mensajes; #general no se puede borrar.
+            </p>
             <div className="kv-settings-list">
-              {community.channels.map((ch) => (
-                <div key={ch.id} className="kv-settings-row">
+              {community.channels.map((ch) => {
+                const draft = topicDrafts[ch.id] ?? ch.topic ?? '';
+                const topicChanged = draft.trim() !== (ch.topic ?? '');
+                return (
+                <div key={ch.id} className="kv-settings-row kv-channel-row">
+                  <div className="kv-channel-row-top">
                   <span className="channel-hash">#</span>
                   <div className="kv-settings-row-text">
                     <span className="member-name">{ch.name}</span>
-                    {ch.topic ? <span className="member-tag">{ch.topic}</span> : null}
                   </div>
                   {ch.name === 'general' ? (
                     <span className="member-tag">Protegido</span>
@@ -205,8 +260,42 @@ export function CommunitySettingsModal({
                       Borrar
                     </button>
                   )}
+                  </div>
+                  <div className="kv-topic-edit">
+                    <input
+                      type="text"
+                      className="form-input"
+                      maxLength={200}
+                      placeholder="Descripción del canal (opcional)"
+                      aria-label={`Descripción de #${ch.name}`}
+                      value={draft}
+                      disabled={busy !== null}
+                      onChange={(e) => setTopicDrafts((prev) => ({ ...prev, [ch.id]: e.target.value }))}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && topicChanged && busy === null) {
+                          e.preventDefault();
+                          void run(`topic:${ch.id}`, () => onSaveChannelTopic(ch.id, draft.trim())).then(
+                            (ok) => ok && setTopicDrafts((prev) => { const { [ch.id]: _gone, ...rest } = prev; return rest; }),
+                          );
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="btn-primary kv-topic-save"
+                      disabled={!topicChanged || busy !== null}
+                      onClick={() =>
+                        void run(`topic:${ch.id}`, () => onSaveChannelTopic(ch.id, draft.trim())).then(
+                          (ok) => ok && setTopicDrafts((prev) => { const { [ch.id]: _gone, ...rest } = prev; return rest; }),
+                        )
+                      }
+                    >
+                      {busy === `topic:${ch.id}` ? 'Guardando…' : 'Guardar'}
+                    </button>
+                  </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

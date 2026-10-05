@@ -99,9 +99,42 @@ export function canDeleteChannel(role: Role, channelName: string): Decision {
   return ALLOWED;
 }
 
+/** Cambiar el tema de un canal: owner y admin. El SQL de updateChannelTopic lo repite. */
+export function canEditChannel(role: Role): Decision {
+  if (role === null) return deny(403, "not_member", "Únete a la comunidad primero.");
+  if (!isAdminRole(role)) return deny(403, "not_admin", "Solo owner y admin editan el canal.");
+  return ALLOWED;
+}
+
+/** Roles que moderan mensajes ajenos: owner, admin y moderator. */
+export function isModeratorRole(role: Role): boolean {
+  return role === "owner" || role === "admin" || role === "moderator";
+}
+
+/** Editar un mensaje: solo su autor (y sigue siendo miembro). Nadie edita mensajes ajenos, ni el owner. */
+export function canEditMessage(role: Role, authorId: string, actorId: string): Decision {
+  if (role === null) return deny(403, "not_member", "Únete a la comunidad primero.");
+  if (authorId !== actorId) return deny(403, "not_author", "Solo quien lo escribió puede editar el mensaje.");
+  return ALLOWED;
+}
+
+/** Borrar un mensaje: su autor, o owner/admin/moderator de la comunidad. Un miembro común no borra mensajes ajenos. */
+export function canDeleteMessage(role: Role, authorId: string, actorId: string): Decision {
+  if (role === null) return deny(403, "not_member", "Únete a la comunidad primero.");
+  if (authorId === actorId || isModeratorRole(role)) return ALLOWED;
+  return deny(403, "cannot_delete_message", "No puedes borrar este mensaje.");
+}
+
 /** Borrar la comunidad entera: solo el owner. */
 export function canDeleteCommunity(role: Role): Decision {
   if (role === null) return deny(403, "not_member", "Únete a la comunidad primero.");
   if (role !== "owner") return deny(403, "not_owner", "Solo el owner puede borrar la comunidad.");
+  return ALLOWED;
+}
+
+/** Cambiar la descripción de la comunidad: owner y admin. El SQL de updateCommunityDescription lo repite. */
+export function canEditCommunityDescription(role: Role): Decision {
+  if (role === null) return deny(403, "not_member", "Únete a la comunidad primero.");
+  if (!isAdminRole(role)) return deny(403, "not_admin", "Solo owner y admin cambian la descripción.");
   return ALLOWED;
 }

@@ -45,7 +45,7 @@ type AuthorRow = Pick<ProfileRow, 'id' | 'username' | 'display_name' | 'avatar_s
 type CommunityRow = { id: string; slug: string; name: string; icon: string | null; description: string | null; image?: string | null };
 type ChannelRow = { id: string; community_id: string; name: string; topic: string | null; type: string };
 type MemberRow = { role: string; profile: ProfileRow };
-type MessageWire = { id: string; channel_id: string; content: string; created_at: string; author: AuthorRow };
+type MessageWire = { id: string; channel_id: string; content: string; created_at: string; edited_at?: string | null; author: AuthorRow };
 type PaymentParty = { username: string } | null;
 type PaymentWire = {
   id: string;
@@ -115,7 +115,7 @@ function toChannel(c: ChannelRow): Channel {
 const hora = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
 function toMessage(m: MessageWire): Message {
-  return { id: m.id, channelId: m.channel_id, author: toUser(m.author), content: m.content, createdAt: hora(m.created_at) };
+  return { id: m.id, channelId: m.channel_id, author: toUser(m.author), content: m.content, createdAt: hora(m.created_at), editedAt: m.edited_at ?? undefined };
 }
 
 // ------------------------------------------------------------ auth
@@ -251,12 +251,30 @@ export class ApiCommunityService implements ICommunityService {
     await call(`/api/communities/${encodeURIComponent(slug)}/join`, { method: 'POST' });
   }
 
+  async updateChannelTopic(_communityId: string, channelId: string, topic: string): Promise<Channel> {
+    const { channel } = await call<{ channel: ChannelRow }>(`/api/channels/${encodeURIComponent(channelId)}`, {
+      method: 'PATCH',
+      body: { topic },
+    });
+    return toChannel(channel);
+  }
+
   async updateImage(communityId: string, image: string | null): Promise<Community> {
     const slug = this.slugs.get(communityId);
     if (!slug) throw new ApiError('Comunidad desconocida.');
     const { community } = await call<{ community: CommunityRow }>(`/api/communities/${encodeURIComponent(slug)}`, {
       method: 'PATCH',
       body: { image },
+    });
+    return this.detail(community);
+  }
+
+  async updateDescription(communityId: string, description: string): Promise<Community> {
+    const slug = this.slugs.get(communityId);
+    if (!slug) throw new ApiError('Comunidad desconocida.');
+    const { community } = await call<{ community: CommunityRow }>(`/api/communities/${encodeURIComponent(slug)}`, {
+      method: 'PATCH',
+      body: { description },
     });
     return this.detail(community);
   }
@@ -276,6 +294,7 @@ export class ApiCommunityService implements ICommunityService {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const POLL_MS = 2_500;
+const PAGE_SIZE = 50;
 
 export class ApiChatService implements IChatService {
   async getMessages(channelId: string): Promise<Message[]> {
@@ -297,20 +316,41 @@ export class ApiChatService implements IChatService {
     return toMessage(message);
   }
 
-  /** Polling cada 2,5 s con ?after= (lo mismo que hace core). La UI descarta repetidos por id. */
-  subscribeToMessages(channelId: string, callback: (msg: Message) => void): () => void {
+  async editMessage(channelId: string, messageId: string, content: string): Promise<Message> {
+    const { message } = await call<{ message: MessageWire }>(
+      `/api/channels/${channelId}/messages/${encodeURIComponent(messageId)}`,
+      { method: 'PATCH', body: { content } },
+    );
+    return toMessage(message);
+  }
+
+  async deleteMessage(channelId: string, messageId: string): Promise<void> {
+    await call(`/api/channels/${channelId}/messages/${encodeURIComponent(messageId)}`, { method: 'DELETE' });
+  }
+
+  /**
+   * Polling cada 2,5 s de la última página (50): lo nuevo va por `callback` y la página
+   * completa por `onSync`, para ver ediciones y borrados de otras personas.
+   */
+  subscribeToMessages(
+    channelId: string,
+    callback: (msg: Message) => void,
+    onSync?: (latestPage: Message[], isFullChannel: boolean) => void,
+  ): () => void {
     if (!UUID_RE.test(channelId)) return () => {};
-    let last: string | null = null;
+    let seen: Set<string> | null = null;
     let stopped = false;
     const tick = async () => {
       if (stopped) return;
       try {
-        const path = last ? `/api/channels/${channelId}/messages?after=${last}` : `/api/channels/${channelId}/messages`;
-        const { messages } = await call<{ messages: MessageWire[] }>(path);
-        for (const m of messages) {
-          if (last !== null) callback(toMessage(m));
+        const { messages } = await call<{ messages: MessageWire[] }>(`/api/channels/${channelId}/messages`);
+        if (stopped) return;
+        const page = messages.map(toMessage);
+        if (seen !== null) {
+          for (const m of page) if (!seen.has(m.id)) callback(m);
+          onSync?.(page, page.length < PAGE_SIZE);
         }
-        if (messages.length > 0) last = messages[messages.length - 1].id;
+        seen = new Set(page.map((m) => m.id));
       } catch {
         // Se reintenta en el próximo tick.
       }

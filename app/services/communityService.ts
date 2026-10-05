@@ -22,8 +22,12 @@ export interface ICommunityService {
   getCommunityById(id: string): Promise<Community | null>;
   createCommunity(input: CreateCommunityInput): Promise<Community>;
   createChannel(communityId: string, input: CreateChannelInput): Promise<Channel>;
+  /** Dueño o admin: cambia la descripción (tema) de un canal; "" la quita. */
+  updateChannelTopic(communityId: string, channelId: string, topic: string): Promise<Channel>;
   /** Solo el dueño: cambia (o quita, con null) la foto. */
   updateImage(communityId: string, image: string | null): Promise<Community>;
+  /** Dueño o admin: cambia la descripción de la comunidad; "" la quita. */
+  updateDescription(communityId: string, description: string): Promise<Community>;
   /** Unirse por el link de invitación (/plataforma?c=<slug>). */
   joinBySlug?(slug: string): Promise<void>;
   /** Dueño (cualquier rol salvo dueño) o admin (moderador/miembro). Devuelve el miembro actualizado. */
@@ -92,9 +96,40 @@ export class MockCommunityService implements ICommunityService {
     return newChannel;
   }
 
+  async updateChannelTopic(communityId: string, channelId: string, topic: string): Promise<Channel> {
+    const list = await this.getCommunities();
+    let found: Channel | undefined;
+    const updated = list.map((c) =>
+      c.id === communityId
+        ? {
+            ...c,
+            channels: c.channels.map((ch) => {
+              if (ch.id !== channelId) return ch;
+              found = { ...ch, topic: topic.trim() || undefined };
+              return found;
+            }),
+          }
+        : c
+    );
+    if (!found) throw new Error('Canal no encontrado.');
+    storage.set(STORAGE_KEY, updated);
+    return found;
+  }
+
   async updateImage(communityId: string, image: string | null): Promise<Community> {
     const list = await this.getCommunities();
     const updated = list.map((c) => (c.id === communityId ? { ...c, image: image ?? undefined } : c));
+    storage.set(STORAGE_KEY, updated);
+    const found = updated.find((c) => c.id === communityId);
+    if (!found) throw new Error('Comunidad no encontrada.');
+    return found;
+  }
+
+  async updateDescription(communityId: string, description: string): Promise<Community> {
+    const clean = description.trim();
+    if (clean.length > 280) throw new Error('La descripción debe tener 280 caracteres como máximo.');
+    const list = await this.getCommunities();
+    const updated = list.map((c) => (c.id === communityId ? { ...c, description: clean } : c));
     storage.set(STORAGE_KEY, updated);
     const found = updated.find((c) => c.id === communityId);
     if (!found) throw new Error('Comunidad no encontrada.');

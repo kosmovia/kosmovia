@@ -47,6 +47,7 @@ test("every builder keeps hostile input out of the SQL text and in values", () =
   assertParameterized(q.myCommunityIds(a), [a]);
   assertParameterized(q.insertCommunity({ name: a, slug: b, description: c, icon: d, ownerId: HOSTILE[4], image: a }), HOSTILE);
   assertParameterized(q.updateCommunityImage(a, b, c), [a, b, c]);
+  assertParameterized(q.updateCommunityDescription(a, b, c), [a, b, c]);
   assertParameterized(q.joinCommunity(a, b), [a, b]);
   assertParameterized(q.memberRole(a, b), [a, b]);
   assertParameterized(q.listMembers(a), [a]);

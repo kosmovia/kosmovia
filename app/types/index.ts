@@ -41,6 +41,8 @@ export interface Message {
   author: User;
   content: string;
   createdAt: string;
+  /** ISO de la última edición; sin valor si nunca se editó. */
+  editedAt?: string;
 }
 
 export interface WalletTransaction {

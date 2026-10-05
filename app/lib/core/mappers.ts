@@ -53,6 +53,8 @@ export interface MessageRow {
   author_id: string;
   content: string;
   created_at: string;
+  /** null = nunca se editó. Solo lo devuelve el backend "api" (migración 0007). */
+  edited_at?: string | null;
 }
 
 export type MemberRole = "owner" | "admin" | "moderator" | "member";

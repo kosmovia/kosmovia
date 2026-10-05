@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { SettlementRecord, WalletTransaction } from '../types';
 import { QrCode } from './QrCode';
+import { IconClose } from './Icons';
 import { RecipientPreview } from './RecipientPreview';
 import { IconRefresh } from './Icons';
 
@@ -119,13 +120,13 @@ export function WalletDrawer({
   return (
     docked ? (
       <aside className="wallet-drawer kv-docked-panel" aria-label="Mi Wallet">
-        <header className="wallet-drawer-header">
+        <header className="kv-panel-head">
           <div className="wallet-header-title-row">
-            <span className="wallet-title">Billetera Kosmovia</span>
-            <span className="wallet-testnet-pill">Stellar Testnet</span>
+            <span className="kv-panel-title">Mi Wallet</span>
+            <span className="wallet-testnet-pill">Testnet</span>
           </div>
           <button type="button" className="wallet-close-btn" onClick={onClose} aria-label="Cerrar billetera">
-            ✕
+            <IconClose size={18} />
           </button>
         </header>
 
@@ -135,15 +136,19 @@ export function WalletDrawer({
             type="button"
             className={`wallet-nav-tab ${activeTab === 'wallet' ? 'active' : ''}`}
             onClick={() => setActiveTab('wallet')}
+            aria-label="Saldo y envío"
+            title="Saldo y envío"
           >
-            💳 Saldo & Envío
+            <span aria-hidden="true">💳</span> Saldo
           </button>
           <button
             type="button"
             className={`wallet-nav-tab ${activeTab === 'settlements' ? 'active' : ''}`}
             onClick={() => setActiveTab('settlements')}
+            aria-label={pendingCount > 0 ? `Liquidaciones B2B, ${pendingCount} pendientes` : 'Liquidaciones B2B'}
+            title="Liquidaciones B2B"
           >
-            📊 Liquidaciones B2B
+            <span aria-hidden="true">📊</span> Cobros B2B
             {pendingCount > 0 && <span className="tab-pending-badge">{pendingCount}</span>}
           </button>
         </nav>
@@ -192,7 +197,7 @@ export function WalletDrawer({
                     className="btn-wallet-action primary"
                     onClick={() => setView('send')}
                   >
-                    ↗ Enviar pago
+                    ↗ Enviar
                   </button>
                   <button
                     type="button"

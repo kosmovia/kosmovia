@@ -3,7 +3,8 @@
 import React from 'react';
 import { Community, WalletTransaction } from '../types';
 import { CommunityAvatar } from './CommunityAvatar';
-import { IconChat, IconCompass, IconMoon, IconPlus, IconSun } from './Icons';
+import { IconChat, IconCompass, IconPlus } from './Icons';
+import { ThemePicker, type ThemeId } from './ThemePicker';
 
 interface CommunityBarProps {
   communities: Community[];
@@ -16,14 +17,14 @@ interface CommunityBarProps {
   isWalletOpen?: boolean;
   balanceUSDC?: number;
   notifications?: { transactions: WalletTransaction[]; unread: number; onOpen: () => void };
-  theme?: 'dark' | 'light';
-  onToggleTheme?: () => void;
+  theme?: ThemeId;
+  onChangeTheme?: (theme: ThemeId) => void;
 }
 
 /**
  * Barra izquierda: logo de Kosmovia, Mensajes directos y Explorar, las
  * comunidades donde estás (con su foto y el relieve "portal") y "+ Crear".
- * Abajo, el modo claro/oscuro (Mi Wallet y notificaciones van arriba a la derecha).
+ * Abajo, el selector de tema (Mi Wallet y notificaciones van arriba a la derecha).
  */
 export function CommunityBar({
   communities,
@@ -34,8 +35,8 @@ export function CommunityBar({
   isWalletOpen,
   balanceUSDC,
   notifications,
-  theme = 'dark',
-  onToggleTheme,
+  theme = 'kosmovia',
+  onChangeTheme,
 }: CommunityBarProps) {
   return (
     <aside className="community-bar" aria-label="Comunidades">
@@ -85,17 +86,7 @@ export function CommunityBar({
       </nav>
 
       <div className="kv-rail-bottom">
-        {onToggleTheme ? (
-          <button
-            type="button"
-            className="kv-rail-btn"
-            onClick={onToggleTheme}
-            aria-label={theme === 'light' ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro'}
-            title={theme === 'light' ? 'Modo oscuro' : 'Modo claro'}
-          >
-            {theme === 'light' ? <IconMoon size={20} /> : <IconSun size={20} />}
-          </button>
-        ) : null}
+        {onChangeTheme ? <ThemePicker theme={theme} onChange={onChangeTheme} /> : null}
       </div>
     </aside>
   );
