@@ -19,6 +19,10 @@ interface CommunityBarProps {
   notifications?: { transactions: WalletTransaction[]; unread: number; onOpen: () => void };
   theme?: ThemeId;
   onChangeTheme?: (theme: ThemeId) => void;
+  /** Mensajes directos: abre la vista, y cuántos mensajes sin leer hay en total. */
+  onOpenDms?: () => void;
+  isDmsActive?: boolean;
+  dmUnread?: number;
 }
 
 /**
@@ -37,6 +41,9 @@ export function CommunityBar({
   notifications,
   theme = 'kosmovia',
   onChangeTheme,
+  onOpenDms,
+  isDmsActive = false,
+  dmUnread = 0,
 }: CommunityBarProps) {
   return (
     <aside className="community-bar" aria-label="Comunidades">
@@ -52,8 +59,17 @@ export function CommunityBar({
         <img src="/brand/kosmovia-logo.png" alt="" width={48} height={48} className="kv-brand-img" />
       </button>
 
-      <button type="button" className="kv-rail-btn" disabled title="Mensajes directos · próximamente" aria-label="Mensajes directos (próximamente)">
+      <button
+        type="button"
+        className={`kv-rail-btn kv-rail-dm ${isDmsActive ? 'active' : ''}`}
+        disabled={!onOpenDms}
+        onClick={onOpenDms}
+        aria-pressed={isDmsActive}
+        title="Mensajes directos"
+        aria-label={dmUnread > 0 ? `Mensajes directos: ${dmUnread} sin leer` : 'Mensajes directos'}
+      >
         <IconChat size={20} />
+        {dmUnread > 0 ? <span className="kv-unread-badge kv-rail-badge">{dmUnread > 9 ? '9+' : dmUnread}</span> : null}
       </button>
       <button type="button" className="kv-rail-btn" disabled title="Explorar comunidades · próximamente" aria-label="Explorar comunidades (próximamente)">
         <IconCompass size={20} />
@@ -63,7 +79,7 @@ export function CommunityBar({
 
       <nav className="kv-rail-communities" aria-label="Tus comunidades">
         {communities.map((community) => {
-          const isActive = community.id === activeCommunityId;
+          const isActive = !isDmsActive && community.id === activeCommunityId;
           return (
             <button
               key={community.id}

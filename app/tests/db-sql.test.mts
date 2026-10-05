@@ -51,12 +51,12 @@ test("every builder keeps hostile input out of the SQL text and in values", () =
   assertParameterized(q.joinCommunity(a, b), [a, b]);
   assertParameterized(q.memberRole(a, b), [a, b]);
   assertParameterized(q.listMembers(a), [a]);
-  assertParameterized(q.listChannels(a), [a]);
+  assertParameterized(q.listChannels(a, b), [a, b]);
   assertParameterized(q.insertChannel({ communityId: a, name: b, topic: c, type: "text" }), [a, b, c]);
   assertParameterized(q.channelWithRole(a, b), [a, b]);
-  assertParameterized(q.messagesNewest(a, 50), [a]);
-  assertParameterized(q.messagesNewest(a, 50, b), [a, b]);
-  assertParameterized(q.messagesAfter(a, b, 100), [a, b]);
+  assertParameterized(q.messagesNewest(a, b, 50), [a, b]);
+  assertParameterized(q.messagesNewest(a, c, 50, b), [a, b, c]);
+  assertParameterized(q.messagesAfter(a, c, b, 100), [a, b, c]);
   assertParameterized(q.insertMessage(a, b, "1 or 1=1; -- hola"), [a, b, "1 or 1=1; -- hola"]);
 });
 
@@ -91,15 +91,16 @@ test("X verification: level 1 never 2, never touches a level-2 profile, row must
 test("message insert enforces membership and the announcement rule inside the INSERT itself", () => {
   const { text } = q.insertMessage("c", "a", "hi");
   assert.match(text, /join public\.members mem on mem\.community_id = ch\.community_id and mem\.profile_id = \$2::uuid/);
-  assert.match(text, /\(ch\.type = 'text' or mem\.role in \('owner', 'admin'\)\)/);
+  assert.match(text, /\(ch\.type <> 'announcement' or mem\.role in \('owner', 'admin'\)\)/);
+  assert.match(text, /\(ch\.visibility = 'public' or mem\.role in \('owner', 'admin', 'moderator'\)\)/);
 });
 
 test("message pages: cursors resolve inside the channel, order is stable, size is clamped", () => {
-  const newest = q.messagesNewest("c", 50);
+  const newest = q.messagesNewest("c", "v", 50);
   assert.match(newest.text, /order by m\.created_at desc, m\.id desc limit \$2/);
-  const older = q.messagesNewest("c", 50, "m");
+  const older = q.messagesNewest("c", "v", 50, "m");
   assert.match(older.text, /\(m\.created_at, m\.id\) < \(select b\.created_at, b\.id from public\.messages b where b\.id = \$2 and b\.channel_id = \$1\)/);
-  const after = q.messagesAfter("c", "m", 100);
+  const after = q.messagesAfter("c", "v", "m", 100);
   assert.match(after.text, /b\.id = \$2 and b\.channel_id = \$1/);
   assert.match(after.text, /make_interval\(secs => 5\)/);
   assert.match(after.text, /order by m\.created_at asc, m\.id asc limit \$3/);
@@ -112,7 +113,7 @@ test("message pages: cursors resolve inside the channel, order is stable, size i
 });
 
 test("message rows carry a microsecond ISO timestamp and the slim author only", () => {
-  const { text } = q.messagesNewest("c", 10);
+  const { text } = q.messagesNewest("c", "v", 10);
   assert.match(text, /to_char\(m\.created_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS\.US"Z"'\) as created_at/);
   const author = /json_build_object\(([^)]*)\) as author/.exec(text)?.[1] ?? "";
   assert.match(author, /'id'.*'username'.*'display_name'.*'avatar_seed'.*'avatar_style'/);

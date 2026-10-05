@@ -45,6 +45,11 @@ export interface ChannelRow {
   name: string;
   topic: string | null;
   type: string;
+  /** Solo el backend "api" (migración 0008). */
+  category_id?: string | null;
+  position?: number;
+  visibility?: string;
+  emoji?: string | null;
 }
 
 export interface MessageRow {
@@ -186,6 +191,7 @@ const QUOTA_MESSAGES: Record<string, string> = {
   communities_per_day: "Ya creaste 3 comunidades en las últimas 24 horas. Intenta de nuevo más tarde.",
   communities_total: "Llegaste al máximo de 10 comunidades por perfil.",
   channels_per_community: "Esta comunidad ya tiene el máximo de 50 canales.",
+  categories_per_community: "Esta comunidad ya tiene el máximo de 20 categorías.",
 };
 
 /** Spanish message for a quota trigger of 0002_hardening.sql (`quota_exceeded:<kind>`), else null. */

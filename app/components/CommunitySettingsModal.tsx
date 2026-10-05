@@ -2,7 +2,11 @@
 
 import React, { useEffect, useState } from 'react';
 import { Community, User } from '../types';
+import type { UpdateChannelInput } from '../services/communityService';
 import { AvatarFace } from './AvatarFace';
+import { CategorySelect, EmojiField, VisibilityToggle } from './ChannelFields';
+import { IconArrowDown, IconArrowUp } from './Icons';
+import { groupChannels, sortCategories } from './channelUtils';
 import { CommunityPhotoPicker } from './CommunityPhotoPicker';
 
 type AssignableRole = 'admin' | 'moderator' | 'member';
@@ -23,6 +27,14 @@ interface CommunitySettingsModalProps {
   /** Guarda la descripción (tema) de un canal; "" la quita. */
   onSaveChannelTopic: (channelId: string, topic: string) => Promise<boolean>;
   onDeleteCommunity: () => Promise<boolean>;
+  /** Emoji, categoría o visibilidad de un canal. */
+  onUpdateChannel: (channelId: string, patch: UpdateChannelInput) => Promise<boolean>;
+  /** Sube (-1) o baja (1) un canal dentro de su categoría. */
+  onMoveChannel: (channelId: string, dir: -1 | 1) => Promise<boolean>;
+  onCreateCategory: (name: string) => Promise<boolean>;
+  onRenameCategory: (categoryId: string, name: string) => Promise<boolean>;
+  onMoveCategory: (categoryId: string, dir: -1 | 1) => Promise<boolean>;
+  onDeleteCategory: (categoryId: string) => Promise<boolean>;
 }
 
 const ROLE_LABEL: Record<string, string> = { owner: 'Dueño', admin: 'Admin', moderator: 'Moderador', member: 'Miembro', builder: 'Miembro' };
@@ -44,6 +56,12 @@ export function CommunitySettingsModal({
   onDeleteChannel,
   onSaveChannelTopic,
   onDeleteCommunity,
+  onUpdateChannel,
+  onMoveChannel,
+  onCreateCategory,
+  onRenameCategory,
+  onMoveCategory,
+  onDeleteCategory,
 }: CommunitySettingsModalProps) {
   const isOwner = myRole === 'owner';
   const [tab, setTab] = useState<'general' | 'roles' | 'channels' | 'delete'>('general');
@@ -54,6 +72,10 @@ export function CommunitySettingsModal({
   const [confirmName, setConfirmName] = useState('');
   // Descripciones en edición (canal -> texto); sin entrada = sin cambios.
   const [topicDrafts, setTopicDrafts] = useState<Record<string, string>>({});
+  // Categorías: nombre nuevo, renombres en edición y la que espera confirmación para borrarse.
+  const [newCategory, setNewCategory] = useState('');
+  const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
+  const [confirmCategory, setConfirmCategory] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -63,6 +85,9 @@ export function CommunitySettingsModal({
     setConfirmChannel(null);
     setConfirmName('');
     setTopicDrafts({});
+    setNewCategory('');
+    setNameDrafts({});
+    setConfirmCategory(null);
   }, [isOpen, community.id, community.image, community.description]);
 
   if (!isOpen) return null;
@@ -223,20 +248,145 @@ export function CommunitySettingsModal({
 
         {tab === 'channels' && (
           <div className="modal-body">
+            <h4 className="kv-settings-subtitle">Categorías</h4>
             <p className="settings-tab-desc">
-              Cambia la descripción de cada canal (aparece junto a su nombre). Borrar un canal borra todos sus mensajes; #general no se puede borrar.
+              Agrupan los canales en la barra lateral. Al borrar una categoría, sus canales quedan sin categoría.
             </p>
             <div className="kv-settings-list">
-              {community.channels.map((ch) => {
+              {sortCategories(community.categories ?? []).map((cat, idx, all) => {
+                const draftName = nameDrafts[cat.id] ?? cat.name;
+                const renamed = draftName.trim() !== cat.name && draftName.trim().length > 0;
+                const saveName = () =>
+                  void run(`catname:${cat.id}`, () => onRenameCategory(cat.id, draftName.trim())).then(
+                    (ok) => ok && setNameDrafts((prev) => { const { [cat.id]: _gone, ...rest } = prev; return rest; }),
+                  );
+                return (
+                  <div key={cat.id} className="kv-settings-row kv-category-row">
+                    <input
+                      type="text"
+                      className="form-input"
+                      maxLength={40}
+                      aria-label={`Nombre de la categoría ${cat.name}`}
+                      value={draftName}
+                      disabled={busy !== null}
+                      onChange={(e) => setNameDrafts((prev) => ({ ...prev, [cat.id]: e.target.value }))}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && renamed && busy === null) {
+                          e.preventDefault();
+                          saveName();
+                        }
+                      }}
+                    />
+                    {renamed ? (
+                      <button type="button" className="btn-primary kv-topic-save" disabled={busy !== null} onClick={saveName}>
+                        {busy === `catname:${cat.id}` ? 'Guardando…' : 'Guardar'}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="kv-icon-btn"
+                      aria-label={`Subir la categoría ${cat.name}`}
+                      title="Subir"
+                      disabled={busy !== null || idx === 0}
+                      onClick={() => void run(`catmove:${cat.id}`, () => onMoveCategory(cat.id, -1))}
+                    >
+                      <IconArrowUp size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      className="kv-icon-btn"
+                      aria-label={`Bajar la categoría ${cat.name}`}
+                      title="Bajar"
+                      disabled={busy !== null || idx === all.length - 1}
+                      onClick={() => void run(`catmove:${cat.id}`, () => onMoveCategory(cat.id, 1))}
+                    >
+                      <IconArrowDown size={14} />
+                    </button>
+                    {confirmCategory === cat.id ? (
+                      <span style={{ display: 'flex', gap: 6 }}>
+                        <button type="button" className="btn-secondary" onClick={() => setConfirmCategory(null)} disabled={busy !== null}>
+                          No
+                        </button>
+                        <button
+                          type="button"
+                          className="kv-danger-btn"
+                          disabled={busy !== null}
+                          onClick={() => void run(`catdel:${cat.id}`, () => onDeleteCategory(cat.id)).then((ok) => ok && setConfirmCategory(null))}
+                        >
+                          {busy === `catdel:${cat.id}` ? 'Borrando…' : 'Sí, borrar'}
+                        </button>
+                      </span>
+                    ) : (
+                      <button type="button" className="kv-danger-btn ghost" onClick={() => setConfirmCategory(cat.id)} disabled={busy !== null}>
+                        Borrar
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+              <form
+                className="kv-topic-edit"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const name = newCategory.trim();
+                  if (!name || busy !== null) return;
+                  void run('catnew', () => onCreateCategory(name)).then((ok) => ok && setNewCategory(''));
+                }}
+              >
+                <input
+                  type="text"
+                  className="form-input"
+                  maxLength={40}
+                  placeholder="Nueva categoría (ej: Main Deck)"
+                  aria-label="Nombre de la nueva categoría"
+                  value={newCategory}
+                  disabled={busy !== null}
+                  onChange={(e) => setNewCategory(e.target.value)}
+                />
+                <button type="submit" className="btn-primary kv-topic-save" disabled={!newCategory.trim() || busy !== null}>
+                  {busy === 'catnew' ? 'Creando…' : 'Crear'}
+                </button>
+              </form>
+            </div>
+
+            <hr className="kv-settings-sep" />
+            <h4 className="kv-settings-subtitle">Canales</h4>
+            <p className="settings-tab-desc">
+              Cambia la descripción, el emoji, la categoría, el orden y la visibilidad de cada canal. Borrar un canal borra todos sus mensajes; #general no se puede borrar.
+            </p>
+            <div className="kv-settings-list">
+              {groupChannels(community.channels, community.categories ?? []).flatMap((group) =>
+                group.channels.map((ch, chIdx) => {
                 const draft = topicDrafts[ch.id] ?? ch.topic ?? '';
                 const topicChanged = draft.trim() !== (ch.topic ?? '');
+                const lockedPublic = ch.name === 'general' || ch.type === 'payments';
                 return (
                 <div key={ch.id} className="kv-settings-row kv-channel-row">
                   <div className="kv-channel-row-top">
-                  <span className="channel-hash">#</span>
+                  {ch.emoji ? <span aria-hidden="true">{ch.emoji}</span> : <span className="channel-hash">#</span>}
                   <div className="kv-settings-row-text">
                     <span className="member-name">{ch.name}</span>
                   </div>
+                  <button
+                    type="button"
+                    className="kv-icon-btn"
+                    aria-label={`Subir el canal ${ch.name}`}
+                    title="Subir"
+                    disabled={busy !== null || chIdx === 0}
+                    onClick={() => void run(`chmove:${ch.id}`, () => onMoveChannel(ch.id, -1))}
+                  >
+                    <IconArrowUp size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="kv-icon-btn"
+                    aria-label={`Bajar el canal ${ch.name}`}
+                    title="Bajar"
+                    disabled={busy !== null || chIdx === group.channels.length - 1}
+                    onClick={() => void run(`chmove:${ch.id}`, () => onMoveChannel(ch.id, 1))}
+                  >
+                    <IconArrowDown size={14} />
+                  </button>
                   {ch.name === 'general' ? (
                     <span className="member-tag">Protegido</span>
                   ) : confirmChannel === ch.id ? (
@@ -293,9 +443,25 @@ export function CommunitySettingsModal({
                       {busy === `topic:${ch.id}` ? 'Guardando…' : 'Guardar'}
                     </button>
                   </div>
+                  <div className="kv-channel-controls">
+                    <EmojiField value={ch.emoji ?? null} disabled={busy !== null} onChange={(emoji) => void run(`emoji:${ch.id}`, () => onUpdateChannel(ch.id, { emoji }))} />
+                    <CategorySelect
+                      value={ch.categoryId ?? null}
+                      categories={community.categories ?? []}
+                      disabled={busy !== null}
+                      ariaLabel={`Categoría de #${ch.name}`}
+                      onChange={(categoryId) => void run(`cat:${ch.id}`, () => onUpdateChannel(ch.id, { categoryId }))}
+                    />
+                    <VisibilityToggle
+                      name={`vis-${ch.id}`}
+                      value={ch.visibility ?? 'public'}
+                      disabled={busy !== null || lockedPublic}
+                      onChange={(visibility) => void run(`vis:${ch.id}`, () => onUpdateChannel(ch.id, { visibility }))}
+                    />
+                  </div>
                 </div>
                 );
-              })}
+              }))}
             </div>
           </div>
         )}

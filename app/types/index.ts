@@ -20,7 +20,26 @@ export interface Channel {
   communityId: string;
   name: string; // e.g. "general"
   topic?: string;
-  type: 'text' | 'announcement';
+  /** 'payments' = #verificacion-pagos: solo comprobantes automáticos, nadie escribe. */
+  type: 'text' | 'announcement' | 'payments';
+  categoryId?: string | null;
+  position?: number;
+  visibility?: 'public' | 'private';
+  emoji?: string | null;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  position: number;
+}
+
+export interface DmThread {
+  id: string;
+  other: User;
+  lastMessage: { content: string; createdAt: string; authorId: string } | null;
+  unread: number;
+  lastMessageAt?: string;
 }
 
 export interface Community {
@@ -32,6 +51,7 @@ export interface Community {
   image?: string;
   description: string;
   channels: Channel[];
+  categories?: Category[];
   members: User[];
 }
 

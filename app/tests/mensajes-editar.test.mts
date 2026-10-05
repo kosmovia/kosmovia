@@ -78,8 +78,8 @@ test("parseChannelUpdate: trimmed topic 0..200; empty becomes null; anything els
 });
 
 test("parseChannelCreate keeps accepting an optional topic (0..200)", () => {
-  assert.deepEqual(parseChannelCreate({ name: "ideas" }), { ok: true, value: { name: "ideas", topic: null, type: "text" } });
-  assert.deepEqual(parseChannelCreate({ name: "ideas", topic: " Lluvia " }), { ok: true, value: { name: "ideas", topic: "Lluvia", type: "text" } });
+  assert.deepEqual(parseChannelCreate({ name: "ideas" }), { ok: true, value: { name: "ideas", topic: null, type: "text", emoji: null, categoryId: null, visibility: "public" } });
+  assert.deepEqual(parseChannelCreate({ name: "ideas", topic: " Lluvia " }), { ok: true, value: { name: "ideas", topic: "Lluvia", type: "text", emoji: null, categoryId: null, visibility: "public" } });
   assert.equal(parseChannelCreate({ name: "ideas", topic: "a".repeat(201) }).ok, false);
 });
 
@@ -132,8 +132,8 @@ test("messageWithRole looks the message up inside its channel; message reads and
   const query = q.messageWithRole(a, b, c);
   assertParameterized(query, [a, b, c]);
   assert.match(query.text, /where m\.id = \$2 and m\.channel_id = \$1/);
-  assert.match(q.messagesNewest("c", 50).text, /as edited_at/);
-  assert.match(q.messagesAfter("c", "m", 50).text, /as edited_at/);
+  assert.match(q.messagesNewest("c", "v", 50).text, /as edited_at/);
+  assert.match(q.messagesAfter("c", "v", "m", 50).text, /as edited_at/);
   assert.match(q.insertMessage("c", "a", "hola").text, /returning id, channel_id, author_id, content, created_at, edited_at/);
   assert.match(q.insertMessage("c", "a", "hola").text, /as edited_at/);
 });

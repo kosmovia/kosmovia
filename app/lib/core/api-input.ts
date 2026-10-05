@@ -1,4 +1,11 @@
-import { isAssignableRole, isChannelType, type AssignableRole, type ChannelType } from "./authz.ts";
+import {
+  isAssignableRole,
+  isChannelType,
+  isChannelVisibility,
+  type AssignableRole,
+  type ChannelVisibility,
+  type CreatableChannelType,
+} from "./authz.ts";
 import { isAvatarStyle, isValidAvatarSeed } from "./avatar/generator.ts";
 import { esCodigoValido } from "./avatar/kosmonautas.ts";
 import { isUuid } from "./ids.ts";
@@ -157,7 +164,10 @@ export function parseCommunityCreate(body: unknown): Parsed<CommunityCreate> {
 export interface ChannelCreate {
   name: string;
   topic: string | null;
-  type: ChannelType;
+  type: CreatableChannelType;
+  emoji: string | null;
+  categoryId: string | null;
+  visibility: ChannelVisibility;
 }
 
 export function parseChannelCreate(body: unknown): Parsed<ChannelCreate> {
@@ -172,7 +182,23 @@ export function parseChannelCreate(body: unknown): Parsed<ChannelCreate> {
   if (cleanTopic.length > TOPIC_MAX) return fail(`El tema debe tener ${TOPIC_MAX} caracteres como máximo.`);
   const type = body.type === undefined ? "text" : body.type;
   if (!isChannelType(type)) return fail("Tipo de canal inválido.");
-  return { ok: true, value: { name: name.trim(), topic: cleanTopic === "" ? null : cleanTopic, type } };
+  let emoji: string | null = null;
+  if (body.emoji !== undefined) {
+    const parsed = parseEmoji(body.emoji);
+    if (parsed === undefined) return fail(`El emoji debe tener ${ICON_MAX} caracteres como máximo.`);
+    emoji = parsed;
+  }
+  let categoryId: string | null = null;
+  if (body.category_id !== undefined && body.category_id !== null) {
+    if (typeof body.category_id !== "string" || !isUuid(body.category_id)) return fail("La categoría no es válida.");
+    categoryId = body.category_id;
+  }
+  const visibility = body.visibility === undefined ? "public" : body.visibility;
+  if (!isChannelVisibility(visibility)) return fail("La visibilidad debe ser public o private.");
+  return {
+    ok: true,
+    value: { name: name.trim(), topic: cleanTopic === "" ? null : cleanTopic, type, emoji, categoryId, visibility },
+  };
 }
 
 /** Body de PATCH .../members/[profileId]: solo admin, moderator o member (nunca owner). */
@@ -188,12 +214,117 @@ export function parseMessageCreate(body: unknown): Parsed<{ content: string }> {
   return { ok: true, value: { content } };
 }
 
-/** Body de PATCH /api/channels/[id]: `{ topic }` (texto recortado, 0..TOPIC_MAX; vacío = sin tema, null). */
-export function parseChannelUpdate(body: unknown): Parsed<{ topic: string | null }> {
-  if (!isRecord(body) || typeof body.topic !== "string") return fail("Escribe el tema del canal.");
-  const topic = body.topic.trim();
-  if (topic.length > TOPIC_MAX) return fail(`El tema debe tener ${TOPIC_MAX} caracteres como máximo.`);
-  return { ok: true, value: { topic: topic === "" ? null : topic } };
+/**
+ * Emoji de un canal: texto recortado de 0..ICON_MAX caracteres ('' o null = sin emoji).
+ * Devuelve undefined si no es texto ni null.
+ */
+function parseEmoji(value: unknown): string | null | undefined {
+  if (value === null) return null;
+  if (typeof value !== "string") return undefined;
+  const emoji = value.trim();
+  if (emoji.length > ICON_MAX) return undefined;
+  return emoji === "" ? null : emoji;
+}
+
+/** Posición: entero 0..1000. */
+function parsePosition(value: unknown): number | null {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 1000 ? value : null;
+}
+
+/** Valores de un canal que PATCH /api/channels/[id] puede cambiar. Los mismos nombres de ChannelPatch (sql.ts). */
+export interface ChannelUpdate {
+  topic?: string | null;
+  emoji?: string | null;
+  categoryId?: string | null;
+  visibility?: ChannelVisibility;
+  position?: number;
+}
+
+/**
+ * Body de PATCH /api/channels/[id]: cualquier subconjunto de
+ * `{ topic, emoji, category_id (uuid | null), visibility, position }`.
+ * topic: texto recortado, 0..TOPIC_MAX (vacío = sin tema, null; no acepta null).
+ * emoji: texto 0..ICON_MAX ('' o null lo quita). Claves desconocidas se ignoran.
+ */
+export function parseChannelUpdate(body: unknown): Parsed<ChannelUpdate> {
+  if (!isRecord(body)) return fail("Datos inválidos.");
+  const out: ChannelUpdate = {};
+
+  if (body.topic !== undefined) {
+    if (typeof body.topic !== "string") return fail("Escribe el tema del canal.");
+    const topic = body.topic.trim();
+    if (topic.length > TOPIC_MAX) return fail(`El tema debe tener ${TOPIC_MAX} caracteres como máximo.`);
+    out.topic = topic === "" ? null : topic;
+  }
+  if (body.emoji !== undefined) {
+    const emoji = parseEmoji(body.emoji);
+    if (emoji === undefined) return fail(`El emoji debe tener ${ICON_MAX} caracteres como máximo.`);
+    out.emoji = emoji;
+  }
+  if (body.category_id !== undefined) {
+    if (body.category_id !== null && (typeof body.category_id !== "string" || !isUuid(body.category_id))) {
+      return fail("La categoría no es válida.");
+    }
+    out.categoryId = body.category_id;
+  }
+  if (body.visibility !== undefined) {
+    if (!isChannelVisibility(body.visibility)) return fail("La visibilidad debe ser public o private.");
+    out.visibility = body.visibility;
+  }
+  if (body.position !== undefined) {
+    const position = parsePosition(body.position);
+    if (position === null) return fail("La posición no es válida.");
+    out.position = position;
+  }
+  if (Object.keys(out).length === 0) return fail("No hay nada que cambiar.");
+  return { ok: true, value: out };
+}
+
+export const CATEGORY_NAME_MAX = 40;
+
+/** Nombre de categoría: texto recortado, 1..CATEGORY_NAME_MAX. */
+function parseCategoryName(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const name = value.trim();
+  return name.length >= 1 && name.length <= CATEGORY_NAME_MAX ? name : null;
+}
+
+/** Body de POST /api/communities/[slug]/categories: `{ name }`. */
+export function parseCategoryCreate(body: unknown): Parsed<{ name: string }> {
+  const name = isRecord(body) ? parseCategoryName(body.name) : null;
+  if (name === null) return fail(`El nombre de la categoría debe tener entre 1 y ${CATEGORY_NAME_MAX} caracteres.`);
+  return { ok: true, value: { name } };
+}
+
+/** Body de PATCH /api/categories/[id]: `{ name?, position? }` (al menos uno). */
+export function parseCategoryUpdate(body: unknown): Parsed<{ name?: string; position?: number }> {
+  if (!isRecord(body)) return fail("Datos inválidos.");
+  const out: { name?: string; position?: number } = {};
+  if (body.name !== undefined) {
+    const name = parseCategoryName(body.name);
+    if (name === null) return fail(`El nombre de la categoría debe tener entre 1 y ${CATEGORY_NAME_MAX} caracteres.`);
+    out.name = name;
+  }
+  if (body.position !== undefined) {
+    const position = parsePosition(body.position);
+    if (position === null) return fail("La posición no es válida.");
+    out.position = position;
+  }
+  if (Object.keys(out).length === 0) return fail("No hay nada que cambiar.");
+  return { ok: true, value: out };
+}
+
+/** Body de POST /api/dms: `{ username }` (con o sin @) o `{ profileId }` (uuid). */
+export function parseDmOpen(body: unknown): Parsed<{ username?: string; profileId?: string }> {
+  if (!isRecord(body)) return fail("Datos inválidos.");
+  if (typeof body.profileId === "string") {
+    return isUuid(body.profileId) ? { ok: true, value: { profileId: body.profileId.toLowerCase() } } : fail("La persona no es válida.");
+  }
+  if (typeof body.username === "string") {
+    const username = fromHandle(body.username);
+    return USERNAME_RE.test(username) ? { ok: true, value: { username } } : fail("Revisa el @usuario.");
+  }
+  return fail("Indica el @usuario con quien quieres hablar.");
 }
 
 /** Body de PATCH .../messages/[messageId]: las mismas reglas que al publicar (1..2000 caracteres). */

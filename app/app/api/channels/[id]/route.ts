@@ -8,10 +8,14 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * PATCH /api/channels/[id] { topic }
+ * PATCH /api/channels/[id] { topic?, emoji?, category_id?, visibility?, position? }
  *
- * Owner y admin cambian el tema del canal (texto recortado, 0..200; vacío lo quita).
- * -> 200 { channel } | 400 invalid_input | 403 | 404
+ * Owner y admin cambian cualquier subconjunto: tema (texto recortado, 0..200; vacío lo quita),
+ * emoji (0..16 caracteres; '' o null lo quita), categoría (uuid de la misma comunidad, o null
+ * para sacarlo), visibilidad ('public' | 'private') y posición (entero 0..1000).
+ * #general y el canal de pagos no pueden ser privados.
+ * -> 200 { channel: { id, community_id, name, topic, type, category_id, position, visibility, emoji } }
+ *  | 400 invalid_input / invalid_category / channel_protected | 403 not_admin / not_member | 404
  */
 export async function PATCH(request: Request, ctx: Params<{ id: string }>): Promise<Response> {
   const auth = requireGate(request);
@@ -27,7 +31,7 @@ export async function PATCH(request: Request, ctx: Params<{ id: string }>): Prom
   if (!input.ok) return failure(400, input.error, "invalid_input");
 
   return handled("PATCH /api/channels/:id", async () => {
-    const result = await repo.updateChannelTopic(channelId, auth.session.profileId, input.value.topic);
+    const result = await repo.updateChannel(channelId, auth.session.profileId, input.value);
     if (!result.ok) {
       if ("notFound" in result) return failure(404, "Canal no encontrado.", "not_found");
       return failure(result.denied.status, result.denied.error, result.denied.code);
@@ -39,8 +43,8 @@ export async function PATCH(request: Request, ctx: Params<{ id: string }>): Prom
 /**
  * DELETE /api/channels/[id] (api backend)
  *
- * Owner y admin borran el canal y sus mensajes. #general nunca se borra.
- * -> 200 { ok: true } | 400 general_protected | 403 | 404
+ * Owner y admin borran el canal y sus mensajes. #general y el canal de pagos nunca se borran.
+ * -> 200 { ok: true } | 400 general_protected / payments_protected | 403 | 404
  */
 export async function DELETE(request: Request, ctx: Params<{ id: string }>): Promise<Response> {
   const auth = requireGate(request);

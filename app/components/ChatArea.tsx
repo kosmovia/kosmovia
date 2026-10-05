@@ -10,6 +10,9 @@ import { WalletTransaction } from '../types';
 
 interface ChatAreaProps {
   channel: Channel;
+  /** 'dm': conversación directa (`channel.name` es el nombre de la otra persona). */
+  variant?: 'channel' | 'dm';
+  dmPeer?: User;
   community: Community;
   messages: Message[];
   onSendMessage: (content: string) => void;
@@ -61,6 +64,8 @@ function useAutoGrow(ref: React.RefObject<HTMLTextAreaElement | null>, value: st
 
 export function ChatArea({
   channel,
+  variant = 'channel',
+  dmPeer,
   community,
   messages,
   onSendMessage,
@@ -96,6 +101,10 @@ export function ChatArea({
   const [editText, setEditText] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
+
+  const isDm = variant === 'dm';
+  const isPayments = !isDm && channel.type === 'payments';
+  const label = isDm ? channel.name : `#${channel.name}`;
 
   useAutoGrow(composerRef, inputText);
   useAutoGrow(editRef, editText);
@@ -196,10 +205,22 @@ export function ChatArea({
             ☰
           </button>
           <div className="chat-header-title">
-            <span className="channel-hash">#</span>
+            {isDm ? (
+              dmPeer ? (
+                <span className="kv-dm-header-avatar">
+                  <AvatarFace avatar={dmPeer.avatar} name={dmPeer.displayName} />
+                </span>
+              ) : null
+            ) : channel.emoji ? (
+              <span aria-hidden="true">{channel.emoji}</span>
+            ) : (
+              <span className="channel-hash">#</span>
+            )}
             <span>{channel.name}</span>
           </div>
-          {onOpenChannelSettings ? (
+          {isDm ? (
+            dmPeer ? <span className="chat-header-topic">{dmPeer.username}</span> : null
+          ) : onOpenChannelSettings ? (
             <button
               type="button"
               className={`chat-header-topic kv-topic-btn ${channel.topic ? '' : 'empty'}`}
@@ -265,13 +286,17 @@ export function ChatArea({
       <section className="message-feed" aria-label="Historial de mensajes">
         {messages.length === 0 ? (
           <div className="empty-chat-state">
-            <div className="empty-chat-icon">💬</div>
-            <h3 className="empty-chat-title">Bienvenido a #{channel.name}</h3>
+            <div className="empty-chat-icon">{isPayments ? '💸' : channel.emoji || '💬'}</div>
+            <h3 className="empty-chat-title">{isDm ? `Tu conversación con ${channel.name}` : isPayments ? 'Comprobantes de pago' : `Bienvenido a #${channel.name}`}</h3>
             <p className="empty-chat-desc">
-              {channel.topic || 'Este es el inicio del canal. ¡Sé el primero en enviar un mensaje o emitir un cobro B2B en Stellar!'}
+              {isDm
+                ? 'Este es el inicio de la conversación. Escribe el primer mensaje.'
+                : isPayments
+                  ? 'Aquí aparecerán los comprobantes de los pagos verificados en Stellar.'
+                  : channel.topic || 'Este es el inicio del canal. ¡Sé el primero en enviar un mensaje o emitir un cobro B2B en Stellar!'}
             </p>
             <div className="empty-chat-actions">
-              {canPost && (
+              {canPost && !isDm && (
                 <button
                   type="button"
                   className="btn-empty-action"
@@ -463,16 +488,21 @@ export function ChatArea({
       </section>
 
       <footer className="chat-input-container">
-        {canPost ? (
+        {isPayments ? (
+          <div className="chat-input-box kv-composer-locked" role="note">
+            <IconLock size={16} />
+            <span>Aquí se publican los comprobantes de pago verificados</span>
+          </div>
+        ) : canPost ? (
           <form onSubmit={handleSubmit} className="chat-input-box">
-            <ComposerPlus onInvoice={onOpenQuickInvoice} />
+            {isDm ? null : <ComposerPlus onInvoice={onOpenQuickInvoice} />}
             <textarea
               ref={composerRef}
               className="chat-input-field"
               rows={1}
               maxLength={MAX_LEN}
-              placeholder={`Mensaje en #${channel.name}`}
-              aria-label={`Mensaje en #${channel.name}`}
+              placeholder={isDm ? `Mensaje para ${label}` : `Mensaje en ${label}`}
+              aria-label={isDm ? `Mensaje para ${label}` : `Mensaje en ${label}`}
               aria-keyshortcuts="Enter"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}

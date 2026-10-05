@@ -5,9 +5,10 @@
  * firmada con SEP-53, pagos con Pollar verificados en Horizon).
  */
 import type { PollarClient } from '@pollar/core';
-import type { Channel, Community, Message, User, WalletTransaction } from '../../types';
+import type { Category, Channel, Community, DmThread, Message, User, WalletTransaction } from '../../types';
+import type { IDmService } from '../dmService';
 import type { IAuthService } from '../authService';
-import type { CreateChannelInput, CreateCommunityInput, ICommunityService } from '../communityService';
+import type { CreateChannelInput, CreateCommunityInput, ICommunityService, UpdateChannelInput } from '../communityService';
 import type { IChatService } from '../chatService';
 import type { IWalletService, SendPaymentInput, WalletBalances } from '../walletService';
 import type { IProfileService } from '../profileService';
@@ -43,7 +44,25 @@ type ProfileRow = {
 };
 type AuthorRow = Pick<ProfileRow, 'id' | 'username' | 'display_name' | 'avatar_seed' | 'avatar_style'>;
 type CommunityRow = { id: string; slug: string; name: string; icon: string | null; description: string | null; image?: string | null };
-type ChannelRow = { id: string; community_id: string; name: string; topic: string | null; type: string };
+type ChannelRow = {
+  id: string;
+  community_id: string;
+  name: string;
+  topic: string | null;
+  type: string;
+  category_id?: string | null;
+  position?: number | null;
+  visibility?: string | null;
+  emoji?: string | null;
+};
+type CategoryRow = { id: string; name: string; position: number };
+type DmThreadWire = {
+  id: string;
+  other: AuthorRow & { wallet?: string };
+  last_message: { content: string; created_at: string; author_id: string } | null;
+  unread: number;
+  last_message_at?: string | null;
+};
 type MemberRow = { role: string; profile: ProfileRow };
 type MessageWire = { id: string; channel_id: string; content: string; created_at: string; edited_at?: string | null; author: AuthorRow };
 type PaymentParty = { username: string } | null;
@@ -108,7 +127,27 @@ function toChannel(c: ChannelRow): Channel {
     communityId: c.community_id,
     name: c.name,
     topic: c.topic ?? undefined,
-    type: c.type === 'announcement' ? 'announcement' : 'text',
+    type: c.type === 'announcement' ? 'announcement' : c.type === 'payments' ? 'payments' : 'text',
+    categoryId: c.category_id ?? null,
+    position: c.position ?? 0,
+    visibility: c.visibility === 'private' ? 'private' : 'public',
+    emoji: c.emoji ?? null,
+  };
+}
+
+function toCategory(k: CategoryRow): Category {
+  return { id: k.id, name: k.name, position: k.position };
+}
+
+function toThread(t: DmThreadWire): DmThread {
+  return {
+    id: t.id,
+    other: toUser(t.other),
+    lastMessage: t.last_message
+      ? { content: t.last_message.content, createdAt: t.last_message.created_at, authorId: t.last_message.author_id }
+      : null,
+    unread: t.unread ?? 0,
+    lastMessageAt: t.last_message_at ?? undefined,
   };
 }
 
@@ -175,8 +214,8 @@ export class ApiCommunityService implements ICommunityService {
 
   private async detail(c: CommunityRow): Promise<Community> {
     this.slugs.set(c.id, c.slug);
-    const [{ channels }, { members }] = await Promise.all([
-      call<{ channels: ChannelRow[] }>(`/api/communities/${encodeURIComponent(c.slug)}/channels`),
+    const [{ channels, categories }, { members }] = await Promise.all([
+      call<{ channels: ChannelRow[]; categories?: CategoryRow[] }>(`/api/communities/${encodeURIComponent(c.slug)}/channels`),
       call<{ members: MemberRow[] }>(`/api/communities/${encodeURIComponent(c.slug)}/members`),
     ]);
     return {
@@ -187,6 +226,7 @@ export class ApiCommunityService implements ICommunityService {
       image: c.image ?? undefined,
       description: c.description ?? '',
       channels: channels.map(toChannel),
+      categories: (categories ?? []).map(toCategory),
       members: members.map((m) => toUser(m.profile, { role: m.role })),
     };
   }
@@ -284,9 +324,130 @@ export class ApiCommunityService implements ICommunityService {
     if (!slug) throw new ApiError('Comunidad desconocida.');
     const { channel } = await call<{ channel: ChannelRow }>(`/api/communities/${encodeURIComponent(slug)}/channels`, {
       method: 'POST',
-      body: { name: input.name, topic: input.topic ?? null, type: input.type ?? 'text' },
+      body: {
+        name: input.name,
+        topic: input.topic ?? null,
+        type: input.type ?? 'text',
+        ...(input.emoji ? { emoji: input.emoji } : {}),
+        ...(input.categoryId ? { category_id: input.categoryId } : {}),
+        ...(input.visibility ? { visibility: input.visibility } : {}),
+      },
     });
     return toChannel(channel);
+  }
+
+  async updateChannel(_communityId: string, channelId: string, patch: UpdateChannelInput): Promise<Channel> {
+    const body: Record<string, unknown> = {};
+    if (patch.topic !== undefined) body.topic = patch.topic;
+    if (patch.emoji !== undefined) body.emoji = patch.emoji;
+    if (patch.categoryId !== undefined) body.category_id = patch.categoryId;
+    if (patch.visibility !== undefined) body.visibility = patch.visibility;
+    if (patch.position !== undefined) body.position = patch.position;
+    const { channel } = await call<{ channel: ChannelRow }>(`/api/channels/${encodeURIComponent(channelId)}`, {
+      method: 'PATCH',
+      body,
+    });
+    return toChannel(channel);
+  }
+
+  async createCategory(communityId: string, name: string): Promise<Category> {
+    const slug = this.slugs.get(communityId);
+    if (!slug) throw new ApiError('Comunidad desconocida.');
+    const { category } = await call<{ category: CategoryRow }>(`/api/communities/${encodeURIComponent(slug)}/categories`, {
+      method: 'POST',
+      body: { name },
+    });
+    return toCategory(category);
+  }
+
+  async updateCategory(_communityId: string, categoryId: string, patch: { name?: string; position?: number }): Promise<Category> {
+    const { category } = await call<{ category: CategoryRow }>(`/api/categories/${encodeURIComponent(categoryId)}`, {
+      method: 'PATCH',
+      body: patch,
+    });
+    return toCategory(category);
+  }
+
+  async deleteCategory(_communityId: string, categoryId: string): Promise<void> {
+    await call(`/api/categories/${encodeURIComponent(categoryId)}`, { method: 'DELETE' });
+  }
+}
+
+// ------------------------------------------------------------ direct messages
+
+const DM_POLL_MS = 3_000;
+
+export class ApiDmService implements IDmService {
+  async getThreads(): Promise<DmThread[]> {
+    const { threads } = await call<{ threads: DmThreadWire[] }>('/api/dms');
+    return threads.map(toThread);
+  }
+
+  async openThread(username: string): Promise<DmThread> {
+    const { thread } = await call<{ thread: DmThreadWire }>('/api/dms', {
+      method: 'POST',
+      body: { username: username.replace(/^@/, '') },
+    });
+    return toThread(thread);
+  }
+
+  async getMessages(threadId: string): Promise<Message[]> {
+    try {
+      const { messages } = await call<{ messages: MessageWire[] }>(`/api/dms/${encodeURIComponent(threadId)}/messages`);
+      return messages.map(toMessage);
+    } catch {
+      return [];
+    }
+  }
+
+  async sendMessage(threadId: string, content: string, _author: User): Promise<Message> {
+    const { message } = await call<{ message: MessageWire }>(`/api/dms/${encodeURIComponent(threadId)}/messages`, {
+      method: 'POST',
+      body: { content },
+    });
+    return toMessage(message);
+  }
+
+  async editMessage(threadId: string, messageId: string, content: string): Promise<Message> {
+    const { message } = await call<{ message: MessageWire }>(
+      `/api/dms/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}`,
+      { method: 'PATCH', body: { content } },
+    );
+    return toMessage(message);
+  }
+
+  async deleteMessage(threadId: string, messageId: string): Promise<void> {
+    await call(`/api/dms/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}`, { method: 'DELETE' });
+  }
+
+  subscribeToMessages(
+    threadId: string,
+    callback: (msg: Message) => void,
+    onSync?: (latestPage: Message[], isFullThread: boolean) => void,
+  ): () => void {
+    let seen: Set<string> | null = null;
+    let stopped = false;
+    const tick = async () => {
+      if (stopped) return;
+      try {
+        const { messages } = await call<{ messages: MessageWire[] }>(`/api/dms/${encodeURIComponent(threadId)}/messages`);
+        if (stopped) return;
+        const page = messages.map(toMessage);
+        if (seen !== null) {
+          for (const m of page) if (!seen.has(m.id)) callback(m);
+          onSync?.(page, page.length < PAGE_SIZE);
+        }
+        seen = new Set(page.map((m) => m.id));
+      } catch {
+        // Se reintenta en el próximo tick.
+      }
+      if (!stopped) timer = setTimeout(tick, DM_POLL_MS);
+    };
+    let timer = setTimeout(tick, 0);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
   }
 }
 

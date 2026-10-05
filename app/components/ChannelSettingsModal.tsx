@@ -1,34 +1,46 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Channel } from '../types';
+import { Category, Channel } from '../types';
+import type { UpdateChannelInput } from '../services/communityService';
+import { CategorySelect, EmojiField, VisibilityToggle } from './ChannelFields';
 
 interface ChannelSettingsModalProps {
   /** Canal a configurar; null = cerrado. */
   channel: Channel | null;
   onClose: () => void;
-  /** Guarda la descripción (tema); "" la quita. */
-  onSaveTopic: (channelId: string, topic: string) => Promise<boolean>;
+  /** Guarda los cambios (descripción, emoji, categoría, visibilidad). */
+  onUpdate: (channelId: string, patch: UpdateChannelInput) => Promise<boolean>;
+  categories?: Category[];
   onDelete: (channelId: string) => Promise<boolean>;
 }
 
 const TOPIC_MAX = 200;
 
 /**
- * "Configurar canal" (dueño o admin): descripción y borrar. El servidor vuelve a
- * revisar el permiso; #general no se puede borrar.
+ * "Configurar canal" (dueño o admin): descripción, emoji, categoría, visibilidad y borrar.
+ * El servidor vuelve a revisar el permiso; #general no se puede borrar.
  */
-export function ChannelSettingsModal({ channel, onClose, onSaveTopic, onDelete }: ChannelSettingsModalProps) {
+export function ChannelSettingsModal({ channel, onClose, onUpdate, categories = [], onDelete }: ChannelSettingsModalProps) {
   const [topic, setTopic] = useState('');
+  const [emoji, setEmoji] = useState<string | null>(null);
+  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [visibility, setVisibility] = useState<'public' | 'private'>('public');
   const [busy, setBusy] = useState<'save' | 'delete' | null>(null);
   const [confirming, setConfirming] = useState(false);
 
   const channelId = channel?.id;
   const savedTopic = channel?.topic ?? '';
+  const savedEmoji = channel?.emoji ?? null;
+  const savedCategory = channel?.categoryId ?? null;
+  const savedVisibility = channel?.visibility ?? 'public';
   useEffect(() => {
     setTopic(savedTopic);
+    setEmoji(savedEmoji);
+    setCategoryId(savedCategory);
+    setVisibility(savedVisibility);
     setConfirming(false);
-  }, [channelId, savedTopic]);
+  }, [channelId, savedTopic, savedEmoji, savedCategory, savedVisibility]);
 
   useEffect(() => {
     if (!channel) return;
@@ -38,12 +50,21 @@ export function ChannelSettingsModal({ channel, onClose, onSaveTopic, onDelete }
   }, [channel, onClose]);
 
   if (!channel) return null;
-  const changed = topic.trim() !== savedTopic;
+  const changed =
+    topic.trim() !== savedTopic || emoji !== savedEmoji || categoryId !== savedCategory || visibility !== savedVisibility;
+  // #general y los canales de comprobantes no pueden volverse privados.
+  const lockedPublic = channel.name === 'general' || channel.type === 'payments';
 
   const save = async () => {
+    const patch: UpdateChannelInput = {};
+    if (topic.trim() !== savedTopic) patch.topic = topic.trim();
+    if (emoji !== savedEmoji) patch.emoji = emoji;
+    if (categoryId !== savedCategory) patch.categoryId = categoryId;
+    if (visibility !== savedVisibility) patch.visibility = visibility;
     setBusy('save');
-    await onSaveTopic(channel.id, topic.trim());
+    const ok = await onUpdate(channel.id, patch);
     setBusy(null);
+    if (ok) onClose();
   };
 
   const remove = async () => {
@@ -89,6 +110,21 @@ export function ChannelSettingsModal({ channel, onClose, onSaveTopic, onDelete }
             <span className="form-hint kv-field-count" aria-live="polite">
               {topic.length}/{TOPIC_MAX}
             </span>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Emoji</label>
+            <EmojiField value={emoji} onChange={setEmoji} disabled={busy !== null} />
+          </div>
+          <div className="form-group">
+            <label className="form-label" htmlFor="kv-channel-cat">
+              Categoría
+            </label>
+            <CategorySelect id="kv-channel-cat" value={categoryId} onChange={setCategoryId} categories={categories} disabled={busy !== null} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Visibilidad</label>
+            <VisibilityToggle name="kv-channel-vis" value={visibility} onChange={setVisibility} disabled={busy !== null || lockedPublic} />
+            {lockedPublic ? <span className="form-hint">Este canal siempre es público.</span> : null}
           </div>
           <div className="modal-actions kv-actions-inline">
             <button type="button" className="btn-primary" disabled={!changed || busy !== null} onClick={() => void save()}>

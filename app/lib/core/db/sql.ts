@@ -18,7 +18,10 @@ export interface Query {
 const PROFILE_COLUMNS =
   "p.id, p.wallet, p.username, p.display_name, p.avatar_seed, p.avatar_style, p.bio, p.trust_level, p.x_handle, p.x_verified_at, p.created_at, p.username_changed_at, p.avatar_changed_at";
 const COMMUNITY_COLUMNS = "c.id, c.slug, c.name, c.icon, c.description, c.owner_id, c.created_at, c.image";
-const CHANNEL_COLUMNS = "ch.id, ch.community_id, ch.name, ch.topic, ch.type";
+const CHANNEL_COLUMNS = "ch.id, ch.community_id, ch.name, ch.topic, ch.type, ch.category_id, ch.position, ch.visibility, ch.emoji";
+const CHANNEL_RETURNING = "returning ch.id, ch.community_id, ch.name, ch.topic, ch.type, ch.category_id, ch.position, ch.visibility, ch.emoji";
+/** Roles que ven y escriben en canales privados (lo mismo que canSeePrivateChannels). */
+const STAFF_ROLES = "('owner', 'admin', 'moderator')";
 
 /** ISO-8601 with microseconds, so ordering by the string equals ordering by the column. */
 const ISO_US = `to_char(%s at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
@@ -237,9 +240,18 @@ export const setMemberRole = (communityId: string, targetId: string, newRole: st
 
 // ----------------------------------------------------------------- channels
 
-export const listChannels = (communityId: string): Query => ({
-  text: `select ${CHANNEL_COLUMNS} from public.channels ch where ch.community_id = $1 order by ch.created_at asc, ch.id asc`,
-  values: [communityId],
+/**
+ * Canales de la comunidad que `viewerId` puede ver: los públicos, y los privados
+ * solo si es owner/admin/moderator (la regla va dentro del SELECT). Un no miembro
+ * no recibe nada. Orden: posición, luego creación.
+ */
+export const listChannels = (communityId: string, viewerId: string): Query => ({
+  text:
+    `select ${CHANNEL_COLUMNS} from public.channels ch ` +
+    "join public.members vm on vm.community_id = ch.community_id and vm.profile_id = $2::uuid " +
+    `where ch.community_id = $1 and (ch.visibility = 'public' or vm.role in ${STAFF_ROLES}) ` +
+    "order by ch.position asc, ch.created_at asc, ch.id asc",
+  values: [communityId, viewerId],
 });
 
 export interface NewChannel {
@@ -247,22 +259,87 @@ export interface NewChannel {
   name: string;
   topic: string | null;
   type: "text" | "announcement";
+  emoji?: string | null;
+  categoryId?: string | null;
+  visibility?: "public" | "private";
 }
 
+/**
+ * Crea el canal al final de su categoría. La categoría tiene que ser de la misma
+ * comunidad (si no, cero filas). El tipo `payments` no se crea por aquí.
+ */
 export const insertChannel = (c: NewChannel): Query => ({
   text:
-    "insert into public.channels (community_id, name, topic, type) values ($1, $2, $3, $4) " +
-    "returning id, community_id, name, topic, type",
-  values: [c.communityId, c.name, c.topic, c.type],
+    "insert into public.channels (community_id, name, topic, type, emoji, category_id, visibility, position) " +
+    "select $1::uuid, $2::text, $3::text, $4::text, $5::text, $6::uuid, $7::text, " +
+    "coalesce((select max(o.position) + 1 from public.channels o where o.community_id = $1::uuid and o.category_id is not distinct from $6::uuid), 0) " +
+    "where $4::text in ('text', 'announcement') " +
+    "and ($6::uuid is null or exists (select 1 from public.channel_categories k where k.id = $6::uuid and k.community_id = $1::uuid)) " +
+    "returning id, community_id, name, topic, type, category_id, position, visibility, emoji",
+  values: [c.communityId, c.name, c.topic, c.type, c.emoji ?? null, c.categoryId ?? null, c.visibility ?? "public"],
 });
+
+/** Campos que PATCH /api/channels/[id] puede cambiar (cualquier subconjunto, ya validados). */
+export interface ChannelPatch {
+  topic?: string | null;
+  emoji?: string | null;
+  categoryId?: string | null;
+  visibility?: "public" | "private";
+  position?: number;
+}
+
+const CHANNEL_PATCH_COLUMNS: Array<[keyof ChannelPatch, string, string]> = [
+  ["topic", "topic", ""],
+  ["emoji", "emoji", ""],
+  ["categoryId", "category_id", "::uuid"],
+  ["visibility", "visibility", ""],
+  ["position", "position", "::integer"],
+];
+
+/**
+ * Edita el canal solo si quien llama es owner/admin de su comunidad; la nueva
+ * categoría debe ser de esa comunidad; #general y los canales `payments` no
+ * pasan a privados (las mismas reglas de canUpdateChannel). Cero filas = no
+ * permitido (o no existe). Null cuando no hay nada que cambiar. Los nombres de
+ * columna salen de una lista fija; los valores viajan como parámetros.
+ */
+export function updateChannel(channelId: string, profileId: string, patch: ChannelPatch): Query | null {
+  const sets: string[] = [];
+  const values: unknown[] = [channelId, profileId];
+  let categoryRef: string | null = null;
+  let visibilityRef: string | null = null;
+  for (const [key, column, cast] of CHANNEL_PATCH_COLUMNS) {
+    const value = patch[key];
+    if (value === undefined) continue;
+    values.push(value);
+    const ref = `$${values.length}${cast}`;
+    sets.push(`${column} = ${ref}`);
+    if (key === "categoryId") categoryRef = ref;
+    if (key === "visibility") visibilityRef = `$${values.length}`;
+  }
+  if (sets.length === 0) return null;
+  let guard = "";
+  if (categoryRef) {
+    guard +=
+      ` and (${categoryRef} is null or exists (select 1 from public.channel_categories k where k.id = ${categoryRef} and k.community_id = ch.community_id))`;
+  }
+  if (visibilityRef) guard += ` and not (${visibilityRef} = 'private' and (ch.name = 'general' or ch.type = 'payments'))`;
+  return {
+    text:
+      `update public.channels ch set ${sets.join(", ")} where ch.id = $1 ` +
+      "and exists (select 1 from public.members m where m.community_id = ch.community_id and m.profile_id = $2::uuid " +
+      `and m.role in ('owner', 'admin'))${guard} ${CHANNEL_RETURNING}`,
+    values,
+  };
+}
 
 /**
  * Borra un canal (y sus mensajes, en cascada) solo si quien llama es owner o admin
- * de su comunidad y no es #general. Cero filas = no permitido (o no existe).
+ * de su comunidad y no es #general ni el canal de pagos. Cero filas = no permitido (o no existe).
  */
 export const deleteChannel = (channelId: string, profileId: string): Query => ({
   text:
-    "delete from public.channels ch where ch.id = $1 and ch.name <> 'general' " +
+    "delete from public.channels ch where ch.id = $1 and ch.name <> 'general' and ch.type <> 'payments' " +
     "and exists (select 1 from public.members m where m.community_id = ch.community_id and m.profile_id = $2::uuid " +
     "and m.role in ('owner', 'admin')) returning ch.id",
   values: [channelId, profileId],
@@ -280,7 +357,7 @@ export const updateChannelTopic = (channelId: string, profileId: string, topic: 
 /** The channel plus the caller's role in its community (null when not a member), in one round trip. */
 export const channelWithRole = (channelId: string, profileId: string): Query => ({
   text:
-    "select ch.id, ch.community_id, ch.name, ch.type, m.role " +
+    "select ch.id, ch.community_id, ch.name, ch.type, m.role, ch.visibility " +
     "from public.channels ch " +
     "left join public.members m on m.community_id = ch.community_id and m.profile_id = $2 " +
     "where ch.id = $1",
@@ -304,7 +381,7 @@ export function pageSize(requested: number | undefined): number {
  * into another channel's rows and rows sharing a timestamp are neither skipped
  * nor repeated.
  */
-export function messagesNewest(channelId: string, limit: number, beforeId?: string): Query {
+export function messagesNewest(channelId: string, viewerId: string, limit: number, beforeId?: string): Query {
   const values: unknown[] = [channelId];
   let cursor = "";
   if (beforeId !== undefined) {
@@ -313,12 +390,28 @@ export function messagesNewest(channelId: string, limit: number, beforeId?: stri
       " and (m.created_at, m.id) < (select b.created_at, b.id from public.messages b where b.id = $2 and b.channel_id = $1)";
   }
   values.push(limit);
+  const limitRef = `$${values.length}`;
+  values.push(viewerId);
   return {
     text:
       `select ${MESSAGE_SELECT} ${MESSAGE_FROM} where m.channel_id = $1${cursor} ` +
-      `order by m.created_at desc, m.id desc limit $${values.length}`,
+      `and ${canSeeChannel("$1", `$${values.length}`)} ` +
+      `order by m.created_at desc, m.id desc limit ${limitRef}`,
     values,
   };
+}
+
+/**
+ * The reader is a member of the channel's community and, for a private channel,
+ * owner/admin/moderator (the same rule as canViewChannel). `channelRef` and
+ * `viewerRef` are `$n` placeholders.
+ */
+function canSeeChannel(channelRef: string, viewerRef: string): string {
+  return (
+    "exists (select 1 from public.channels vch " +
+    `join public.members vm on vm.community_id = vch.community_id and vm.profile_id = ${viewerRef}::uuid ` +
+    `where vch.id = ${channelRef} and (vch.visibility = 'public' or vm.role in ${STAFF_ROLES}))`
+  );
 }
 
 /** Seconds of overlap of the polling query (see messagesAfter). */
@@ -330,14 +423,15 @@ export const AFTER_OVERLAP_SECONDS = 5;
  * timestamp older than a message the client already has. The window therefore
  * reaches back AFTER_OVERLAP_SECONDS before the cursor; the client dedupes by id.
  */
-export function messagesAfter(channelId: string, afterId: string, limit: number): Query {
+export function messagesAfter(channelId: string, viewerId: string, afterId: string, limit: number): Query {
   return {
     text:
       `select ${MESSAGE_SELECT} ${MESSAGE_FROM} where m.channel_id = $1 ` +
       "and m.created_at > (select b.created_at from public.messages b where b.id = $2 and b.channel_id = $1) " +
       `- make_interval(secs => ${AFTER_OVERLAP_SECONDS}) ` +
+      `and ${canSeeChannel("$1", "$4")} ` +
       "order by m.created_at asc, m.id asc limit $3",
-    values: [channelId, afterId, limit],
+    values: [channelId, afterId, limit, viewerId],
   };
 }
 
@@ -353,7 +447,8 @@ export const insertMessage = (channelId: string, authorId: string, content: stri
     "insert into public.messages (channel_id, author_id, content) " +
     "select ch.id, $2::uuid, $3 from public.channels ch " +
     "join public.members mem on mem.community_id = ch.community_id and mem.profile_id = $2::uuid " +
-    "where ch.id = $1 and (ch.type = 'text' or mem.role in ('owner', 'admin')) " +
+    "where ch.id = $1 and (ch.type <> 'announcement' or mem.role in ('owner', 'admin')) " +
+    `and (ch.visibility = 'public' or mem.role in ${STAFF_ROLES}) ` +
     "returning id, channel_id, author_id, content, created_at, edited_at) " +
     `select m.id, m.channel_id, m.author_id, m.content, ${isoUs("m.created_at")} as created_at, ${isoUs("m.edited_at")} as edited_at, ${AUTHOR_JSON} as author ` +
     "from ins m join public.profiles a on a.id = m.author_id",
@@ -363,7 +458,7 @@ export const insertMessage = (channelId: string, authorId: string, content: stri
 /** The message (inside its channel) plus the caller's role in the channel's community (null when not a member). */
 export const messageWithRole = (channelId: string, messageId: string, profileId: string): Query => ({
   text:
-    "select m.id, m.author_id, ch.community_id, mem.role " +
+    "select m.id, m.author_id, ch.community_id, mem.role, ch.visibility " +
     "from public.messages m join public.channels ch on ch.id = m.channel_id " +
     "left join public.members mem on mem.community_id = ch.community_id and mem.profile_id = $3 " +
     "where m.id = $2 and m.channel_id = $1",
@@ -381,7 +476,8 @@ export const updateMessage = (channelId: string, messageId: string, authorId: st
     "update public.messages m set content = $4, edited_at = now() " +
     "from public.channels ch " +
     "where m.id = $2 and m.channel_id = $1 and ch.id = m.channel_id and m.author_id = $3::uuid " +
-    "and exists (select 1 from public.members mem where mem.community_id = ch.community_id and mem.profile_id = $3::uuid) " +
+    "and exists (select 1 from public.members mem where mem.community_id = ch.community_id and mem.profile_id = $3::uuid " +
+    `and (ch.visibility = 'public' or mem.role in ${STAFF_ROLES})) ` +
     "returning m.id, m.channel_id, m.author_id, m.content, m.created_at, m.edited_at) " +
     `select m.id, m.channel_id, m.author_id, m.content, ${isoUs("m.created_at")} as created_at, ${isoUs("m.edited_at")} as edited_at, ${AUTHOR_JSON} as author ` +
     "from upd m join public.profiles a on a.id = m.author_id",
@@ -398,9 +494,255 @@ export const deleteMessage = (channelId: string, messageId: string, profileId: s
     "delete from public.messages m using public.channels ch " +
     "where m.id = $2 and m.channel_id = $1 and ch.id = m.channel_id " +
     "and exists (select 1 from public.members mem where mem.community_id = ch.community_id and mem.profile_id = $3::uuid " +
-    "and (m.author_id = $3::uuid or mem.role in ('owner', 'admin', 'moderator'))) " +
+    "and (m.author_id = $3::uuid or mem.role in ('owner', 'admin', 'moderator')) " +
+    `and (ch.visibility = 'public' or mem.role in ${STAFF_ROLES})) ` +
     "returning m.id",
   values: [channelId, messageId, profileId],
+});
+
+// --------------------------------------------------------------- categories
+
+const CATEGORY_COLUMNS = "k.id, k.community_id, k.name, k.position";
+
+/** Categorías de la comunidad, para sus miembros (el JOIN con members es la regla). */
+export const listCategories = (communityId: string, viewerId: string): Query => ({
+  text:
+    `select ${CATEGORY_COLUMNS} from public.channel_categories k ` +
+    "join public.members vm on vm.community_id = k.community_id and vm.profile_id = $2::uuid " +
+    "where k.community_id = $1 order by k.position asc, k.created_at asc, k.id asc",
+  values: [communityId, viewerId],
+});
+
+/** The category plus the caller's role in its community (null when not a member), in one round trip. */
+export const categoryWithRole = (categoryId: string, profileId: string): Query => ({
+  text:
+    "select k.id, k.community_id, m.role from public.channel_categories k " +
+    "left join public.members m on m.community_id = k.community_id and m.profile_id = $2 " +
+    "where k.id = $1",
+  values: [categoryId, profileId],
+});
+
+/** Una categoría de esta comunidad (para validar `category_id` antes de crear un canal). */
+export const categoryInCommunity = (categoryId: string, communityId: string): Query => ({
+  text: "select k.id from public.channel_categories k where k.id = $1 and k.community_id = $2",
+  values: [categoryId, communityId],
+});
+
+/** Crea la categoría al final, solo si quien llama es owner/admin. Cero filas = no permitido. */
+export const insertCategory = (communityId: string, profileId: string, name: string): Query => ({
+  text:
+    "insert into public.channel_categories (community_id, name, position) " +
+    "select $1::uuid, $3::text, coalesce((select max(o.position) + 1 from public.channel_categories o where o.community_id = $1::uuid), 0) " +
+    "where exists (select 1 from public.members m where m.community_id = $1::uuid and m.profile_id = $2::uuid and m.role in ('owner', 'admin')) " +
+    "returning id, community_id, name, position",
+  values: [communityId, profileId, name],
+});
+
+export interface CategoryPatch {
+  name?: string;
+  position?: number;
+}
+
+const CATEGORY_PATCH_COLUMNS: Array<[keyof CategoryPatch, string, string]> = [
+  ["name", "name", "::text"],
+  ["position", "position", "::integer"],
+];
+
+/** Null when the patch is empty. Owner/admin only, inside the UPDATE. */
+export function updateCategory(categoryId: string, profileId: string, patch: CategoryPatch): Query | null {
+  const sets: string[] = [];
+  const values: unknown[] = [categoryId, profileId];
+  for (const [key, column, cast] of CATEGORY_PATCH_COLUMNS) {
+    const value = patch[key];
+    if (value === undefined) continue;
+    values.push(value);
+    sets.push(`${column} = $${values.length}${cast}`);
+  }
+  if (sets.length === 0) return null;
+  return {
+    text:
+      `update public.channel_categories k set ${sets.join(", ")} where k.id = $1 ` +
+      "and exists (select 1 from public.members m where m.community_id = k.community_id and m.profile_id = $2::uuid " +
+      "and m.role in ('owner', 'admin')) returning k.id, k.community_id, k.name, k.position",
+    values,
+  };
+}
+
+/** Borra la categoría (sus canales quedan sin categoría: ON DELETE SET NULL). Owner/admin only. */
+export const deleteCategory = (categoryId: string, profileId: string): Query => ({
+  text:
+    "delete from public.channel_categories k where k.id = $1 " +
+    "and exists (select 1 from public.members m where m.community_id = k.community_id and m.profile_id = $2::uuid " +
+    "and m.role in ('owner', 'admin')) returning k.id",
+  values: [categoryId, profileId],
+});
+
+// ------------------------------------------------------------ direct messages
+
+/** Whether two profiles are members of at least one common community. */
+export const sharedCommunity = (profileA: string, profileB: string): Query => ({
+  text:
+    "select exists (select 1 from public.members x join public.members y on y.community_id = x.community_id " +
+    "where x.profile_id = $1::uuid and y.profile_id = $2::uuid) as shared",
+  values: [profileA, profileB],
+});
+
+/**
+ * Creates the thread of a pair (ordered, so (least, greatest) is unique) only if
+ * they are different people who share a community (the same rule as canOpenDm);
+ * an existing thread inserts nothing (`on conflict do nothing`), the repo then reads it.
+ */
+export const insertDmThread = (actorId: string, otherId: string): Query => ({
+  text:
+    "insert into public.dm_threads (user_a, user_b) " +
+    "select least($1::uuid, $2::uuid), greatest($1::uuid, $2::uuid) " +
+    "where $1::uuid <> $2::uuid and exists (select 1 from public.members x join public.members y on y.community_id = x.community_id " +
+    "where x.profile_id = $1::uuid and y.profile_id = $2::uuid) " +
+    "on conflict (user_a, user_b) do nothing returning id",
+  values: [actorId, otherId],
+});
+
+/** The existing thread of a pair, whatever the order they are given in. */
+export const dmThreadOfPair = (profileA: string, profileB: string): Query => ({
+  text:
+    "select t.id from public.dm_threads t where t.user_a = least($1::uuid, $2::uuid) and t.user_b = greatest($1::uuid, $2::uuid)",
+  values: [profileA, profileB],
+});
+
+/** What a thread looks like on the wire, for `$1` = the caller. */
+const DM_THREAD_SELECT =
+  "t.id, " +
+  "json_build_object('id', o.id, 'username', o.username, 'display_name', o.display_name, 'avatar_seed', o.avatar_seed, " +
+  "'avatar_style', o.avatar_style, 'wallet', o.wallet) as other, " +
+  "(select json_build_object('content', lm.content, 'created_at', " +
+  `${isoUs("lm.created_at")}, 'author_id', lm.author_id) ` +
+  "from public.dm_messages lm where lm.thread_id = t.id order by lm.created_at desc, lm.id desc limit 1) as last_message, " +
+  "(select count(*)::int from public.dm_messages um where um.thread_id = t.id and um.author_id <> $1::uuid " +
+  "and um.created_at > coalesce(case when t.user_a = $1::uuid then t.a_read_at else t.b_read_at end, '-infinity'::timestamptz)) as unread, " +
+  `${isoUs("t.last_message_at")} as last_message_at`;
+
+const DM_THREAD_FROM =
+  "from public.dm_threads t join public.profiles o on o.id = case when t.user_a = $1::uuid then t.user_b else t.user_a end " +
+  "where (t.user_a = $1::uuid or t.user_b = $1::uuid)";
+
+/** The caller's threads, newest first. */
+export const listDmThreads = (profileId: string): Query => ({
+  text: `select ${DM_THREAD_SELECT} ${DM_THREAD_FROM} order by t.last_message_at desc, t.id desc limit 100`,
+  values: [profileId],
+});
+
+/** One thread of the caller (null row when it is not theirs), in the same shape as the list. */
+export const dmThreadForUser = (threadId: string, profileId: string): Query => ({
+  text: `select ${DM_THREAD_SELECT} ${DM_THREAD_FROM} and t.id = $2`,
+  values: [profileId, threadId],
+});
+
+/** The thread row itself (participants), for the pure checks. */
+export const dmThreadById = (threadId: string): Query => ({
+  text: "select t.id, t.user_a, t.user_b from public.dm_threads t where t.id = $1",
+  values: [threadId],
+});
+
+/** What a DM message looks like on the wire: the channel message shape, with `thread_id` (and `channel_id` = the same id). */
+const DM_MESSAGE_SELECT =
+  `m.id, m.thread_id, m.thread_id as channel_id, m.author_id, m.content, ${isoUs("m.created_at")} as created_at, ${isoUs("m.edited_at")} as edited_at, ${AUTHOR_JSON} as author`;
+const DM_MESSAGE_FROM = "from public.dm_messages m join public.profiles a on a.id = m.author_id";
+
+/** The caller is one of the two participants of `$1` (the same rule as canAccessDm). `viewerRef` is a `$n`. */
+const dmParticipant = (threadRef: string, viewerRef: string): string =>
+  `exists (select 1 from public.dm_threads vt where vt.id = ${threadRef} and (vt.user_a = ${viewerRef}::uuid or vt.user_b = ${viewerRef}::uuid))`;
+
+/** Same cursor semantics as messagesNewest, in a DM thread; participants only. */
+export function dmMessagesNewest(threadId: string, viewerId: string, limit: number, beforeId?: string): Query {
+  const values: unknown[] = [threadId];
+  let cursor = "";
+  if (beforeId !== undefined) {
+    values.push(beforeId);
+    cursor =
+      " and (m.created_at, m.id) < (select b.created_at, b.id from public.dm_messages b where b.id = $2 and b.thread_id = $1)";
+  }
+  values.push(limit);
+  const limitRef = `$${values.length}`;
+  values.push(viewerId);
+  return {
+    text:
+      `select ${DM_MESSAGE_SELECT} ${DM_MESSAGE_FROM} where m.thread_id = $1${cursor} ` +
+      `and ${dmParticipant("$1", `$${values.length}`)} order by m.created_at desc, m.id desc limit ${limitRef}`,
+    values,
+  };
+}
+
+/** Same polling window as messagesAfter, in a DM thread; participants only. */
+export function dmMessagesAfter(threadId: string, viewerId: string, afterId: string, limit: number): Query {
+  return {
+    text:
+      `select ${DM_MESSAGE_SELECT} ${DM_MESSAGE_FROM} where m.thread_id = $1 ` +
+      "and m.created_at > (select b.created_at from public.dm_messages b where b.id = $2 and b.thread_id = $1) " +
+      `- make_interval(secs => ${AFTER_OVERLAP_SECONDS}) ` +
+      `and ${dmParticipant("$1", "$4")} order by m.created_at asc, m.id asc limit $3`,
+    values: [threadId, afterId, limit, viewerId],
+  };
+}
+
+/** Stamps the caller's read time on the thread (only if they are a participant). */
+export const markDmRead = (threadId: string, profileId: string): Query => ({
+  text:
+    "update public.dm_threads t set " +
+    "a_read_at = case when t.user_a = $2::uuid then now() else t.a_read_at end, " +
+    "b_read_at = case when t.user_b = $2::uuid then now() else t.b_read_at end " +
+    "where t.id = $1 and (t.user_a = $2::uuid or t.user_b = $2::uuid) returning t.id",
+  values: [threadId, profileId],
+});
+
+/**
+ * Posts a DM: written only if the author is a participant of the thread. The
+ * same statement bumps last_message_at and marks the thread read for the author.
+ * Zero rows back = not allowed.
+ */
+export const insertDmMessage = (threadId: string, authorId: string, content: string): Query => ({
+  text:
+    "with ins as (" +
+    "insert into public.dm_messages (thread_id, author_id, content) " +
+    "select t.id, $2::uuid, $3::text from public.dm_threads t " +
+    "where t.id = $1 and (t.user_a = $2::uuid or t.user_b = $2::uuid) " +
+    "returning id, thread_id, author_id, content, created_at, edited_at), " +
+    "bump as (update public.dm_threads t set last_message_at = now(), " +
+    "a_read_at = case when t.user_a = $2::uuid then now() else t.a_read_at end, " +
+    "b_read_at = case when t.user_b = $2::uuid then now() else t.b_read_at end " +
+    "where t.id = $1 and exists (select 1 from ins) returning t.id) " +
+    `select m.id, m.thread_id, m.thread_id as channel_id, m.author_id, m.content, ${isoUs("m.created_at")} as created_at, ${isoUs("m.edited_at")} as edited_at, ${AUTHOR_JSON} as author ` +
+    "from ins m join public.profiles a on a.id = m.author_id",
+  values: [threadId, authorId, content],
+});
+
+/** The DM message (inside its thread) with the thread's participants. */
+export const dmMessageAccess = (threadId: string, messageId: string): Query => ({
+  text:
+    "select m.id, m.author_id, t.user_a, t.user_b from public.dm_messages m " +
+    "join public.dm_threads t on t.id = m.thread_id where m.id = $2 and m.thread_id = $1",
+  values: [threadId, messageId],
+});
+
+/** Edits a DM message and stamps edited_at: only its author, and only inside their own thread. */
+export const updateDmMessage = (threadId: string, messageId: string, authorId: string, content: string): Query => ({
+  text:
+    "with upd as (" +
+    "update public.dm_messages m set content = $4::text, edited_at = now() from public.dm_threads t " +
+    "where m.id = $2 and m.thread_id = $1 and t.id = m.thread_id and m.author_id = $3::uuid " +
+    "and (t.user_a = $3::uuid or t.user_b = $3::uuid) " +
+    "returning m.id, m.thread_id, m.author_id, m.content, m.created_at, m.edited_at) " +
+    `select m.id, m.thread_id, m.thread_id as channel_id, m.author_id, m.content, ${isoUs("m.created_at")} as created_at, ${isoUs("m.edited_at")} as edited_at, ${AUTHOR_JSON} as author ` +
+    "from upd m join public.profiles a on a.id = m.author_id",
+  values: [threadId, messageId, authorId, content],
+});
+
+/** Hard-deletes a DM message: only its author, and only inside their own thread. */
+export const deleteDmMessage = (threadId: string, messageId: string, profileId: string): Query => ({
+  text:
+    "delete from public.dm_messages m using public.dm_threads t " +
+    "where m.id = $2 and m.thread_id = $1 and t.id = m.thread_id and m.author_id = $3::uuid " +
+    "and (t.user_a = $3::uuid or t.user_b = $3::uuid) returning m.id",
+  values: [threadId, messageId, profileId],
 });
 
 // ----------------------------------------------------------------- payments

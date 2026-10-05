@@ -164,3 +164,18 @@ export const IconClose = (p: IconProps) => (
     <path d="M6 6l12 12M18 6 6 18" />
   </Svg>
 );
+export const IconChevronDown = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="m6 9 6 6 6-6" />
+  </Svg>
+);
+export const IconArrowUp = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 19V5M5 12l7-7 7 7" />
+  </Svg>
+);
+export const IconArrowDown = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 5v14M19 12l-7 7-7-7" />
+  </Svg>
+);

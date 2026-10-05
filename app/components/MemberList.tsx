@@ -3,7 +3,7 @@
 import React from 'react';
 import { User } from '../types';
 import { AvatarFace } from './AvatarFace';
-import { IconClose } from './Icons';
+import { IconChat, IconClose } from './Icons';
 
 interface MemberListProps {
   members: User[];
@@ -12,9 +12,28 @@ interface MemberListProps {
   onClose?: () => void;
   /** Abre la tarjeta de perfil del miembro. */
   onOpenProfile?: (user: User) => void;
+  /** Mensaje directo (botón al pasar el mouse o con foco); no aparece en tu propia fila. */
+  onMessage?: (user: User) => void;
+  currentUserId?: string;
 }
 
-export function MemberList({ members, isOpen, onClose, onOpenProfile }: MemberListProps) {
+export function MemberList({ members, isOpen, onClose, onOpenProfile, onMessage, currentUserId }: MemberListProps) {
+  const messageBtn = (member: User) =>
+    onMessage && member.id !== currentUserId ? (
+      <button
+        type="button"
+        className="kv-member-dm"
+        onClick={(e) => {
+          e.stopPropagation();
+          onMessage(member);
+        }}
+        onKeyDown={(e) => e.stopPropagation()}
+        aria-label={`Enviar mensaje directo a ${member.username}`}
+        title="Mensaje directo"
+      >
+        <IconChat size={15} />
+      </button>
+    ) : null;
   // Cada fila abre el perfil, con mouse o teclado.
   const open = (member: User) => ({
     role: 'button' as const,
@@ -68,6 +87,7 @@ export function MemberList({ members, isOpen, onClose, onOpenProfile }: MemberLi
               </div>
               <span className="member-tag">{member.username}</span>
             </div>
+            {messageBtn(member)}
           </div>
         ))}
       </div>
@@ -92,6 +112,7 @@ export function MemberList({ members, isOpen, onClose, onOpenProfile }: MemberLi
                   </div>
                   <span className="member-tag">{member.username}</span>
                 </div>
+                {messageBtn(member)}
               </div>
             ))}
           </div>
