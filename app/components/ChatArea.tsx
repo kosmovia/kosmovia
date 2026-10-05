@@ -1,15 +1,18 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { Channel, Community, Message, User } from '../types';
 import { AvatarFace } from './AvatarFace';
 import { ComposerPlus } from './ComposerPlus';
 import { EmojiPicker } from './EmojiPicker';
-import { IconBell, IconUsers, IconWallet } from './Icons';
+import { IconBell, IconLock, IconPencil, IconTrash, IconUsers, IconWallet } from './Icons';
 import { WalletTransaction } from '../types';
 
 interface ChatAreaProps {
   channel: Channel;
+  /** 'dm': conversación directa (`channel.name` es el nombre de la otra persona). */
+  variant?: 'channel' | 'dm';
+  dmPeer?: User;
   community: Community;
   messages: Message[];
   onSendMessage: (content: string) => void;
@@ -18,8 +21,6 @@ interface ChatAreaProps {
   isMemberListOpen?: boolean;
   onOpenWallet?: () => void;
   balanceUSDC?: number;
-  theme?: 'dark' | 'light';
-  onToggleTheme?: () => void;
   onOpenQuickInvoice?: () => void;
   /** Paga el cobro a quien lo emitió (`payee` = @usuario del autor). true si el pago salió. */
   onPayInvoice?: (amount: number, concept: string, payee: string) => Promise<boolean> | void;
@@ -35,10 +36,36 @@ interface ChatAreaProps {
   /** La campana abre/cierra las notificaciones en el panel derecho. */
   onToggleNotifications?: () => void;
   isNotificationsOpen?: boolean;
+  /** false en #anuncios (o similar) para quien no es dueño/admin: el campo se desactiva. */
+  canPost?: boolean;
+  /** Dueño, admin o moderador: puede borrar mensajes de otras personas. */
+  canModerate?: boolean;
+  /** Dueño o admin: el tema del canal es un botón que abre "Configurar canal". */
+  onOpenChannelSettings?: () => void;
+  /** Guarda la edición; true si se guardó. */
+  onEditMessage?: (messageId: string, content: string) => Promise<boolean>;
+  /** Borra el mensaje; true si se borró. */
+  onDeleteMessage?: (messageId: string) => Promise<boolean>;
+}
+
+const COMPOSER_MAX_PX = 168; // ~8 líneas
+const MAX_LEN = 2000;
+
+/** Textarea que crece con el texto hasta un máximo y luego hace scroll. */
+function useAutoGrow(ref: React.RefObject<HTMLTextAreaElement | null>, value: string) {
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, COMPOSER_MAX_PX)}px`;
+    el.style.overflowY = el.scrollHeight > COMPOSER_MAX_PX ? 'auto' : 'hidden';
+  }, [ref, value]);
 }
 
 export function ChatArea({
   channel,
+  variant = 'channel',
+  dmPeer,
   community,
   messages,
   onSendMessage,
@@ -47,8 +74,6 @@ export function ChatArea({
   isMemberListOpen,
   onOpenWallet,
   balanceUSDC,
-  theme = 'dark',
-  onToggleTheme,
   onOpenQuickInvoice,
   onPayInvoice,
   isWalletOpen,
@@ -59,22 +84,103 @@ export function ChatArea({
   notifications,
   onToggleNotifications,
   isNotificationsOpen,
+  canPost = true,
+  canModerate = false,
+  onOpenChannelSettings,
+  onEditMessage,
+  onDeleteMessage,
 }: ChatAreaProps) {
   const [inputText, setInputText] = useState('');
   const [paidInvoices, setPaidInvoices] = useState<Record<string, boolean>>({});
   const [payingInvoice, setPayingInvoice] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const editRef = useRef<HTMLTextAreaElement>(null);
+  const lastMessageId = useRef<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
 
+  const isDm = variant === 'dm';
+  const isPayments = !isDm && channel.type === 'payments';
+  const label = isDm ? channel.name : `#${channel.name}`;
+
+  useAutoGrow(composerRef, inputText);
+  useAutoGrow(editRef, editText);
+
+  // Solo baja al final cuando llega un mensaje nuevo (no en cada refresco por ediciones o borrados).
+  const newestId = messages.length > 0 ? messages[messages.length - 1].id : null;
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (newestId !== lastMessageId.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: lastMessageId.current === null ? 'auto' : 'smooth' });
+      lastMessageId.current = newestId;
+    }
+  }, [newestId]);
+
+  // Al cambiar de canal se cancelan edición y confirmación, y el siguiente canal baja al final sin animación.
+  useEffect(() => {
+    setEditingId(null);
+    setConfirmDeleteId(null);
+    lastMessageId.current = null;
+  }, [channel.id]);
+
+  const send = () => {
+    const trimmed = inputText.trim();
+    if (!trimmed || !canPost) return;
+    onSendMessage(trimmed);
+    setInputText('');
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmed = inputText.trim();
-    if (!trimmed) return;
-    onSendMessage(trimmed);
-    setInputText('');
+    send();
+  };
+
+  // Enter envía; Shift+Enter agrega una línea (no se envía mientras se compone con IME).
+  const handleComposerKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      send();
+    }
+  };
+
+  const startEdit = (msg: Message) => {
+    setConfirmDeleteId(null);
+    setEditingId(msg.id);
+    setEditText(msg.content);
+    setTimeout(() => editRef.current?.focus(), 0);
+  };
+
+  const saveEdit = async (msg: Message) => {
+    const next = editText.trim();
+    if (actionBusy) return;
+    if (!next || next === msg.content) {
+      setEditingId(null);
+      return;
+    }
+    setActionBusy(true);
+    const ok = await (onEditMessage?.(msg.id, next) ?? Promise.resolve(false));
+    setActionBusy(false);
+    if (ok) setEditingId(null);
+  };
+
+  const handleEditKey = (e: React.KeyboardEvent<HTMLTextAreaElement>, msg: Message) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      setEditingId(null);
+    } else if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      void saveEdit(msg);
+    }
+  };
+
+  const confirmDelete = async (msg: Message) => {
+    if (actionBusy) return;
+    setActionBusy(true);
+    const ok = await (onDeleteMessage?.(msg.id) ?? Promise.resolve(false));
+    setActionBusy(false);
+    if (ok) setConfirmDeleteId(null);
   };
 
   // Se marca pagado solo si el pago salió de verdad.
@@ -99,13 +205,36 @@ export function ChatArea({
             ☰
           </button>
           <div className="chat-header-title">
-            <span className="channel-hash">#</span>
+            {isDm ? (
+              dmPeer ? (
+                <span className="kv-dm-header-avatar">
+                  <AvatarFace avatar={dmPeer.avatar} name={dmPeer.displayName} />
+                </span>
+              ) : null
+            ) : channel.emoji ? (
+              <span aria-hidden="true">{channel.emoji}</span>
+            ) : (
+              <span className="channel-hash">#</span>
+            )}
             <span>{channel.name}</span>
           </div>
-          {channel.topic && (
-            <span className="chat-header-topic" title={channel.topic}>
-              {channel.topic}
-            </span>
+          {isDm ? (
+            dmPeer ? <span className="chat-header-topic">{dmPeer.username}</span> : null
+          ) : onOpenChannelSettings ? (
+            <button
+              type="button"
+              className={`chat-header-topic kv-topic-btn ${channel.topic ? '' : 'empty'}`}
+              onClick={onOpenChannelSettings}
+              title={channel.topic ? `${channel.topic} (clic para editar)` : 'Agregar descripción del canal'}
+            >
+              {channel.topic || 'Agregar descripción'}
+            </button>
+          ) : (
+            channel.topic && (
+              <span className="chat-header-topic" title={channel.topic}>
+                {channel.topic}
+              </span>
+            )
           )}
         </div>
         <div className="chat-header-actions">
@@ -157,20 +286,26 @@ export function ChatArea({
       <section className="message-feed" aria-label="Historial de mensajes">
         {messages.length === 0 ? (
           <div className="empty-chat-state">
-            <div className="empty-chat-icon">💬</div>
-            <h3 className="empty-chat-title">Bienvenido a #{channel.name}</h3>
+            <div className="empty-chat-icon">{isPayments ? '💸' : channel.emoji || '💬'}</div>
+            <h3 className="empty-chat-title">{isDm ? `Tu conversación con ${channel.name}` : isPayments ? 'Comprobantes de pago' : `Bienvenido a #${channel.name}`}</h3>
             <p className="empty-chat-desc">
-              {channel.topic || 'Este es el inicio del canal. ¡Sé el primero en enviar un mensaje o emitir un cobro B2B en Stellar!'}
+              {isDm
+                ? 'Este es el inicio de la conversación. Escribe el primer mensaje.'
+                : isPayments
+                  ? 'Aquí aparecerán los comprobantes de los pagos verificados en Stellar.'
+                  : channel.topic || 'Este es el inicio del canal. ¡Sé el primero en enviar un mensaje o emitir un cobro B2B en Stellar!'}
             </p>
             <div className="empty-chat-actions">
-              <button
-                type="button"
-                className="btn-empty-action"
-                onClick={() => onSendMessage('👋 ¡Hola a todos! Arrancamos la conversación por acá.')}
-              >
-                👋 Saludar en el canal
-              </button>
-              {onOpenQuickInvoice && (
+              {canPost && !isDm && (
+                <button
+                  type="button"
+                  className="btn-empty-action"
+                  onClick={() => onSendMessage('👋 ¡Hola a todos! Arrancamos la conversación por acá.')}
+                >
+                  👋 Saludar en el canal
+                </button>
+              )}
+              {onOpenQuickInvoice && canPost && (
                 <button
                   type="button"
                   className="btn-empty-action accent"
@@ -207,8 +342,13 @@ export function ChatArea({
             const isMine = currentUserId !== undefined && msg.author.id === currentUserId;
             const isPaying = payingInvoice === msg.id;
 
+            const canEdit = isMine && !invoiceData && !!onEditMessage;
+            const canDelete = (isMine || canModerate) && !!onDeleteMessage;
+            const isEditing = editingId === msg.id;
+            const isConfirming = confirmDeleteId === msg.id;
+
             return (
-              <article key={msg.id} className={`message-item ${grouped ? 'kv-grouped' : ''}`}>
+              <article key={msg.id} className={`message-item ${grouped ? 'kv-grouped' : ''} ${isEditing ? 'kv-editing' : ''}`}>
                 {grouped ? (
                   <div className="kv-avatar-spacer" aria-hidden="true">
                     <time className="kv-grouped-time">{msg.createdAt}</time>
@@ -265,10 +405,81 @@ export function ChatArea({
                               : `Pagar ${invoiceData.amount} USDC a ${msg.author.username}`}
                       </button>
                     </div>
+                  ) : isEditing ? (
+                    <div className="kv-edit-box">
+                      <textarea
+                        ref={editRef}
+                        className="kv-edit-field"
+                        rows={1}
+                        maxLength={MAX_LEN}
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        onKeyDown={(e) => handleEditKey(e, msg)}
+                        aria-label="Editar mensaje"
+                        disabled={actionBusy}
+                      />
+                      <div className="kv-edit-hint">
+                        Enter guarda · Shift+Enter nueva línea · Esc cancela
+                        <span className="kv-edit-buttons">
+                          <button type="button" className="kv-mini-btn" onClick={() => setEditingId(null)} disabled={actionBusy}>
+                            Cancelar
+                          </button>
+                          <button
+                            type="button"
+                            className="kv-mini-btn primary"
+                            onClick={() => void saveEdit(msg)}
+                            disabled={actionBusy || !editText.trim()}
+                          >
+                            {actionBusy ? 'Guardando…' : 'Guardar'}
+                          </button>
+                        </span>
+                      </div>
+                    </div>
                   ) : (
-                    <p className="msg-content">{msg.content}</p>
+                    <p className="msg-content">
+                      {msg.content}
+                      {msg.editedAt ? (
+                        <span className="kv-edited" title="Este mensaje fue editado">
+                          {' '}(editado)
+                        </span>
+                      ) : null}
+                    </p>
                   )}
+                  {isConfirming ? (
+                    <div className="kv-confirm-row" role="alertdialog" aria-label="Confirmar borrado">
+                      <span>¿Borrar este mensaje?</span>
+                      <button type="button" className="kv-mini-btn" onClick={() => setConfirmDeleteId(null)} disabled={actionBusy}>
+                        No
+                      </button>
+                      <button type="button" className="kv-mini-btn danger" onClick={() => void confirmDelete(msg)} disabled={actionBusy} autoFocus>
+                        {actionBusy ? 'Borrando…' : 'Sí, borrar'}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
+                {!isEditing && !isConfirming && (canEdit || canDelete) ? (
+                  <div className="kv-msg-actions" role="group" aria-label="Acciones del mensaje">
+                    {canEdit ? (
+                      <button type="button" className="kv-msg-action" onClick={() => startEdit(msg)} aria-label="Editar mensaje" title="Editar">
+                        <IconPencil size={15} />
+                      </button>
+                    ) : null}
+                    {canDelete ? (
+                      <button
+                        type="button"
+                        className="kv-msg-action danger"
+                        onClick={() => {
+                          setEditingId(null);
+                          setConfirmDeleteId(msg.id);
+                        }}
+                        aria-label="Borrar mensaje"
+                        title="Borrar"
+                      >
+                        <IconTrash size={15} />
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
               </article>
             );
           })
@@ -277,26 +488,37 @@ export function ChatArea({
       </section>
 
       <footer className="chat-input-container">
-        <form onSubmit={handleSubmit} className="chat-input-box">
-          <ComposerPlus onInvoice={onOpenQuickInvoice} />
-          <input
-            type="text"
-            className="chat-input-field"
-            maxLength={2000}
-            placeholder={`Mensaje en #${channel.name}`}
-            aria-label={`Mensaje en #${channel.name}`}
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-          />
-          <EmojiPicker onPick={(emoji) => setInputText((t) => t + emoji)} />
-          <button
-            type="submit"
-            className="chat-send-btn"
-            disabled={!inputText.trim()}
-          >
-            Enviar
-          </button>
-        </form>
+        {isPayments ? (
+          <div className="chat-input-box kv-composer-locked" role="note">
+            <IconLock size={16} />
+            <span>Aquí se publican los comprobantes de pago verificados</span>
+          </div>
+        ) : canPost ? (
+          <form onSubmit={handleSubmit} className="chat-input-box">
+            {isDm ? null : <ComposerPlus onInvoice={onOpenQuickInvoice} />}
+            <textarea
+              ref={composerRef}
+              className="chat-input-field"
+              rows={1}
+              maxLength={MAX_LEN}
+              placeholder={isDm ? `Mensaje para ${label}` : `Mensaje en ${label}`}
+              aria-label={isDm ? `Mensaje para ${label}` : `Mensaje en ${label}`}
+              aria-keyshortcuts="Enter"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={handleComposerKey}
+            />
+            <EmojiPicker onPick={(emoji) => setInputText((t) => t + emoji)} />
+            <button type="submit" className="chat-send-btn" disabled={!inputText.trim()}>
+              Enviar
+            </button>
+          </form>
+        ) : (
+          <div className="chat-input-box kv-composer-locked" role="note">
+            <IconLock size={16} />
+            <span>Solo los admins pueden escribir en #{channel.name}</span>
+          </div>
+        )}
       </footer>
     </main>
   );

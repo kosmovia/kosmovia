@@ -8,7 +8,12 @@ import type { MemberRole } from "./mappers.ts";
  * the post rule inside the INSERT, so a race can't slip past these checks.
  */
 
-export type ChannelType = "text" | "announcement";
+/** `payments` = #verificacion-pagos: lo escribe la app (comprobantes), no se crea a mano. */
+export type ChannelType = "text" | "announcement" | "payments";
+/** Los tipos que una persona puede pedir al crear un canal. */
+export type CreatableChannelType = "text" | "announcement";
+/** `private`: solo owner, admin y moderator lo ven, lo leen y escriben. */
+export type ChannelVisibility = "public" | "private";
 export type Role = MemberRole | null;
 
 export type Decision = { allowed: true } | { allowed: false; status: 400 | 401 | 403; code: string; error: string };
@@ -28,9 +33,32 @@ export function canReadCommunity(role: Role): Decision {
   return role === null ? deny(403, "not_member", "Únete a la comunidad para ver este contenido.") : ALLOWED;
 }
 
-/** `text`: any member. `announcement`: owner and admin only. */
-export function canPostInChannel(role: Role, channelType: ChannelType): Decision {
+/** Roles que ven los canales privados: owner, admin y moderator. */
+export function canSeePrivateChannels(role: Role): boolean {
+  return role === "owner" || role === "admin" || role === "moderator";
+}
+
+/**
+ * Ver, listar y leer un canal: miembros; si es privado, solo owner/admin/moderator
+ * (403 `private_channel`; el repo lo responde como 404 para no revelar que existe).
+ */
+export function canViewChannel(role: Role, visibility: ChannelVisibility = "public"): Decision {
+  if (role === null) return deny(403, "not_member", "Únete a la comunidad para ver este contenido.");
+  if (visibility === "private" && !canSeePrivateChannels(role)) {
+    return deny(403, "private_channel", "Este canal es privado.");
+  }
+  return ALLOWED;
+}
+
+/**
+ * `text` y `payments`: cualquier miembro (la app publica comprobantes en
+ * `payments`; el chat de ahí lo oculta la UI). `announcement`: owner y admin.
+ * Un canal privado solo lo escribe owner/admin/moderator.
+ */
+export function canPostInChannel(role: Role, channelType: ChannelType, visibility: ChannelVisibility = "public"): Decision {
   if (role === null) return deny(403, "not_member", "Únete a la comunidad para escribir.");
+  const view = canViewChannel(role, visibility);
+  if (!view.allowed) return view;
   if (channelType === "announcement" && !isAdminRole(role)) {
     return deny(403, "announcement_readonly", "Solo owner y admin escriben en este canal.");
   }
@@ -44,8 +72,17 @@ export function canCreateChannel(role: Role): Decision {
 }
 
 /** A channel type the caller asks for is only accepted if it is one we know. */
-export function isChannelType(value: unknown): value is ChannelType {
+export function isChannelType(value: unknown): value is CreatableChannelType {
   return value === "text" || value === "announcement";
+}
+
+export function isChannelVisibility(value: unknown): value is ChannelVisibility {
+  return value === "public" || value === "private";
+}
+
+/** Tipo guardado en la base -> ChannelType (lo desconocido cuenta como `text`). */
+export function channelTypeOf(value: string | null | undefined): ChannelType {
+  return value === "announcement" || value === "payments" ? value : "text";
 }
 
 /** Maps what the database returns (`role` is text) to a role, or null. */
@@ -89,19 +126,113 @@ export function canAssignRole(actorRole: Role, targetCurrentRole: Role, newRole:
 }
 
 /**
- * Borrar un canal: owner y admin, y nunca #general (400 `general_protected`).
- * `channelName` es el nombre guardado (minúsculas, sin #).
+ * Borrar un canal: owner y admin, y nunca #general (400 `general_protected`) ni el
+ * canal de pagos (400 `payments_protected`). `channelName` es el nombre guardado
+ * (minúsculas, sin #). #cobros sí se puede borrar.
  */
-export function canDeleteChannel(role: Role, channelName: string): Decision {
+export function canDeleteChannel(role: Role, channelName: string, channelType: ChannelType = "text"): Decision {
   if (role === null) return deny(403, "not_member", "Únete a la comunidad primero.");
   if (!isAdminRole(role)) return deny(403, "not_admin", "Solo owner y admin borran canales.");
   if (channelName === GENERAL_CHANNEL) return deny(400, "general_protected", "El canal #general no se puede borrar.");
+  if (channelType === "payments") return deny(400, "payments_protected", "El canal de verificación de pagos no se puede borrar.");
   return ALLOWED;
+}
+
+/** Cambios que PATCH /api/channels/[id] aplica (cualquier subconjunto). */
+export interface ChannelEdit {
+  topic?: string | null;
+  emoji?: string | null;
+  categoryId?: string | null;
+  visibility?: ChannelVisibility;
+  position?: number;
+}
+
+/**
+ * Editar un canal: owner y admin. #general y el canal de pagos no pueden ser
+ * privados (400 `channel_protected`): dejarían a los miembros sin ellos.
+ * El SQL de updateChannel repite estas reglas dentro del UPDATE.
+ */
+export function canUpdateChannel(role: Role, channelName: string, channelType: ChannelType, edit: ChannelEdit): Decision {
+  const base = canEditChannel(role);
+  if (!base.allowed) return base;
+  if (edit.visibility === "private" && (channelName === GENERAL_CHANNEL || channelType === "payments")) {
+    return deny(400, "channel_protected", "Este canal no puede ser privado.");
+  }
+  return ALLOWED;
+}
+
+/** Crear, renombrar, reordenar y borrar categorías: owner y admin. El SQL lo repite. */
+export function canManageCategories(role: Role): Decision {
+  if (role === null) return deny(403, "not_member", "Únete a la comunidad primero.");
+  if (!isAdminRole(role)) return deny(403, "not_admin", "Solo owner y admin gestionan las categorías.");
+  return ALLOWED;
+}
+
+// ----------------------------------------------------------- mensajes directos
+
+/**
+ * Abrir un mensaje directo: no consigo mismo (400 `self_dm`) y solo si los dos
+ * comparten al menos una comunidad (403 `no_shared_community`). El SQL de
+ * openDmThread repite la regla de la comunidad compartida.
+ */
+export function canOpenDm(actorId: string, otherId: string, sharesCommunity: boolean): Decision {
+  if (actorId === otherId) return deny(400, "self_dm", "No puedes escribirte a ti mismo.");
+  if (!sharesCommunity) {
+    return deny(403, "no_shared_community", "Solo puedes escribir a quien comparte una comunidad contigo.");
+  }
+  return ALLOWED;
+}
+
+/** Leer y escribir en un hilo: solo sus dos participantes (403 `not_participant`). */
+export function canAccessDm(userA: string, userB: string, actorId: string): Decision {
+  if (actorId !== userA && actorId !== userB) return deny(403, "not_participant", "Esta conversación no es tuya.");
+  return ALLOWED;
+}
+
+/** Editar o borrar un mensaje directo: solo su autor, y dentro de un hilo propio. */
+export function canChangeDmMessage(userA: string, userB: string, authorId: string, actorId: string): Decision {
+  const access = canAccessDm(userA, userB, actorId);
+  if (!access.allowed) return access;
+  if (authorId !== actorId) return deny(403, "not_author", "Solo quien lo escribió puede cambiar el mensaje.");
+  return ALLOWED;
+}
+
+/** Cambiar el tema de un canal: owner y admin. El SQL de updateChannelTopic lo repite. */
+export function canEditChannel(role: Role): Decision {
+  if (role === null) return deny(403, "not_member", "Únete a la comunidad primero.");
+  if (!isAdminRole(role)) return deny(403, "not_admin", "Solo owner y admin editan el canal.");
+  return ALLOWED;
+}
+
+/** Roles que moderan mensajes ajenos: owner, admin y moderator. */
+export function isModeratorRole(role: Role): boolean {
+  return role === "owner" || role === "admin" || role === "moderator";
+}
+
+/** Editar un mensaje: solo su autor (y sigue siendo miembro). Nadie edita mensajes ajenos, ni el owner. */
+export function canEditMessage(role: Role, authorId: string, actorId: string): Decision {
+  if (role === null) return deny(403, "not_member", "Únete a la comunidad primero.");
+  if (authorId !== actorId) return deny(403, "not_author", "Solo quien lo escribió puede editar el mensaje.");
+  return ALLOWED;
+}
+
+/** Borrar un mensaje: su autor, o owner/admin/moderator de la comunidad. Un miembro común no borra mensajes ajenos. */
+export function canDeleteMessage(role: Role, authorId: string, actorId: string): Decision {
+  if (role === null) return deny(403, "not_member", "Únete a la comunidad primero.");
+  if (authorId === actorId || isModeratorRole(role)) return ALLOWED;
+  return deny(403, "cannot_delete_message", "No puedes borrar este mensaje.");
 }
 
 /** Borrar la comunidad entera: solo el owner. */
 export function canDeleteCommunity(role: Role): Decision {
   if (role === null) return deny(403, "not_member", "Únete a la comunidad primero.");
   if (role !== "owner") return deny(403, "not_owner", "Solo el owner puede borrar la comunidad.");
+  return ALLOWED;
+}
+
+/** Cambiar la descripción de la comunidad: owner y admin. El SQL de updateCommunityDescription lo repite. */
+export function canEditCommunityDescription(role: Role): Decision {
+  if (role === null) return deny(403, "not_member", "Únete a la comunidad primero.");
+  if (!isAdminRole(role)) return deny(403, "not_admin", "Solo owner y admin cambian la descripción.");
   return ALLOWED;
 }

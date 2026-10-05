@@ -14,6 +14,8 @@ interface UserCardProps {
   isSelf: boolean;
   onClose: () => void;
   onTransfer: (username: string) => void;
+  /** Abre (o crea) un mensaje directo con esta persona. */
+  onMessage?: (username: string) => void;
   onEditProfile: () => void;
 }
 
@@ -33,7 +35,7 @@ const desde = (iso?: string) =>
  * los modales de la app. Completa los datos con el perfil público (bio, nivel,
  * X, wallet). Botones: Transferir (abre Mi Wallet con su @usuario) y Copiar.
  */
-export function UserCard({ user, role, isSelf, onClose, onTransfer, onEditProfile }: UserCardProps) {
+export function UserCard({ user, role, isSelf, onClose, onTransfer, onMessage, onEditProfile }: UserCardProps) {
   const [full, setFull] = useState<User | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -126,9 +128,16 @@ export function UserCard({ user, role, isSelf, onClose, onTransfer, onEditProfil
                 Editar perfil
               </button>
             ) : (
-              <button type="button" className="btn-primary" onClick={() => onTransfer(u.username)}>
-                💸 Transferir
-              </button>
+              <>
+                {onMessage ? (
+                  <button type="button" className="btn-secondary" onClick={() => onMessage(u.username)}>
+                    Mensaje
+                  </button>
+                ) : null}
+                <button type="button" className="btn-primary" onClick={() => onTransfer(u.username)}>
+                  💸 Transferir
+                </button>
+              </>
             )}
           </div>
         </div>

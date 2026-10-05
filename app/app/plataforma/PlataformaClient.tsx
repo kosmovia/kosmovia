@@ -13,12 +13,18 @@ import { QuickInvoiceModal } from '../../components/QuickInvoiceModal';
 import { UserCard } from '../../components/UserCard';
 import { NotificationsPanel } from '../../components/NotificationsPanel';
 import { CreateCommunityModal } from '../../components/CreateCommunityModal';
+import { ChannelSettingsModal } from '../../components/ChannelSettingsModal';
+import { THEME_STORAGE_KEY, isThemeId, type ThemeId } from '../../components/ThemePicker';
 import { CommunitySettingsModal } from '../../components/CommunitySettingsModal';
-import { Channel, Community, Message, SettlementRecord, User, WalletTransaction } from '../../types';
+import { DmList } from '../../components/DmList';
+import { sortChannels } from '../../components/channelUtils';
+import type { UpdateChannelInput } from '../../services';
+import { Channel, Community, DmThread, Message, SettlementRecord, User, WalletTransaction } from '../../types';
 import {
   authService,
   communityService,
   chatService,
+  dmService,
   walletService,
   settlementService,
   INITIAL_USER,
@@ -28,6 +34,30 @@ import {
   INITIAL_SETTLEMENTS,
   SERVICES_MODE,
 } from '../../services';
+
+/**
+ * Junta la última página que devolvió el servidor con lo que ya se ve: refleja ediciones
+ * y borrados de otras personas. Devuelve `current` (misma referencia) si nada cambió.
+ * `keep`: ids enviados hace segundos que el servidor quizá aún no lista.
+ */
+function mergeLatest(current: Message[], page: Message[], isFullChannel: boolean, keep: Set<string>): Message[] {
+  let next: Message[];
+  if (isFullChannel) {
+    next = page.slice();
+    for (const m of current) if (keep.has(m.id) && !next.some((n) => n.id === m.id)) next.push(m);
+  } else {
+    const anchor = page.length > 0 ? current.findIndex((m) => m.id === page[0].id) : -1;
+    if (anchor < 0) return current;
+    next = current.slice(0, anchor).concat(page);
+    for (const m of current.slice(anchor)) if (keep.has(m.id) && !next.some((n) => n.id === m.id)) next.push(m);
+  }
+  const same =
+    next.length === current.length &&
+    next.every((m, i) => m.id === current[i].id && m.content === current[i].content && m.editedAt === current[i].editedAt);
+  return same ? current : next;
+}
+
+const TOAST_MS = 7000;
 
 export function PlataformaPage() {
   const [currentUser, setCurrentUser] = useState<User>(INITIAL_USER);
@@ -43,8 +73,16 @@ export function PlataformaPage() {
   const isMemberListOpen = rightPanel === 'members';
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
 
-  // Tema Claro / Oscuro (Turquesa + Negro/Blanco)
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  // Tema: Kosmovia (azul noche con turquesa) o Negro. Se recuerda en este navegador.
+  const [theme, setTheme] = useState<ThemeId>('kosmovia');
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
+      if (isThemeId(saved)) setTheme(saved);
+    } catch {
+      /* sin almacenamiento: queda el tema por defecto */
+    }
+  }, []);
 
   // Modales de creación de canal y cobro B2B
   const [isCreateChannelOpen, setIsCreateChannelOpen] = useState<boolean>(false);
@@ -71,11 +109,28 @@ export function PlataformaPage() {
   const knownTxIds = useRef<Set<string> | null>(null);
   const [isCreateCommunityOpen, setIsCreateCommunityOpen] = useState(false);
   const [isCommunitySettingsOpen, setIsCommunitySettingsOpen] = useState(false);
+  // Canal cuyo "Configurar canal" está abierto (null = cerrado).
+  const [channelSettingsId, setChannelSettingsId] = useState<string | null>(null);
+  // Categoría donde se creará el canal nuevo (la del "+" que se tocó).
+  const [newChannelCategory, setNewChannelCategory] = useState<string | null>(null);
+  // Mensajes directos: la columna del medio y el chat cambian a las conversaciones.
+  const [view, setView] = useState<'community' | 'dms'>('community');
+  const [dmThreads, setDmThreads] = useState<DmThread[]>([]);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const inDm = view === 'dms';
+  const dmUnreadTotal = dmThreads.reduce((sum, t) => sum + (t.unread || 0), 0);
 
   // En pantallas chicas la lista de miembros arranca oculta (el chat necesita el espacio).
   useEffect(() => {
     if (typeof window !== 'undefined' && window.innerWidth < 1200) setRightPanel(null);
   }, []);
+  // Los avisos desaparecen solos a los 7 s (se reinicia si llega otro). "Pagando…" espera al resultado (tope 30 s).
+  useEffect(() => {
+    if (!payNotice) return;
+    const timer = setTimeout(() => setPayNotice(null), payNotice.kind === 'info' ? 30_000 : TOAST_MS);
+    return () => clearTimeout(timer);
+  }, [payNotice]);
+  const recentlySent = useRef<Map<string, number>>(new Map());
   const errorText = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
 
   // Sincronizar tema con atributo en documentElement
@@ -232,46 +287,92 @@ export function PlataformaPage() {
     };
   }, [isWalletOpen, publicKey]);
 
-  // Suscripción en tiempo real y carga de mensajes por canal activo
+  // Conversaciones: se revisan cada 10 s (insignia de no leídos del riel). Solo en modo api (el demo no tiene otra persona).
+  const refreshThreads = useCallback(async () => {
+    try {
+      const threads = await dmService.getThreads();
+      setDmThreads(threads);
+    } catch {
+      /* se reintenta en el próximo ciclo */
+    }
+  }, []);
   useEffect(() => {
+    if (!ready) return;
+    void refreshThreads();
+    if (SERVICES_MODE !== 'api') return;
+    const timer = setInterval(() => void refreshThreads(), 10_000);
+    return () => clearInterval(timer);
+  }, [ready, refreshThreads]);
+
+  // Id del chat abierto (canal o conversación) y su servicio: los dos comparten la forma de los mensajes.
+  const chatId = inDm ? activeThreadId : activeChannelId;
+  const msgSvc = inDm ? dmService : chatService;
+
+  // Suscripción en tiempo real y carga de mensajes por canal (o conversación) activo
+  useEffect(() => {
+    if (!chatId) return;
+    const activeChannelId = chatId;
     let isMounted = true;
 
-    chatService.getMessages(activeChannelId).then((msgs) => {
+    msgSvc.getMessages(activeChannelId).then((msgs) => {
       if (!isMounted) return;
       setMessagesByChannel((prev) => ({
         ...prev,
         [activeChannelId]: msgs,
       }));
+      if (inDm) void refreshThreads(); // abrirla la marca como leída
     });
 
-    const unsubscribe = chatService.subscribeToMessages(activeChannelId, (incomingMsg) => {
-      if (!isMounted) return;
-      setMessagesByChannel((prev) => {
-        const current = prev[activeChannelId] || [];
-        if (current.some((m) => m.id === incomingMsg.id)) {
-          return prev;
-        }
-        return {
-          ...prev,
-          [activeChannelId]: [...current, incomingMsg],
-        };
-      });
-    });
+    const unsubscribe = msgSvc.subscribeToMessages(
+      activeChannelId,
+      (incomingMsg) => {
+        if (!isMounted) return;
+        setMessagesByChannel((prev) => {
+          const current = prev[activeChannelId] || [];
+          if (current.some((m) => m.id === incomingMsg.id)) {
+            return prev;
+          }
+          return {
+            ...prev,
+            [activeChannelId]: [...current, incomingMsg],
+          };
+        });
+      },
+      // Ediciones y borrados de otras personas.
+      (latestPage, isFullChannel) => {
+        if (!isMounted) return;
+        const now = Date.now();
+        const keep = new Set<string>();
+        recentlySent.current.forEach((at, id) => (now - at < 8000 ? keep.add(id) : recentlySent.current.delete(id)));
+        setMessagesByChannel((prev) => {
+          const current = prev[activeChannelId] || [];
+          const merged = mergeLatest(current, latestPage, isFullChannel, keep);
+          return merged === current ? prev : { ...prev, [activeChannelId]: merged };
+        });
+      },
+    );
 
     return () => {
       isMounted = false;
       unsubscribe();
     };
-  }, [activeChannelId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId, inDm]);
 
-  const handleToggleTheme = () => {
-    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  const handleChangeTheme = (next: ThemeId) => {
+    setTheme(next);
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, next);
+    } catch {
+      /* sin almacenamiento: el cambio vale solo en esta sesión */
+    }
   };
 
   const activeCommunity = communities.find((c) => c.id === activeCommunityId) || communities[0];
   const activeChannel = activeCommunity.channels.find((ch) => ch.id === activeChannelId) || activeCommunity.channels[0];
 
   const handleSelectCommunity = (communityId: string) => {
+    setView('community');
     setActiveCommunityId(communityId);
     const targetCommunity = communities.find((c) => c.id === communityId);
     if (targetCommunity && targetCommunity.channels.length > 0) {
@@ -284,31 +385,213 @@ export function PlataformaPage() {
     setIsMobileOpen(false);
   };
 
+  /** Los avisos de error del servidor traen códigos: se muestran en español. */
+  const friendlyError = (err: unknown, fallback: string) => {
+    const text = errorText(err, fallback);
+    return text.includes('no_shared_community') ? 'Solo puedes escribirle a quien comparte una comunidad contigo.' : text;
+  };
+
   const handleSendMessage = async (text: string) => {
-    if (!text.trim()) return;
+    if (!text.trim() || !chatId) return;
+    const targetId = chatId;
 
     try {
-      const sentMsg = await chatService.sendMessage(activeChannel.id, text, currentUser);
+      const sentMsg = await msgSvc.sendMessage(targetId, text, currentUser);
+      recentlySent.current.set(sentMsg.id, Date.now());
       setMessagesByChannel((prev) => {
-        const current = prev[activeChannel.id] || [];
+        const current = prev[targetId] || [];
         if (current.some((m) => m.id === sentMsg.id)) return prev;
         return {
           ...prev,
-          [activeChannel.id]: [...current, sentMsg],
+          [targetId]: [...current, sentMsg],
         };
       });
+      if (inDm) void refreshThreads();
     } catch (err) {
       console.error('[PlataformaPage] Error sending message:', err);
       setPayNotice({ kind: 'error', text: errorText(err, 'No se pudo enviar el mensaje.') });
     }
   };
 
-  const handleCreateChannel = async (name: string, topic: string): Promise<boolean> => {
+  const handleEditMessage = async (messageId: string, content: string): Promise<boolean> => {
+    const channelId = chatId;
+    if (!channelId) return false;
+    try {
+      const updated = await msgSvc.editMessage(channelId, messageId, content);
+      setMessagesByChannel((prev) => ({
+        ...prev,
+        [channelId]: (prev[channelId] || []).map((m) => (m.id === messageId ? { ...m, content: updated.content, editedAt: updated.editedAt ?? new Date().toISOString() } : m)),
+      }));
+      return true;
+    } catch (err) {
+      setPayNotice({ kind: 'error', text: errorText(err, 'No se pudo editar el mensaje.') });
+      return false;
+    }
+  };
+
+  const handleDeleteMessage = async (messageId: string): Promise<boolean> => {
+    const channelId = chatId;
+    if (!channelId) return false;
+    try {
+      await msgSvc.deleteMessage(channelId, messageId);
+      setMessagesByChannel((prev) => ({ ...prev, [channelId]: (prev[channelId] || []).filter((m) => m.id !== messageId) }));
+      return true;
+    } catch (err) {
+      setPayNotice({ kind: 'error', text: errorText(err, 'No se pudo borrar el mensaje.') });
+      return false;
+    }
+  };
+
+  const handleSaveChannelTopic = async (channelId: string, topic: string): Promise<boolean> => {
+    try {
+      const updated = await communityService.updateChannelTopic(activeCommunity.id, channelId, topic);
+      setCommunities((prev) =>
+        prev.map((c) =>
+          c.id === activeCommunity.id
+            ? { ...c, channels: c.channels.map((ch) => (ch.id === channelId ? { ...ch, topic: updated.topic } : ch)) }
+            : c
+        )
+      );
+      setPayNotice({ kind: 'ok', text: 'Descripción del canal guardada.' });
+      return true;
+    } catch (err) {
+      setPayNotice({ kind: 'error', text: errorText(err, 'No se pudo guardar la descripción.') });
+      return false;
+    }
+  };
+
+  const handleUpdateChannel = async (channelId: string, patch: UpdateChannelInput): Promise<boolean> => {
+    try {
+      const updated = await communityService.updateChannel(activeCommunity.id, channelId, patch);
+      setCommunities((prev) =>
+        prev.map((c) =>
+          c.id === activeCommunity.id
+            ? { ...c, channels: c.channels.map((ch) => (ch.id === channelId ? { ...ch, ...updated } : ch)) }
+            : c
+        )
+      );
+      return true;
+    } catch (err) {
+      setPayNotice({ kind: 'error', text: errorText(err, 'No se pudo guardar el canal.') });
+      return false;
+    }
+  };
+
+  /** Sube o baja un canal: reasigna posiciones dentro de su categoría (0..n) y guarda las que cambian. */
+  const handleMoveChannel = async (channelId: string, dir: -1 | 1): Promise<boolean> => {
+    const ch = activeCommunity.channels.find((x) => x.id === channelId);
+    if (!ch) return false;
+    const siblings = sortChannels(activeCommunity.channels.filter((x) => (x.categoryId ?? null) === (ch.categoryId ?? null)));
+    const i = siblings.findIndex((x) => x.id === channelId);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= siblings.length) return false;
+    const reordered = siblings.slice();
+    [reordered[i], reordered[j]] = [reordered[j], reordered[i]];
+    try {
+      const changed = reordered.map((x, idx) => ({ x, idx })).filter(({ x, idx }) => x.position !== idx);
+      await Promise.all(changed.map(({ x, idx }) => communityService.updateChannel(activeCommunity.id, x.id, { position: idx })));
+      const pos = new Map(changed.map(({ x, idx }) => [x.id, idx] as const));
+      setCommunities((prev) =>
+        prev.map((c) =>
+          c.id === activeCommunity.id
+            ? { ...c, channels: c.channels.map((x) => (pos.has(x.id) ? { ...x, position: pos.get(x.id) } : x)) }
+            : c
+        )
+      );
+      return true;
+    } catch (err) {
+      setPayNotice({ kind: 'error', text: errorText(err, 'No se pudo reordenar el canal.') });
+      return false;
+    }
+  };
+
+  const handleCreateCategory = async (name: string): Promise<boolean> => {
+    try {
+      const category = await communityService.createCategory(activeCommunity.id, name);
+      setCommunities((prev) =>
+        prev.map((c) => (c.id === activeCommunity.id ? { ...c, categories: [...(c.categories ?? []), category] } : c))
+      );
+      return true;
+    } catch (err) {
+      setPayNotice({ kind: 'error', text: errorText(err, 'No se pudo crear la categoría.') });
+      return false;
+    }
+  };
+
+  const handleRenameCategory = async (categoryId: string, name: string): Promise<boolean> => {
+    try {
+      const updated = await communityService.updateCategory(activeCommunity.id, categoryId, { name });
+      setCommunities((prev) =>
+        prev.map((c) =>
+          c.id === activeCommunity.id ? { ...c, categories: (c.categories ?? []).map((k) => (k.id === categoryId ? updated : k)) } : c
+        )
+      );
+      return true;
+    } catch (err) {
+      setPayNotice({ kind: 'error', text: errorText(err, 'No se pudo renombrar la categoría.') });
+      return false;
+    }
+  };
+
+  const handleMoveCategory = async (categoryId: string, dir: -1 | 1): Promise<boolean> => {
+    const sorted = (activeCommunity.categories ?? []).slice().sort((a, b) => a.position - b.position);
+    const i = sorted.findIndex((k) => k.id === categoryId);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= sorted.length) return false;
+    const reordered = sorted.slice();
+    [reordered[i], reordered[j]] = [reordered[j], reordered[i]];
+    try {
+      const changed = reordered.map((k, idx) => ({ k, idx })).filter(({ k, idx }) => k.position !== idx);
+      await Promise.all(changed.map(({ k, idx }) => communityService.updateCategory(activeCommunity.id, k.id, { position: idx })));
+      const pos = new Map(changed.map(({ k, idx }) => [k.id, idx] as const));
+      setCommunities((prev) =>
+        prev.map((c) =>
+          c.id === activeCommunity.id
+            ? { ...c, categories: (c.categories ?? []).map((k) => (pos.has(k.id) ? { ...k, position: pos.get(k.id)! } : k)) }
+            : c
+        )
+      );
+      return true;
+    } catch (err) {
+      setPayNotice({ kind: 'error', text: errorText(err, 'No se pudo reordenar la categoría.') });
+      return false;
+    }
+  };
+
+  const handleDeleteCategory = async (categoryId: string): Promise<boolean> => {
+    try {
+      await communityService.deleteCategory(activeCommunity.id, categoryId);
+      setCommunities((prev) =>
+        prev.map((c) =>
+          c.id === activeCommunity.id
+            ? {
+                ...c,
+                categories: (c.categories ?? []).filter((k) => k.id !== categoryId),
+                channels: c.channels.map((ch) => (ch.categoryId === categoryId ? { ...ch, categoryId: null } : ch)),
+              }
+            : c
+        )
+      );
+      return true;
+    } catch (err) {
+      setPayNotice({ kind: 'error', text: errorText(err, 'No se pudo borrar la categoría.') });
+      return false;
+    }
+  };
+
+  const handleCreateChannel = async (
+    name: string,
+    topic: string,
+    extra: { emoji: string | null; categoryId: string | null; visibility: 'public' | 'private' }
+  ): Promise<boolean> => {
     try {
       const newChannel = await communityService.createChannel(activeCommunity.id, {
         name,
-        topic: topic || 'Canal creado por la comunidad',
+        topic: topic || undefined,
         type: 'text',
+        emoji: extra.emoji,
+        categoryId: extra.categoryId,
+        visibility: extra.visibility,
       });
 
       setCommunities((prev) =>
@@ -356,6 +639,18 @@ export function PlataformaPage() {
       return true;
     } catch (err) {
       setPayNotice({ kind: 'error', text: errorText(err, 'No se pudo guardar la foto.') });
+      return false;
+    }
+  };
+
+  const handleSaveCommunityDescription = async (description: string): Promise<boolean> => {
+    try {
+      const updated = await communityService.updateDescription(activeCommunity.id, description);
+      setCommunities((prev) => prev.map((c) => (c.id === updated.id ? { ...c, description: updated.description } : c)));
+      setPayNotice({ kind: 'ok', text: 'Descripción de la comunidad guardada.' });
+      return true;
+    } catch (err) {
+      setPayNotice({ kind: 'error', text: errorText(err, 'No se pudo guardar la descripción.') });
       return false;
     }
   };
@@ -427,9 +722,36 @@ export function PlataformaPage() {
     }
   };
 
-  const handleCreateInvoice = (amount: number, concept: string) => {
+  /** Canal de comprobantes (#verificacion-pagos) de la comunidad; sin él (demo) se usa el canal actual. */
+  const receiptChannelId = () => activeCommunity.channels.find((ch) => ch.type === 'payments')?.id ?? activeChannel.id;
+
+  /** @usuario si se conoce a quién se pagó (por @usuario o por su wallet G…); si no, la dirección corta. */
+  const recipientLabel = (to: string) => {
+    const raw = to.trim();
+    if (raw.startsWith('#')) return raw;
+    const byWallet = activeCommunity.members.find((m) => m.wallet && m.wallet === raw.toUpperCase());
+    if (byWallet) return byWallet.username;
+    if (/^G[A-Z2-7]{55}$/i.test(raw)) return `${raw.slice(0, 6)}…${raw.slice(-4)}`;
+    return raw.startsWith('@') ? raw : `@${raw}`;
+  };
+
+  /** Los cobros se publican en #cobros (donde también se pagan); sin ese canal, en el actual. */
+  const handleCreateInvoice = async (amount: number, concept: string) => {
     const payload = JSON.stringify({ amount, concept });
-    handleSendMessage(`[COBRO_B2B:${payload}]`);
+    const cobros = activeCommunity.channels.find((ch) => ch.name === 'cobros' && ch.type === 'text');
+    if (!cobros || cobros.id === activeChannel.id) {
+      void handleSendMessage(`[COBRO_B2B:${payload}]`);
+      return;
+    }
+    try {
+      const sent = await chatService.sendMessage(cobros.id, `[COBRO_B2B:${payload}]`, currentUser);
+      recentlySent.current.set(sent.id, Date.now());
+      setMessagesByChannel((prev) => ({ ...prev, [cobros.id]: [...(prev[cobros.id] || []), sent] }));
+      setActiveChannelId(cobros.id);
+      setPayNotice({ kind: 'ok', text: 'Cobro publicado en #cobros.' });
+    } catch (err) {
+      setPayNotice({ kind: 'error', text: errorText(err, 'No se pudo publicar el cobro.') });
+    }
   };
 
   /** Paga un cobro B2B a quien lo emitió (el autor del mensaje con la tarjeta). */
@@ -455,10 +777,10 @@ export function PlataformaPage() {
       });
       setSettlements((prev) => [newSettlement, ...prev]);
 
-      // 3. Confirmar en el canal mediante el servicio de chat
+      // 3. Confirmar en #verificacion-pagos (o en el canal actual si no existe, como en el demo)
       await chatService.sendMessage(
-        activeChannel.id,
-        `✅ Cobro saldado: ${amount} USDC por "${concept}". Fee 0.5% deducido (${newSettlement.feeUSDC} USDC). Transacción confirmada en Stellar Testnet.`,
+        receiptChannelId(),
+        `✅ Cobro saldado: ${amount} USDC a ${recipientLabel(payee)} por "${concept}". Fee 0.5% deducido (${newSettlement.feeUSDC} USDC). Transacción confirmada en Stellar Testnet.`,
         currentUser
         // El pago ya salió: si el canal no deja escribir (p. ej. #anuncios para miembros), no es un error del pago.
       ).catch(() => {});
@@ -509,8 +831,8 @@ export function PlataformaPage() {
 
       setPayNotice({ kind: 'ok', text: `Pago enviado: ${amount} ${asset} a ${to}.` });
       await chatService.sendMessage(
-        activeChannel.id,
-        `💸 He transferido ${amount} ${asset} a ${to} mediante Stellar Testnet (Tx verificada).`,
+        receiptChannelId(),
+        `💸 He transferido ${amount} ${asset} a ${recipientLabel(to)} mediante Stellar Testnet (Tx verificada).`,
         currentUser
       ).catch(() => {});
       return true;
@@ -528,6 +850,41 @@ export function PlataformaPage() {
   const myCommunityRole = currentMembers.find((m) => m.id === currentUser.id)?.role;
   // Configurar: dueño o admin (en modo demo, todos).
   const isCommunityOwner = SERVICES_MODE !== 'api' || myCommunityRole === 'owner' || myCommunityRole === 'admin';
+  // En #anuncios solo escriben dueño y admin; moderadores y dueño/admin pueden borrar mensajes ajenos.
+  const canPostHere = inDm || (activeChannel.type === 'payments' ? false : activeChannel.type !== 'announcement' || isCommunityOwner);
+
+  const activeThread = dmThreads.find((t) => t.id === activeThreadId) ?? null;
+  // En una conversación el "canal" que ve ChatArea es un envoltorio con el nombre de la otra persona.
+  const chatChannel: Channel =
+    inDm && activeThread
+      ? { id: activeThread.id, communityId: '', name: activeThread.other.displayName, type: 'text' }
+      : activeChannel;
+
+  const handleOpenDms = () => {
+    setView('dms');
+    setIsMobileOpen(false);
+    void refreshThreads();
+  };
+
+  const handleSelectThread = (threadId: string) => {
+    setActiveThreadId(threadId);
+    setIsMobileOpen(false);
+    setDmThreads((prev) => prev.map((t) => (t.id === threadId ? { ...t, unread: 0 } : t)));
+  };
+
+  /** Abre (o crea) la conversación con @usuario y cambia a Mensajes directos. */
+  const handleStartDm = async (username: string) => {
+    try {
+      const thread = await dmService.openThread(username);
+      setDmThreads((prev) => (prev.some((t) => t.id === thread.id) ? prev : [thread, ...prev]));
+      setProfileCardUser(null);
+      setActiveThreadId(thread.id);
+      setView('dms');
+    } catch (err) {
+      setPayNotice({ kind: 'error', text: friendlyError(err, 'No se pudo abrir la conversación.') });
+    }
+  };
+  const canModerate = isCommunityOwner || myCommunityRole === 'moderator';
 
   if (!ready) {
     return (
@@ -545,7 +902,7 @@ export function PlataformaPage() {
   }
 
   return (
-    <div className={`app-container ${isMobileOpen ? 'mobile-open' : ''}`}>
+    <div className={`app-container ${isMobileOpen ? 'mobile-open' : ''} ${rightPanel ? 'kv-has-panel' : ''}`}>
       <div
         className="mobile-backdrop"
         onClick={() => setIsMobileOpen(false)}
@@ -558,29 +915,48 @@ export function PlataformaPage() {
         onSelectCommunity={handleSelectCommunity}
         onCreateCommunity={() => setIsCreateCommunityOpen(true)}
         theme={theme}
-        onToggleTheme={handleToggleTheme}
+        onChangeTheme={handleChangeTheme}
+        onOpenDms={handleOpenDms}
+        isDmsActive={inDm}
+        dmUnread={dmUnreadTotal}
       />
 
-      <ChannelList
-        community={activeCommunity}
-        activeChannelId={activeChannel.id}
-        onSelectChannel={handleSelectChannel}
-        currentUser={currentUser}
-        onOpenProfile={() => setIsProfileModalOpen(true)}
-        onOpenCreateChannel={() => setIsCreateChannelOpen(true)}
-        isOwner={isCommunityOwner}
-        onOpenSettings={() => setIsCommunitySettingsOpen(true)}
-        onNotice={(text) => setPayNotice({ kind: 'ok', text })}
-      />
+      {inDm ? (
+        <DmList
+          threads={dmThreads}
+          activeThreadId={activeThread?.id ?? null}
+          onSelectThread={handleSelectThread}
+          currentUser={currentUser}
+          onOpenProfile={() => setIsProfileModalOpen(true)}
+        />
+      ) : (
+        <ChannelList
+          community={activeCommunity}
+          activeChannelId={activeChannel.id}
+          onSelectChannel={handleSelectChannel}
+          currentUser={currentUser}
+          onOpenProfile={() => setIsProfileModalOpen(true)}
+          onOpenCreateChannel={(categoryId) => {
+            setNewChannelCategory(categoryId ?? null);
+            setIsCreateChannelOpen(true);
+          }}
+          isOwner={isCommunityOwner}
+          onOpenSettings={() => setIsCommunitySettingsOpen(true)}
+          onOpenChannelSettings={setChannelSettingsId}
+          onNotice={(text) => setPayNotice({ kind: 'ok', text })}
+        />
+      )}
 
       <ChatArea
-        channel={activeChannel}
+        channel={chatChannel}
+        variant={inDm ? 'dm' : 'channel'}
+        dmPeer={inDm ? activeThread?.other : undefined}
         community={activeCommunity}
-        messages={messagesByChannel[activeChannel.id] || []}
+        messages={chatId ? messagesByChannel[chatId] || [] : []}
         onSendMessage={handleSendMessage}
         onToggleMobileMenu={() => setIsMobileOpen((prev) => !prev)}
-        onToggleMemberList={() => togglePanel('members')}
-        isMemberListOpen={isMemberListOpen}
+        onToggleMemberList={inDm ? undefined : () => togglePanel('members')}
+        isMemberListOpen={isMemberListOpen && !inDm}
         onOpenWallet={() => togglePanel('wallet')}
         onToggleNotifications={() => {
           if (rightPanel !== 'notifications') markPaymentsSeen();
@@ -594,16 +970,22 @@ export function PlataformaPage() {
         isRefreshingWallet={isRefreshingWallet}
         notifications={{ transactions, unread: unreadPayments, onOpen: markPaymentsSeen }}
         balanceUSDC={balanceUSDC}
-        theme={theme}
-        onToggleTheme={handleToggleTheme}
-        onOpenQuickInvoice={() => setIsQuickInvoiceOpen(true)}
+        onOpenQuickInvoice={inDm ? undefined : () => setIsQuickInvoiceOpen(true)}
         onPayInvoice={handlePayInvoice}
+        canPost={canPostHere}
+        canModerate={canModerate && !inDm}
+        onOpenChannelSettings={isCommunityOwner && !inDm ? () => setChannelSettingsId(activeChannel.id) : undefined}
+        onEditMessage={handleEditMessage}
+        onDeleteMessage={handleDeleteMessage}
       />
 
       <MemberList
         members={currentMembers}
-        isOpen={isMemberListOpen}
+        isOpen={isMemberListOpen && !inDm}
+        onClose={() => setRightPanel(null)}
         onOpenProfile={setProfileCardUser}
+        currentUserId={currentUser.id}
+        onMessage={(u) => void handleStartDm(u.username)}
       />
 
       {rightPanel === 'notifications' ? (
@@ -620,6 +1002,7 @@ export function PlataformaPage() {
           setSendTo({ recipient: username, nonce: Date.now() });
           setRightPanel('wallet');
         }}
+        onMessage={(username) => void handleStartDm(username)}
         onEditProfile={() => {
           setProfileCardUser(null);
           setIsProfileModalOpen(true);
@@ -655,6 +1038,8 @@ export function PlataformaPage() {
         isOpen={isCreateChannelOpen}
         onClose={() => setIsCreateChannelOpen(false)}
         onCreate={handleCreateChannel}
+        categories={activeCommunity.categories ?? []}
+        defaultCategoryId={newChannelCategory}
       />
 
       <CreateCommunityModal
@@ -670,9 +1055,29 @@ export function PlataformaPage() {
         myRole={SERVICES_MODE !== 'api' ? 'owner' : myCommunityRole}
         currentUserId={currentUser.id}
         onSaveImage={handleSaveCommunityImage}
+        onSaveDescription={handleSaveCommunityDescription}
+        onSaveChannelTopic={handleSaveChannelTopic}
+        onUpdateChannel={handleUpdateChannel}
+        onMoveChannel={handleMoveChannel}
+        onCreateCategory={handleCreateCategory}
+        onRenameCategory={handleRenameCategory}
+        onMoveCategory={handleMoveCategory}
+        onDeleteCategory={handleDeleteCategory}
         onChangeRole={handleChangeRole}
         onDeleteChannel={handleDeleteChannel}
         onDeleteCommunity={handleDeleteCommunity}
+      />
+
+      <ChannelSettingsModal
+        channel={activeCommunity.channels.find((ch) => ch.id === channelSettingsId) ?? null}
+        onClose={() => setChannelSettingsId(null)}
+        onUpdate={async (id, patch) => {
+          const ok = await handleUpdateChannel(id, patch);
+          if (ok) setPayNotice({ kind: 'ok', text: 'Canal guardado.' });
+          return ok;
+        }}
+        categories={activeCommunity.categories ?? []}
+        onDelete={handleDeleteChannel}
       />
 
       <QuickInvoiceModal
@@ -683,7 +1088,8 @@ export function PlataformaPage() {
       {payNotice ? (
         <div
           role={payNotice.kind === 'error' ? 'alert' : 'status'}
-          onClick={() => payNotice.kind !== 'info' && setPayNotice(null)}
+          onClick={() => setPayNotice(null)}
+          title="Clic para cerrar"
           style={{
             position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)', zIndex: 1000,
             maxWidth: 'min(92vw, 520px)', padding: '12px 16px', borderRadius: 12, fontSize: 14, cursor: 'pointer',

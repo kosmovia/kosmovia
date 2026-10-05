@@ -1,4 +1,4 @@
-import { cleanSlugParam } from "../../../../lib/core/api-input.ts";
+import { cleanSlugParam, parseCommunityDescription } from "../../../../lib/core/api-input.ts";
 import { failure, gate, handled, json, readJsonBody, requireGate, type Params } from "../../../../lib/core/api-route.ts";
 import { limitedResponse } from "../../../../lib/core/api-limits.ts";
 import { checkCommunityImage } from "../../../../lib/core/community-image.ts";
@@ -29,10 +29,13 @@ export async function GET(request: Request, ctx: Params<{ slug: string }>): Prom
 }
 
 /**
- * PATCH /api/communities/[slug] { image: dataUrl | null } (api backend)
+ * PATCH /api/communities/[slug] { image: dataUrl | null } | { description: string } (api backend)
  *
- * Solo el dueño cambia (o quita) la foto. La imagen se revisa por sus bytes.
- * -> { community } | 403 not_owner | 404
+ * - { image }: solo el dueño cambia (o quita) la foto; se revisa por sus bytes.
+ *   -> { community } | 403 not_owner | 404
+ * - { description }: owner y admin; texto recortado, 0..280 ('' la quita).
+ *   -> { community } | 400 invalid_input | 403 not_admin | 404
+ * Si vienen las dos claves se rechaza: cada cambio es una llamada.
  */
 export async function PATCH(request: Request, ctx: Params<{ slug: string }>): Promise<Response> {
   const g = requireGate(request);
@@ -44,7 +47,22 @@ export async function PATCH(request: Request, ctx: Params<{ slug: string }>): Pr
 
   const body = await readJsonBody(request, 100_000);
   if (!body.ok) return body.response;
-  const raw = (body.value ?? {}) as { image?: unknown };
+  const raw = (body.value ?? {}) as { image?: unknown; description?: unknown };
+
+  if (raw.description !== undefined) {
+    if (raw.image !== undefined) return failure(400, "Cambia la foto y la descripción por separado.", "invalid_input");
+    const parsed = parseCommunityDescription(raw.description);
+    if (!parsed.ok) return failure(400, parsed.error, "invalid_input");
+    return handled("PATCH /api/communities/:slug (description)", async () => {
+      const result = await repo.setCommunityDescription(slug, g.session.profileId, parsed.value);
+      if (!result.ok) {
+        if ("notFound" in result) return failure(404, "Comunidad no encontrada.", "not_found");
+        return failure(result.denied.status, result.denied.error, result.denied.code);
+      }
+      return json({ community: result.value });
+    });
+  }
+
   let image: string | null = null;
   if (raw.image !== null) {
     const checked = checkCommunityImage(raw.image);

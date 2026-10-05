@@ -150,10 +150,10 @@ test("community create: same rules as the form and the CHECKs", () => {
 test("channel create: name format, topic length, only known types", () => {
   const ok = parseChannelCreate({ name: "ideas-2", topic: " tema ", type: "announcement" });
   assert.ok(ok.ok);
-  if (ok.ok) assert.deepEqual(ok.value, { name: "ideas-2", topic: "tema", type: "announcement" });
+  if (ok.ok) assert.deepEqual(ok.value, { name: "ideas-2", topic: "tema", type: "announcement", emoji: null, categoryId: null, visibility: "public" });
   const def = parseChannelCreate({ name: "general-2" });
   assert.ok(def.ok);
-  if (def.ok) assert.deepEqual(def.value, { name: "general-2", topic: null, type: "text" });
+  if (def.ok) assert.deepEqual(def.value, { name: "general-2", topic: null, type: "text", emoji: null, categoryId: null, visibility: "public" });
   for (const bad of [
     {},
     { name: "Mayus" },

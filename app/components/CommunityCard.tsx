@@ -52,9 +52,17 @@ export function CommunityCard({ community, isOwner, onOpenSettings, onNotice }: 
       <div className="kv-community-card-top">
         <CommunityAvatar name={community.name} icon={community.icon} image={community.image} size={60} featured />
         <div className="kv-community-card-text">
-          <p className="kv-community-desc" title={community.description || undefined}>
-            {community.description || 'Todavía no tiene descripción.'}
-          </p>
+          {community.description ? (
+            <p className="kv-community-desc" title={community.description}>
+              {community.description}
+            </p>
+          ) : isOwner ? (
+            <button type="button" className="kv-community-desc kv-desc-add" onClick={onOpenSettings}>
+              Agregar descripción
+            </button>
+          ) : (
+            <p className="kv-community-desc">Todavía no tiene descripción.</p>
+          )}
           <span className="kv-community-meta">
             {members} {members === 1 ? 'miembro' : 'miembros'}
           </span>

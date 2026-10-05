@@ -5,7 +5,19 @@ import { storage } from './storage';
 export interface IChatService {
   getMessages(channelId: string): Promise<Message[]>;
   sendMessage(channelId: string, content: string, author: User): Promise<Message>;
-  subscribeToMessages(channelId: string, callback: (msg: Message) => void): () => void;
+  /** Edita un mensaje propio. */
+  editMessage(channelId: string, messageId: string, content: string): Promise<Message>;
+  /** Borra un mensaje (el autor, o dueño/admin/moderador). */
+  deleteMessage(channelId: string, messageId: string): Promise<void>;
+  /**
+   * `callback`: cada mensaje nuevo. `onSync` (opcional): la última página completa de
+   * mensajes, para reflejar ediciones y borrados hechos por otras personas.
+   */
+  subscribeToMessages(
+    channelId: string,
+    callback: (msg: Message) => void,
+    onSync?: (latestPage: Message[], isFullChannel: boolean) => void,
+  ): () => void;
 }
 
 const STORAGE_KEY = 'kosmovia_messages_by_channel';
@@ -41,7 +53,24 @@ export class MockChatService implements IChatService {
     return newMessage;
   }
 
-  subscribeToMessages(channelId: string, callback: Listener): () => void {
+  async editMessage(channelId: string, messageId: string, content: string): Promise<Message> {
+    const all = storage.get<Record<string, Message[]>>(STORAGE_KEY, INITIAL_MESSAGES);
+    const list = all[channelId] || [];
+    const found = list.find((m) => m.id === messageId);
+    if (!found) throw new Error('Mensaje no encontrado.');
+    const updated: Message = { ...found, content, editedAt: new Date().toISOString() };
+    all[channelId] = list.map((m) => (m.id === messageId ? updated : m));
+    storage.set(STORAGE_KEY, all);
+    return updated;
+  }
+
+  async deleteMessage(channelId: string, messageId: string): Promise<void> {
+    const all = storage.get<Record<string, Message[]>>(STORAGE_KEY, INITIAL_MESSAGES);
+    all[channelId] = (all[channelId] || []).filter((m) => m.id !== messageId);
+    storage.set(STORAGE_KEY, all);
+  }
+
+  subscribeToMessages(channelId: string, callback: Listener, _onSync?: (latestPage: Message[], isFullChannel: boolean) => void): () => void {
     if (!this.listeners.has(channelId)) {
       this.listeners.set(channelId, new Set());
     }

@@ -3,7 +3,8 @@
 import React from 'react';
 import { Community, WalletTransaction } from '../types';
 import { CommunityAvatar } from './CommunityAvatar';
-import { IconChat, IconCompass, IconMoon, IconPlus, IconSun } from './Icons';
+import { IconChat, IconCompass, IconPlus } from './Icons';
+import { ThemePicker, type ThemeId } from './ThemePicker';
 
 interface CommunityBarProps {
   communities: Community[];
@@ -16,14 +17,18 @@ interface CommunityBarProps {
   isWalletOpen?: boolean;
   balanceUSDC?: number;
   notifications?: { transactions: WalletTransaction[]; unread: number; onOpen: () => void };
-  theme?: 'dark' | 'light';
-  onToggleTheme?: () => void;
+  theme?: ThemeId;
+  onChangeTheme?: (theme: ThemeId) => void;
+  /** Mensajes directos: abre la vista, y cuántos mensajes sin leer hay en total. */
+  onOpenDms?: () => void;
+  isDmsActive?: boolean;
+  dmUnread?: number;
 }
 
 /**
  * Barra izquierda: logo de Kosmovia, Mensajes directos y Explorar, las
  * comunidades donde estás (con su foto y el relieve "portal") y "+ Crear".
- * Abajo, el modo claro/oscuro (Mi Wallet y notificaciones van arriba a la derecha).
+ * Abajo, el selector de tema (Mi Wallet y notificaciones van arriba a la derecha).
  */
 export function CommunityBar({
   communities,
@@ -34,8 +39,11 @@ export function CommunityBar({
   isWalletOpen,
   balanceUSDC,
   notifications,
-  theme = 'dark',
-  onToggleTheme,
+  theme = 'kosmovia',
+  onChangeTheme,
+  onOpenDms,
+  isDmsActive = false,
+  dmUnread = 0,
 }: CommunityBarProps) {
   return (
     <aside className="community-bar" aria-label="Comunidades">
@@ -51,8 +59,17 @@ export function CommunityBar({
         <img src="/brand/kosmovia-logo.png" alt="" width={48} height={48} className="kv-brand-img" />
       </button>
 
-      <button type="button" className="kv-rail-btn" disabled title="Mensajes directos · próximamente" aria-label="Mensajes directos (próximamente)">
+      <button
+        type="button"
+        className={`kv-rail-btn kv-rail-dm ${isDmsActive ? 'active' : ''}`}
+        disabled={!onOpenDms}
+        onClick={onOpenDms}
+        aria-pressed={isDmsActive}
+        title="Mensajes directos"
+        aria-label={dmUnread > 0 ? `Mensajes directos: ${dmUnread} sin leer` : 'Mensajes directos'}
+      >
         <IconChat size={20} />
+        {dmUnread > 0 ? <span className="kv-unread-badge kv-rail-badge">{dmUnread > 9 ? '9+' : dmUnread}</span> : null}
       </button>
       <button type="button" className="kv-rail-btn" disabled title="Explorar comunidades · próximamente" aria-label="Explorar comunidades (próximamente)">
         <IconCompass size={20} />
@@ -62,7 +79,7 @@ export function CommunityBar({
 
       <nav className="kv-rail-communities" aria-label="Tus comunidades">
         {communities.map((community) => {
-          const isActive = community.id === activeCommunityId;
+          const isActive = !isDmsActive && community.id === activeCommunityId;
           return (
             <button
               key={community.id}
@@ -85,17 +102,7 @@ export function CommunityBar({
       </nav>
 
       <div className="kv-rail-bottom">
-        {onToggleTheme ? (
-          <button
-            type="button"
-            className="kv-rail-btn"
-            onClick={onToggleTheme}
-            aria-label={theme === 'light' ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro'}
-            title={theme === 'light' ? 'Modo oscuro' : 'Modo claro'}
-          >
-            {theme === 'light' ? <IconMoon size={20} /> : <IconSun size={20} />}
-          </button>
-        ) : null}
+        {onChangeTheme ? <ThemePicker theme={theme} onChange={onChangeTheme} /> : null}
       </div>
     </aside>
   );
