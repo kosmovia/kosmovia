@@ -1,50 +1,38 @@
-# Borrador: frontend de Victor + backend de core
+# Kosmovia en local
 
-Esta rama une la UI de `app/` (Victor) con el backend de `core/` (Alejandro), **sin cambiar las pantallas**: se cambió la instancia de la capa de servicios, como estaba pensada.
+Una sola app (`app/`): las pantallas de Victor y el backend (rutas `/api` en `app/api`, lógica en `lib/core`, migraciones en `db/`) corren en el mismo servidor, en el puerto **3000**, que es el origen autorizado en Pollar.
+
+## Cómo correrlo
+```bash
+cd app
+cp .env.example .env.local   # completa las claves (pídelas por privado)
+npm install
+npm run dev
+```
+Abre http://localhost:3000/login, entra y ve a `/plataforma`.
+
+Sin `NEXT_PUBLIC_KOSMOVIA_SERVICES=api`, la app queda en modo demo con localStorage.
+
+## Comandos
+| Comando | Qué hace |
+| --- | --- |
+| `npm run dev` | App y backend en http://localhost:3000 |
+| `npm test` | Tests del backend (no tocan la base ni Pollar) |
+| `npm run db:migrate` | Aplica `db/migrations/` a la base de `DATABASE_URL` |
+| `npm run db:check` | Comprueba la base |
 
 ## Qué está conectado (modo `api`)
-| Servicio | Antes (demo) | Ahora |
-| --- | --- | --- |
-| `authService` | localStorage | Login con **Pollar** (Google, email, Freighter) y sesión firmada con core. Perfil real (`/api/profile`) |
-| `communityService` | localStorage | Comunidades, canales y miembros reales (`/api/communities…`) |
-| `chatService` | localStorage + eventos | Mensajes reales con polling cada 2,5 s (`/api/channels/:id/messages`) |
-| `walletService` | saldos inventados | Saldo real en Horizon testnet, historial (`/api/payments`) y **pagos reales con Pollar** a un `@usuario`, con la protección contra pagos dobles de core |
-| `settlementService` | demo | Sigue en demo: core todavía no tiene cobros B2B |
+| Servicio | Qué usa |
+| --- | --- |
+| `authService` | Login con **Pollar** (Google, email, Freighter) y sesión firmada (cookie httpOnly). Perfil real (`/api/profile`) |
+| `communityService` | Comunidades, canales, miembros, roles y foto (`/api/communities…`) |
+| `chatService` | Mensajes con polling cada 2,5 s (`/api/channels/:id/messages`) |
+| `walletService` | Saldo en Horizon testnet, historial (`/api/payments`) y **pagos con Pollar** a un `@usuario`, con protección contra pagos dobles |
+| `settlementService` | Sigue en demo: no hay liquidaciones B2B reales |
 
-Los avatares muestran el **Kosmonauta** de cada perfil.
-
-## Cómo correrlo en local
-1. `core` en el puerto **3001** (es la API):
-   ```bash
-   cd core
-   npx next dev -p 3001
-   ```
-2. Esta app en el puerto **3000**: es el único origen autorizado en Pollar.
-   ```bash
-   cd app
-   cp .env.example .env.local   # completa la clave publicable de Pollar
-   npm install
-   npm run dev
-   ```
-3. Abre http://localhost:3000/login, entra y ve a `/plataforma`.
-
-`/api/*` lo reenvía `next.config.ts` a core (`KOSMOVIA_API_URL`). Sin `NEXT_PUBLIC_KOSMOVIA_SERVICES=api`, la app queda en modo demo como antes.
-
-## Arreglos de funcionamiento (sin tocar el diseño)
-- **Mi Wallet:** el botón dice "Mi Wallet" con el saldo chico debajo, y otro clic la cierra. Al abrirla se actualizan saldo e historial. El formulario empieza vacío con 0,01 (el mínimo), espera el resultado real del pago y muestra el error si falla. El QR de "Recibir" es real.
-- **Cobros B2B en el chat:** se pagan **a quien emitió el cobro** (antes iban a un `#canal`, que no existe en la red). Quedan marcados como pagados solo si el pago salió, no se puede pagar el propio cobro y el mínimo es 0,01.
-- **Perfil:** abre con tus datos reales, no con los de ejemplo (antes podía guardar la bio de Victor en tu perfil). Guarda y avisa si falla. Las wallets externas dicen "Próximamente" en lugar de simular la conexión, y el KYC muestra tu nivel real (0 wallet, 1 X verificado, 2 empresa).
-- **Canales:** el nombre se limpia a lo que acepta el servidor (sin tildes ni espacios). Si no eres owner o admin, se ve el error.
-- **Mensajes:** si no se pueden enviar (por ejemplo, en #anuncios sin ser admin), se ve el error.
-- **Carga:** no se muestran los datos de ejemplo mientras llegan los reales. Si no tienes perfil, lo creas ahí mismo con un @usuario espacial y un Kosmonauta.
-- **Miembros:** solo tú sales "en línea" (todavía no hay presencia en tiempo real), y sin la etiqueta de rol falsa en cada mensaje.
-
-- **Perfil al tocar a alguien:** en el chat (avatar o nombre) y en la lista de miembros se abre una tarjeta con su Kosmonauta, su nivel, su X, su bio, desde cuándo está y su wallet. Tiene los botones **Transferir** (abre Mi Wallet en Enviar con su @usuario y 0,01) y **Copiar @usuario**. Si eres tú, dice Editar perfil.
-- **Destinatario reconocido:** al escribir un @usuario o pegar una wallet en Enviar, se ve a quién le envías (core busca perfiles también por wallet).
-
-## Limitaciones del borrador
-- **Copias:** las piezas de sesión y Pollar son copias de core (`lib/core/`, ver su README). La versión final debería compartir el código o vivir en una sola app.
-- **Comunidades:** se ven las comunidades donde eres miembro. Si no estás en ninguna, la app te une a la primera. Todavía no hay botón para crear ni para unirse a otras.
+## Limitaciones
 - **Cobros B2B:** las liquidaciones (fee 0,5 %, lotes) siguen en demo.
-- **Pagos:** si un pago queda sin confirmar, esta UI no lo retoma al recargar (core sí).
-- **@usuario y Kosmonauta:** el editor completo para cambiarlos sigue en core.
+- **Presencia:** solo tú sales "en línea" (todavía no hay presencia en tiempo real).
+- **Mensajes directos y Explorar:** próximamente.
+
+La guía para publicarla está en `DEPLOY-RENDER.md`.

@@ -1,11 +1,8 @@
 /**
  * Adapters "api": los mismos contratos de la capa de servicios de Victor
  * (IAuthService, ICommunityService, IChatService, IWalletService), conectados
- * al backend de `core` (REST en /api, sesión con cookie httpOnly firmada con
- * SEP-53, pagos con Pollar verificados en Horizon). Borrador de integración.
- *
- * /api/* lo reenvía next.config.ts al servidor de core (KOSMOVIA_API_URL),
- * así que para el navegador es el mismo origen.
+ * al backend de esta misma app (REST en /api, sesión con cookie httpOnly
+ * firmada con SEP-53, pagos con Pollar verificados en Horizon).
  */
 import type { PollarClient } from '@pollar/core';
 import type { Channel, Community, Message, User, WalletTransaction } from '../../types';

@@ -1,20 +1,14 @@
 import type { NextConfig } from 'next';
 
 /**
- * Borrador de integración: en modo api, /api/* se reenvía al servidor de core
- * (KOSMOVIA_API_URL, por defecto http://localhost:3001). Para el navegador es
- * el mismo origen, así la cookie de sesión y el login con Pollar funcionan
- * desde esta app.
+ * Una sola app: el frontend y el backend (rutas /api, en app/api) corren en el
+ * mismo servidor, así la cookie de sesión y el login con Pollar usan el mismo origen.
  */
-const API_URL = process.env.KOSMOVIA_API_URL || 'http://localhost:3001';
-
 const nextConfig: NextConfig = {
   // El indicador de desarrollo de Next tapaba la barra izquierda.
   devIndicators: { position: 'bottom-right' },
-  async rewrites() {
-    if (process.env.NEXT_PUBLIC_KOSMOVIA_SERVICES !== 'api') return [];
-    return [{ source: '/api/:path*', destination: `${API_URL}/api/:path*` }];
-  },
+  // pg es un módulo de Node: que Next no lo empaquete.
+  serverExternalPackages: ['pg'],
 };
 
 export default nextConfig;

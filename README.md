@@ -57,8 +57,7 @@ Built in the Stellar Elite Bolivia (TechRebel) program.
 | Folder | Owner | What it holds |
 | --- | --- | --- |
 | `web` | Alejandro and Victor | Landing + web app, deployed on Vercel |
-| `app` | Victor | Victor — the dApp (web client: login, communities, chat, wallet). Victor's landing can replace web/ through a PR. |
-| `core` | Alejandro | Stage A working end to end on testnet: Pollar login (Google, email, Freighter), profiles with Kosmonauta avatars, communities and chat, X verification. Its API and database are what `app` will plug into. |
+| `app` | Victor and Alejandro | The Kosmovia app, frontend and backend in one Next.js server: Pollar login (Google, email, Freighter), Kosmonauta profiles, communities with roles, chat and USDC payments by @username on testnet. API routes in `app/app/api`, backend logic in `app/lib/core`, migrations in `app/db`. Deployed as one Render service (`app/DEPLOY-RENDER.md`). |
 | `server` | Roberto and Alejandro | Backend services |
 | `contracts` | Roberto | Soroban contracts (Rust): escrow and split payments |
 | `design` | Carla | Brand assets and Figma exports |

@@ -12,7 +12,7 @@ import { SERVICES_MODE } from '../services';
 
 /**
  * Borrador de integración. En modo api monta Pollar y la sesión de core
- * (las mismas piezas que core/components/Providers.tsx). En modo demo no
+ * (las mismas piezas del Providers original de core). En modo demo no
  * monta nada y la app queda igual que antes.
  */
 export function CoreProviders({ children }: { children: React.ReactNode }) {
