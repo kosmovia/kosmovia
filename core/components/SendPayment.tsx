@@ -18,7 +18,7 @@ import {
   newPaymentRef,
   paymentOptions,
   pollarAsset,
-  rejectionMessage,
+  rejectionText,
   rejectionReason,
   trimAmount,
   type PaymentAsset,
@@ -257,7 +257,7 @@ export function SendPayment({ address, balances, record, onSent, preset }: SendP
       setStage({ step: "review", recipient, amount: value });
       const why = outcome?.status === "error" ? (outcome.details ?? outcome.message ?? "") : "";
       const reason = rejectionReason(outcome);
-      setFormError(reason ? rejectionMessage(reason) : `No se pudo enviar y no se movió dinero.${why ? ` Pollar dijo: ${why.slice(0, 160)}` : ""}`);
+      setFormError(reason ? rejectionText(reason, outcome) : `No se pudo enviar y no se movió dinero.${why ? ` Pollar dijo: ${why.slice(0, 160)}` : ""}`);
       return;
     }
     if (verdict === "sent") onSent?.();

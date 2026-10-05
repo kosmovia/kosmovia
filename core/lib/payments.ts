@@ -233,7 +233,7 @@ export function attemptDeadlineMs(startedAtMs: number): number {
 type OutcomeLike = { status?: string; hash?: string; code?: string; details?: string; message?: string };
 
 /** Why a send provably never left. */
-export type RejectionReason = "noWallet" | "notReady" | "declined" | "balance" | "fee" | "destination" | "other";
+export type RejectionReason = "noWallet" | "notReady" | "signFailed" | "declined" | "balance" | "fee" | "destination" | "other";
 
 /**
  * Backend codes that refuse a request before anything is submitted. An
@@ -249,6 +249,9 @@ const REJECTED_CODES: Record<string, RejectionReason> = {
   // 409 of /tx/build-sign-submit: Pollar never finished provisioning the custodial
   // wallet, so it refuses to build or sign anything (it retries on the next sign-in).
   SDK_WALLET_NOT_READY: "notReady",
+  // 403 of /tx/build-sign-submit: Pollar refused to sign (e.g. the asset is not
+  // enabled for the app). Without a signature nothing can be submitted.
+  TX_SIGN_FAILED: "signFailed",
 };
 
 /** Messages the SDK raises on the client before sending, compared whole. */
@@ -310,10 +313,24 @@ export function classifyWithPhase(
   return verdict;
 }
 
+/**
+ * The sentence for a rejection plus what Pollar said when it is useful to act
+ * on (a refused signature names the cause, e.g. an asset not enabled in the
+ * dashboard). Never includes keys: it is the server's error text.
+ */
+export function rejectionText(reason: RejectionReason, outcome?: OutcomeLike | null): string {
+  const base = rejectionMessage(reason);
+  if (reason !== "signFailed") return base;
+  const why = (outcome?.details ?? outcome?.message ?? "").trim().slice(0, 200);
+  return why ? `${base} Pollar dijo: ${why}` : base;
+}
+
 export function rejectionMessage(reason: RejectionReason): string {
   switch (reason) {
     case "noWallet":
       return "Tu wallet no está conectada. Vuelve a entrar e intenta de nuevo. No se envió nada.";
+    case "signFailed":
+      return "Pollar no quiso firmar el pago, así que no se envió nada.";
     case "notReady":
       return "Pollar todavía no terminó de crear tu wallet, así que no se envió nada. Sal y vuelve a entrar para que lo reintente; si sigue igual, prueba entrando con Freighter.";
     case "declined":

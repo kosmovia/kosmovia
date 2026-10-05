@@ -18,6 +18,7 @@ import {
   paymentOptions,
   pickPayment,
   rejectionMessage,
+  rejectionText,
   rejectionReason,
   toStroops,
   trimAmount,
@@ -131,6 +132,10 @@ test("un error sin hash es 'desconocido': nunca se trata como 'no se envió'", (
   // La wallet de Pollar no terminó de crearse: nada se armó ni se firmó.
   assert.equal(classifySubmit({ status: "error", code: "SDK_WALLET_NOT_READY" }), "rejected");
   assert.match(rejectionMessage("notReady"), /Sal y vuelve a entrar/);
+  // Pollar no firmó (activo no habilitado): rechazo inmediato, con su motivo.
+  const signFailed = { status: "error", code: "TX_SIGN_FAILED", details: "Asset USDC is not enabled for this application." };
+  assert.equal(classifySubmit(signFailed), "rejected");
+  assert.match(rejectionText("signFailed", signFailed), /no se envió nada.*not enabled/);
   assert.equal(rejectionReason({ status: "error", details: "User declined access" }), "declined");
   assert.equal(rejectionReason({ status: "error", details: "No wallet connected" }), "noWallet");
   // Only the whole message counts, never a substring.
