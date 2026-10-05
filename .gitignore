@@ -20,3 +20,6 @@ target/
 Thumbs.db
 .idea/
 .vscode/
+
+# Archivo local de Claude Code (solo apunta a AGENTS.md); no va al repo
+CLAUDE.md
