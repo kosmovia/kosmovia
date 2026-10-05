@@ -333,9 +333,15 @@ test("verifyXPost refuses an oversized response, declared or streamed", async ()
 });
 
 test("verifyXPost times out a hanging oEmbed call", async () => {
+  // AbortSignal.timeout's timer does not keep Node alive, so hold the event loop
+  // open with a normal timer until the abort fires (otherwise the run can end early).
   const hang: Fetcher = (_url, init) =>
     new Promise((_resolve, reject) => {
-      init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+      const keepAlive = setTimeout(() => {}, 5_000);
+      init.signal?.addEventListener("abort", () => {
+        clearTimeout(keepAlive);
+        reject(new DOMException("aborted", "AbortError"));
+      });
     });
   const result = await verifyXPost({ ...base, fetcher: hang, timeoutMs: 20 });
   assert.ok(!result.ok && result.code === "x_unreachable");
