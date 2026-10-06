@@ -2938,3 +2938,31 @@ html, body {
 .kv-visibility-opt.on { border-color: var(--accent); color: var(--fg); }
 .kv-visibility-opt:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 .kv-visibility-opt input { accent-color: var(--accent); }
+
+/* ===== "Escribiendo…" (Supabase Realtime broadcast) ===== */
+.kv-typing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  padding: 0 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.kv-typing-dots { display: inline-flex; gap: 3px; align-items: flex-end; }
+.kv-typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: kv-typing-bounce 1.2s infinite ease-in-out;
+}
+.kv-typing-dot:nth-child(2) { animation-delay: 0.15s; }
+.kv-typing-dot:nth-child(3) { animation-delay: 0.3s; }
+@keyframes kv-typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.45; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kv-typing-dot { animation: none; opacity: 0.8; }
+}

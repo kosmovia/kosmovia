@@ -27,6 +27,7 @@ import {
   rejectionReason,
 } from '../../lib/core/payments.ts';
 import { forgetPayment, rememberPayment } from '../../lib/core/payment-memory.ts';
+import { openChannelLink, sendTyping } from '../../lib/core/realtime.ts';
 
 // ------------------------------------------------------------ wire types
 
@@ -456,6 +457,10 @@ export class ApiDmService implements IDmService {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const POLL_MS = 2_500;
 const PAGE_SIZE = 50;
+/** Con Realtime vivo no hace falta preguntar seguido: esta pasada es solo red de seguridad. */
+const REALTIME_SAFETY_MS = 30_000;
+/** Se olvida a quien escribe si no manda otro aviso en este tiempo. */
+const TYPING_EXPIRY_MS = 4_000;
 
 export class ApiChatService implements IChatService {
   async getMessages(channelId: string): Promise<Message[]> {
@@ -490,8 +495,13 @@ export class ApiChatService implements IChatService {
   }
 
   /**
-   * Polling cada 2,5 s de la última página (50): lo nuevo va por `callback` y la página
-   * completa por `onSync`, para ver ediciones y borrados de otras personas.
+   * Mensajes en vivo. Con Supabase Realtime disponible, la base avisa y acá se
+   * vuelve a pedir la última página (la API es la que sabe de autorización y de
+   * autores, así que Realtime reemplaza al temporizador, no a la API). Sin
+   * Realtime —o si la suscripción se cae— queda el polling de 2,5 s de siempre.
+   *
+   * Lo nuevo va por `callback`; la página completa por `onSync`, para ver
+   * ediciones y borrados de otras personas.
    */
   subscribeToMessages(
     channelId: string,
@@ -501,8 +511,18 @@ export class ApiChatService implements IChatService {
     if (!UUID_RE.test(channelId)) return () => {};
     let seen: Set<string> | null = null;
     let stopped = false;
-    const tick = async () => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let fetching = false;
+    let again = false;
+
+    const refresh = async (): Promise<void> => {
       if (stopped) return;
+      // Varios avisos seguidos (una ráfaga de mensajes) comparten una sola consulta.
+      if (fetching) {
+        again = true;
+        return;
+      }
+      fetching = true;
       try {
         const { messages } = await call<{ messages: MessageWire[] }>(`/api/channels/${channelId}/messages`);
         if (stopped) return;
@@ -513,14 +533,85 @@ export class ApiChatService implements IChatService {
         }
         seen = new Set(page.map((m) => m.id));
       } catch {
-        // Se reintenta en el próximo tick.
+        // Se reintenta con el próximo aviso o en la pasada de respaldo.
+      } finally {
+        fetching = false;
+        if (again && !stopped) {
+          again = false;
+          void refresh();
+        }
       }
-      if (!stopped) timer = setTimeout(tick, POLL_MS);
     };
-    let timer = setTimeout(tick, 0);
+
+    /** Con Realtime vivo, una pasada lenta de red de seguridad; sin él, el polling normal. */
+    const schedule = (everyMs: number) => {
+      clearTimeout(timer);
+      if (stopped) return;
+      timer = setTimeout(() => {
+        void refresh().finally(() => schedule(everyMs));
+      }, everyMs);
+    };
+
+    void refresh();
+    schedule(POLL_MS);
+
+    const link = openChannelLink(channelId, {
+      onChange: () => void refresh(),
+      onLive: (live) => schedule(live ? REALTIME_SAFETY_MS : POLL_MS),
+    });
+
     return () => {
       stopped = true;
       clearTimeout(timer);
+      link?.close();
+    };
+  }
+
+  notifyTyping(channelId: string, profileId: string): void {
+    if (!UUID_RE.test(channelId)) return;
+    sendTyping(channelId, profileId);
+  }
+
+  /**
+   * Quiénes escriben en el canal. Cada aviso renueva la expiración de esa
+   * persona, así que no hace falta un evento de "dejé de escribir": una pestaña
+   * que se cierra simplemente deja de avisar.
+   */
+  subscribeToTyping(channelId: string, onChange: (profileIds: string[]) => void): () => void {
+    if (!UUID_RE.test(channelId)) return () => {};
+    let stopped = false;
+    const timers = new Map<string, ReturnType<typeof setTimeout>>();
+    let ids: string[] = [];
+
+    const emit = () => {
+      if (!stopped) onChange([...ids]);
+    };
+
+    const link = openChannelLink(channelId, {
+      onChange: () => {},
+      onTyping: (profileId) => {
+        if (stopped) return;
+        clearTimeout(timers.get(profileId));
+        timers.set(
+          profileId,
+          setTimeout(() => {
+            timers.delete(profileId);
+            ids = ids.filter((id) => id !== profileId);
+            emit();
+          }, TYPING_EXPIRY_MS),
+        );
+        if (!ids.includes(profileId)) {
+          ids = [...ids, profileId];
+          emit();
+        }
+      },
+    });
+
+    return () => {
+      stopped = true;
+      for (const t of timers.values()) clearTimeout(t);
+      timers.clear();
+      link?.close();
     };
   }
 }

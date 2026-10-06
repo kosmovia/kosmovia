@@ -46,6 +46,18 @@ interface ChatAreaProps {
   onEditMessage?: (messageId: string, content: string) => Promise<boolean>;
   /** Borra el mensaje; true si se borró. */
   onDeleteMessage?: (messageId: string) => Promise<boolean>;
+  /** Quienes están escribiendo ahora (sin incluirme). Vacío o ausente: no se muestra nada. */
+  typingUsers?: User[];
+  /** Aviso de que estoy escribiendo. Se llama por tecla; quien recibe limita la frecuencia. */
+  onTyping?: () => void;
+}
+
+/** "Ana está escribiendo", "Ana y Beto…", "3 personas…". */
+function typingLabel(users: User[]): string {
+  const name = (u: User) => u.username || u.displayName || 'Alguien';
+  if (users.length === 1) return `${name(users[0])} está escribiendo`;
+  if (users.length === 2) return `${name(users[0])} y ${name(users[1])} están escribiendo`;
+  return `${users.length} personas están escribiendo`;
 }
 
 const COMPOSER_MAX_PX = 168; // ~8 líneas
@@ -89,6 +101,8 @@ export function ChatArea({
   onOpenChannelSettings,
   onEditMessage,
   onDeleteMessage,
+  typingUsers,
+  onTyping,
 }: ChatAreaProps) {
   const [inputText, setInputText] = useState('');
   const [paidInvoices, setPaidInvoices] = useState<Record<string, boolean>>({});
@@ -488,6 +502,16 @@ export function ChatArea({
       </section>
 
       <footer className="chat-input-container">
+        {typingUsers && typingUsers.length > 0 ? (
+          <p className="kv-typing" aria-live="polite">
+            <span className="kv-typing-dots" aria-hidden="true">
+              <span className="kv-typing-dot" />
+              <span className="kv-typing-dot" />
+              <span className="kv-typing-dot" />
+            </span>
+            {typingLabel(typingUsers)}
+          </p>
+        ) : null}
         {isPayments ? (
           <div className="chat-input-box kv-composer-locked" role="note">
             <IconLock size={16} />
@@ -505,7 +529,10 @@ export function ChatArea({
               aria-label={isDm ? `Mensaje para ${label}` : `Mensaje en ${label}`}
               aria-keyshortcuts="Enter"
               value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
+              onChange={(e) => {
+                setInputText(e.target.value);
+                onTyping?.();
+              }}
               onKeyDown={handleComposerKey}
             />
             <EmojiPicker onPick={(emoji) => setInputText((t) => t + emoji)} />

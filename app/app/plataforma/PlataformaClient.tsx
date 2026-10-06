@@ -359,6 +359,20 @@ export function PlataformaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, inDm]);
 
+  // Quién está escribiendo en el canal abierto. Solo en canales: las
+  // conversaciones directas todavía no tienen tiempo real.
+  const [typingIds, setTypingIds] = useState<string[]>([]);
+  useEffect(() => {
+    setTypingIds([]);
+    if (!chatId || inDm || !chatService.subscribeToTyping) return;
+    return chatService.subscribeToTyping(chatId, setTypingIds);
+  }, [chatId, inDm]);
+
+  const handleTyping = useCallback(() => {
+    if (!chatId || inDm) return;
+    chatService.notifyTyping?.(chatId, currentUser.id);
+  }, [chatId, inDm, currentUser.id]);
+
   const handleChangeTheme = (next: ThemeId) => {
     setTheme(next);
     try {
@@ -847,6 +861,12 @@ export function PlataformaPage() {
     m.id === currentUser.id ? { ...m, ...currentUser, role: m.role ?? currentUser.role } : m
   );
 
+  /** Los que escriben, resueltos contra la lista de miembros y sin incluirme. */
+  const typingUsers = typingIds
+    .filter((id) => id !== currentUser.id)
+    .map((id) => currentMembers.find((m) => m.id === id))
+    .filter((u): u is User => u !== undefined);
+
   const myCommunityRole = currentMembers.find((m) => m.id === currentUser.id)?.role;
   // Configurar: dueño o admin (en modo demo, todos).
   const isCommunityOwner = SERVICES_MODE !== 'api' || myCommunityRole === 'owner' || myCommunityRole === 'admin';
@@ -977,6 +997,8 @@ export function PlataformaPage() {
         onOpenChannelSettings={isCommunityOwner && !inDm ? () => setChannelSettingsId(activeChannel.id) : undefined}
         onEditMessage={handleEditMessage}
         onDeleteMessage={handleDeleteMessage}
+        typingUsers={inDm ? undefined : typingUsers}
+        onTyping={inDm ? undefined : handleTyping}
       />
 
       <MemberList

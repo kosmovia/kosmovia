@@ -45,9 +45,14 @@ Para Roberto. Se publica **un solo Web Service** desde el repo `github.com/kosmo
 | `NEXT_PUBLIC_POLLAR_PUBLISHABLE_KEY` | no (pública) | clave publicable de Pollar, testnet |
 | `POLLAR_SECRET_KEY` | **sí** | **Opcional.** Solo con fondeo *Deferred*; con *Immediate* (el que usamos) va vacía |
 | `X_CHALLENGE_SECRET` | **sí** | 16+ caracteres al azar |
+| `DATABASE_SSL` | no | `no-verify` si la base es el pooler de Supabase (usa su propia CA) |
+| `NEXT_PUBLIC_SUPABASE_URL` | no (pública) | la del proyecto de Supabase, para el chat en vivo |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | no (pública) | la clave anon/publishable, para el chat en vivo |
+| `SUPABASE_JWT_PRIVATE_KEY` | **sí** | PEM ES256 importado en Supabase (Settings > JWT), para el chat en vivo |
+| `SUPABASE_JWT_KEY_ID` | no | el `kid` de esa clave |
 
 - Las `NEXT_PUBLIC_*` se fijan **al compilar**. Si cambias alguna: **Manual Deploy > Clear build cache & deploy**.
-- Las variables `NEXT_PUBLIC_SUPABASE_*` y `SUPABASE_JWT_*` son de otro modo; en modo `api` van vacías.
+- **Chat en vivo (Supabase Realtime).** Las cuatro variables `SUPABASE_*` de la tabla son las del tiempo real, y hacen falta **también en modo `api`**: el navegador abre el WebSocket de Supabase con un JWT corto que emite `/api/realtime/token`, firmado con esa clave. Sin ellas el chat sigue funcionando, pero por polling cada 2,5 s y sin el indicador de "escribiendo". La clave importada en Supabase tiene que quedar como **Current** (Settings > JWT > Rotate keys), y las políticas RLS de `supabase/migrations/0001` son las que deciden qué mensajes recibe cada quien.
 - Al terminar, apunta la URL pública (`https://kosmovia-xxxx.onrender.com`): es la que se abre en la demo.
 
 ## 3. Pollar: autorizar el dominio
@@ -84,6 +89,8 @@ Los Web Services gratis de Render se duermen tras 15 minutos sin tráfico y la p
 | `404 backend_disabled` ("No encontrado") | Falta `KOSMOVIA_DATA_BACKEND=api`. |
 | La app queda en modo demo | Faltó `NEXT_PUBLIC_KOSMOVIA_SERVICES=api` al compilar: redeploy con limpieza de caché. |
 | Errores de tablas inexistentes (500) | No se corrieron las migraciones (paso 1). |
+| El chat anda pero tarda ~2,5 s y no hay "escribiendo…" | Falta alguna variable `SUPABASE_*`, o la clave importada no quedó como **Current** en Supabase: el navegador no consigue token y queda en polling. |
+| TLS: `SELF_SIGNED_CERT_IN_CHAIN` al conectar a la base | El pooler de Supabase usa su propia CA: falta `DATABASE_SSL=no-verify`. |
 | `401 session_required` / `session_invalid` | Sesión vencida o `SESSION_SECRET` cambió: vuelve a entrar. |
 | Primera carga muy lenta | El servicio estaba dormido (paso 4). |
 
