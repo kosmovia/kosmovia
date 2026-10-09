@@ -153,7 +153,7 @@ export function readCookie(header: string | null, name: string): string | null {
 // ----------------------------------------------------------- request helper
 
 export type SessionOutcome =
-  | { ok: true; profileId: string; wallet: string; expiresAt: number }
+  | { ok: true; profileId: string; wallet: string; expiresAt: number; issuedAt: number }
   | { ok: false; response: Response };
 
 function fail(status: number, error: string, code: string): SessionOutcome {
@@ -204,5 +204,11 @@ export function requireSession(request: Request, env: Record<string, string | un
     console.warn(`session.rejected reason=${result.reason}`);
     return fail(401, "No se pudo verificar la sesión. Vuelve a entrar.", "session_invalid");
   }
-  return { ok: true, profileId: result.claims.sub, wallet: result.claims.wallet, expiresAt: result.claims.exp * 1000 };
+  return {
+    ok: true,
+    profileId: result.claims.sub,
+    wallet: result.claims.wallet,
+    expiresAt: result.claims.exp * 1000,
+    issuedAt: result.claims.iat * 1000,
+  };
 }

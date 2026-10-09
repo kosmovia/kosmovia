@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { User } from '../types';
 import { AvatarFace } from './AvatarFace';
 import { KosmoFrame } from './KosmoFrame';
+import { SecuritySettings } from './SecuritySettings';
 
 interface ProfileModalProps {
   user: User;
@@ -24,7 +25,7 @@ export function ProfileModal({
   stellarAddress = 'GD26UBYVEYYVVOVCMOLPMIKPWQRFV34LK3I7LHBNTUGYHYIKFMEREH2A',
   onLogout,
 }: ProfileModalProps) {
-  const [activeTab, setActiveTab] = useState<'profile' | 'wallets' | 'kyc'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'wallets' | 'kyc'>('profile');
   const [displayName, setDisplayName] = useState(user.displayName);
   const [bio, setBio] = useState(user.bio || '');
   const [saving, setSaving] = useState(false);
@@ -80,6 +81,13 @@ export function ProfileModal({
             onClick={() => setActiveTab('profile')}
           >
             👤 Mi Perfil
+          </button>
+          <button
+            type="button"
+            className={`settings-tab-btn ${activeTab === 'security' ? 'active' : ''}`}
+            onClick={() => setActiveTab('security')}
+          >
+            🔐 Seguridad
           </button>
           <button
             type="button"
@@ -157,6 +165,9 @@ export function ProfileModal({
             </div>
           </form>
         )}
+
+        {/* Seguridad: PIN de pagos y límite diario */}
+        {activeTab === 'security' && <SecuritySettings />}
 
         {/* Tab 2: Billeteras Vinculadas */}
         {activeTab === 'wallets' && (
@@ -241,7 +252,7 @@ export function ProfileModal({
               <div className="kyc-perk-item">
                 <span className="perk-check">✓</span>
                 <div>
-                  <strong>Comisiones patrocinadas</strong>
+                  <strong>Activación de wallet patrocinada</strong>
                   <p>Pollar activa tu wallet y habilita USDC sin que pagues la reserva (según la configuración de la app).</p>
                 </div>
               </div>
@@ -249,7 +260,7 @@ export function ProfileModal({
               <div className="kyc-perk-item">
                 <span className="perk-check">✓</span>
                 <div>
-                  <strong>Pagos y Cobros B2B para Bolivia</strong>
+                  <strong>Pagos y cobros en USDC</strong>
                   <p>Habilitado para emitir cobros en USDC con comprobantes verificables.</p>
                 </div>
               </div>

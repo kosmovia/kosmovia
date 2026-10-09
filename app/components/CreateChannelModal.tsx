@@ -99,7 +99,7 @@ export function CreateChannelModal({
             <input
               type="text"
               className="form-input"
-              placeholder="ej: Pagos B2B y facturación en Bolivia"
+              placeholder="ej: Cobros y pagos de la comunidad"
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
             />

@@ -56,7 +56,7 @@ export function ComposerPlus({ onInvoice }: { onInvoice?: () => void }) {
                 onInvoice();
               }}
             >
-              <IconCoin size={16} /> Cobro B2B en USDC
+              <IconCoin size={16} /> Cobro en USDC
             </button>
           ) : null}
         </div>

@@ -7,6 +7,7 @@ import { ComposerPlus } from './ComposerPlus';
 import { EmojiPicker } from './EmojiPicker';
 import { IconBell, IconLock, IconPencil, IconTrash, IconUsers, IconWallet } from './Icons';
 import { WalletTransaction } from '../types';
+import { VaquitaChatCard } from './apps/VaquitaChatCard';
 
 interface ChatAreaProps {
   channel: Channel;
@@ -46,6 +47,8 @@ interface ChatAreaProps {
   onEditMessage?: (messageId: string, content: string) => Promise<boolean>;
   /** Borra el mensaje; true si se borró. */
   onDeleteMessage?: (messageId: string) => Promise<boolean>;
+  /** Abre el panel Aplicaciones en esa vaquita (tarjeta `[VAQUITA:id]`). */
+  onOpenVaquita?: (id: string) => void;
 }
 
 const COMPOSER_MAX_PX = 168; // ~8 líneas
@@ -89,6 +92,7 @@ export function ChatArea({
   onOpenChannelSettings,
   onEditMessage,
   onDeleteMessage,
+  onOpenVaquita,
 }: ChatAreaProps) {
   const [inputText, setInputText] = useState('');
   const [paidInvoices, setPaidInvoices] = useState<Record<string, boolean>>({});
@@ -293,7 +297,7 @@ export function ChatArea({
                 ? 'Este es el inicio de la conversación. Escribe el primer mensaje.'
                 : isPayments
                   ? 'Aquí aparecerán los comprobantes de los pagos verificados en Stellar.'
-                  : channel.topic || 'Este es el inicio del canal. ¡Sé el primero en enviar un mensaje o emitir un cobro B2B en Stellar!'}
+                  : channel.topic || 'Este es el inicio del canal. ¡Sé el primero en enviar un mensaje o crear un cobro en Stellar!'}
             </p>
             <div className="empty-chat-actions">
               {canPost && !isDm && (
@@ -311,7 +315,7 @@ export function ChatArea({
                   className="btn-empty-action accent"
                   onClick={onOpenQuickInvoice}
                 >
-                  💸 Emitir Cobro B2B
+                  💸 Crear cobro
                 </button>
               )}
             </div>
@@ -335,14 +339,16 @@ export function ChatArea({
               }
             }
 
+            const vaquitaMatch = /^\[VAQUITA:([A-Za-z0-9_-]{1,64})\]$/.exec(msg.content.trim());
+            const vaquitaId = vaquitaMatch ? vaquitaMatch[1] : null;
             const prev = index > 0 ? messages[index - 1] : null;
             const grouped =
-              !invoiceData && prev !== null && prev.author.id === msg.author.id && !prev.content.startsWith('[COBRO_B2B:');
+              !invoiceData && !vaquitaId && prev !== null && prev.author.id === msg.author.id && !prev.content.startsWith('[COBRO_B2B:') && !prev.content.startsWith('[VAQUITA:');
             const isPaid = paidInvoices[msg.id];
             const isMine = currentUserId !== undefined && msg.author.id === currentUserId;
             const isPaying = payingInvoice === msg.id;
 
-            const canEdit = isMine && !invoiceData && !!onEditMessage;
+            const canEdit = isMine && !invoiceData && !vaquitaId && !!onEditMessage;
             const canDelete = (isMine || canModerate) && !!onDeleteMessage;
             const isEditing = editingId === msg.id;
             const isConfirming = confirmDeleteId === msg.id;
@@ -382,7 +388,9 @@ export function ChatArea({
                   </div>
                   )}
 
-                  {invoiceData ? (
+                  {vaquitaId ? (
+                    <VaquitaChatCard id={vaquitaId} onOpen={onOpenVaquita} />
+                  ) : invoiceData ? (
                     <div className="invoice-card">
                       <div className="invoice-header-row">
                         <span className="invoice-tag">Cobro en Stellar</span>

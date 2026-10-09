@@ -17,6 +17,7 @@ import { renderAvatar } from '../../lib/core/avatar/generator.ts';
 import { fetchBalances, shortAddress } from '../../lib/core/pollar-horizon.ts';
 import {
   ADDRESS_RE,
+  approvalTimeoutSec,
   attemptDeadlineMs,
   checkAmount,
   classifyWithPhase,
@@ -27,6 +28,9 @@ import {
   rejectionReason,
 } from '../../lib/core/payments.ts';
 import { forgetPayment, rememberPayment } from '../../lib/core/payment-memory.ts';
+
+export { ApiSecurityService } from './security';
+export { ApiVaquitaService } from './vaquita';
 
 // ------------------------------------------------------------ wire types
 
@@ -74,6 +78,8 @@ type PaymentWire = {
   asset: 'XLM' | 'USDC';
   amount: string;
   paid_at: string;
+  /** Salió sin permiso válido del PIN. El servidor solo lo marca para quien envió. */
+  unverified?: boolean;
   from_profile: PaymentParty;
   to_profile: PaymentParty;
 };
@@ -551,6 +557,7 @@ function toTx(p: PaymentWire, me: string): WalletTransaction {
     timestamp: new Date(p.paid_at).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
     hash: p.tx_hash,
     paidAt: p.paid_at,
+    unverified: sent && p.unverified === true ? true : undefined,
   };
 }
 
@@ -581,8 +588,14 @@ export class ApiWalletService implements IWalletService {
     const me = myAddress();
     if (!client) throw new ApiError('Pollar no está listo.');
 
-    // A quién: @usuario (con o sin @, igual que la vista previa) o dirección G….
-    // Los cobros B2B a un #canal siguen en modo demo.
+    // Sin permiso del PIN no se paga: el servidor lo dio (securityService.approve) atado a un
+    // destino, activo y monto. Esto es un control de la app, no una barrera de la firma (la hace
+    // Pollar en el navegador); lo que se salte el PIN queda marcado como `unverified`.
+    const approval = input.approval;
+    if (!approval) throw new ApiError('Confirma el pago con tu PIN.');
+
+    // A quién: @usuario (con o sin @, igual que la vista previa) o dirección G…, y tiene que ser
+    // EXACTAMENTE el destino que se aprobó con el PIN. Los cobros B2B a un #canal siguen en modo demo.
     const raw = input.to.trim();
     const handle = raw.replace(/^@/, '').toLowerCase();
     let destination: string;
@@ -592,9 +605,20 @@ export class ApiWalletService implements IWalletService {
       destination = profile.wallet;
     } else throw new ApiError('Por ahora solo se puede pagar a un @usuario o a una dirección G….');
     if (destination === me) throw new ApiError('No puedes enviarte a ti mismo.');
+    if (destination !== approval.toWallet) {
+      throw new ApiError('El destino no coincide con el que confirmaste con tu PIN. No se envió nada; confírmalo de nuevo.');
+    }
 
     const checked = checkAmount(String(input.amount), input.asset);
     if (!checked.ok) throw new ApiError(checked.error);
+    const approved = checkAmount(String(approval.amount), approval.asset);
+    if (!approved.ok || approval.asset !== input.asset || approved.amount !== checked.amount) {
+      throw new ApiError('La confirmación del PIN no coincide con este pago. Confírmalo de nuevo.');
+    }
+
+    // La transacción no puede vivir más que el permiso; con menos de 30 s no se firma.
+    const life = approvalTimeoutSec(Date.parse(approval.expiresAt), Date.now());
+    if (!life.ok) throw new ApiError('Se venció (o está por vencer) la confirmación del PIN. Confírmala de nuevo.');
 
     const memo = newPaymentRef();
     const startedAt = new Date().toISOString();
@@ -606,7 +630,7 @@ export class ApiWalletService implements IWalletService {
         destination,
         amount: checked.amount,
         asset: pollarAsset(input.asset),
-        options: paymentOptions(memo),
+        options: paymentOptions(memo, life.timeoutSec),
       });
     } catch (err) {
       // Desconocido: se busca, no se reenvía.
@@ -629,7 +653,7 @@ export class ApiWalletService implements IWalletService {
       const useHash = hash && Date.now() < deadline ? hash : undefined;
       const res = await apiRequest<{ payment?: PaymentWire }>('/api/payments', {
         method: 'POST',
-        body: { hash: useHash, memo, startedAt, note: '' },
+        body: { hash: useHash, memo, startedAt, note: '', approvalId: approval.id },
       });
       if (res.ok && res.data.payment) {
         forgetPayment(me);

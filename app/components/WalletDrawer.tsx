@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { SettlementRecord, WalletTransaction } from '../types';
+import { WalletTransaction } from '../types';
 import { QrCode } from './QrCode';
 import { IconClose } from './Icons';
 import { RecipientPreview } from './RecipientPreview';
@@ -16,8 +16,6 @@ interface WalletDrawerProps {
   transactions: WalletTransaction[];
   /** true si el pago salió; false deja el formulario abierto (el error lo muestra la página). */
   onSend: (to: string, amount: number, asset: 'USDC' | 'XLM') => Promise<boolean> | void;
-  settlements?: SettlementRecord[];
-  onDisbursePending?: () => void;
   /** Abrir directo en "Enviar" con un destinatario (desde el perfil). `nonce` cambia en cada pedido. */
   sendTo?: { recipient: string; nonce: number } | null;
   /** Botón ↻ (solo ícono) junto al saldo. */
@@ -35,26 +33,20 @@ export function WalletDrawer({
   publicKey,
   transactions,
   onSend,
-  settlements = [],
-  onDisbursePending,
   sendTo,
   onRefresh,
   isRefreshing,
   docked = false,
 }: WalletDrawerProps) {
-  const [activeTab, setActiveTab] = useState<'wallet' | 'settlements'>('wallet');
   const [view, setView] = useState<'overview' | 'send' | 'receive'>('overview');
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('0.01');
   const [asset, setAsset] = useState<'USDC' | 'XLM'>('USDC');
   const [copied, setCopied] = useState(false);
   const [isSending, setIsSending] = useState(false);
-  const [isDisbursing, setIsDisbursing] = useState(false);
-  const [disbursedNotice, setDisbursedNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!sendTo) return;
-    setActiveTab('wallet');
     setView('send');
     setRecipient(sendTo.recipient);
     setAmount('0.01');
@@ -83,40 +75,6 @@ export function WalletDrawer({
     }
   };
 
-  // Cálculo de métricas de liquidaciones B2B
-  const totalInvoiced = settlements.reduce((acc, curr) => acc + curr.totalUSDC, 0);
-  const totalFees = settlements.reduce((acc, curr) => acc + curr.feeUSDC, 0);
-  const totalNet = settlements.reduce((acc, curr) => acc + curr.netUSDC, 0);
-  const pendingCount = settlements.filter((s) => s.status === 'PENDING').length;
-
-  // Exportar reporte contable a CSV
-  const handleExportCSV = () => {
-    const headers = ['ID_Orden,Fecha,Cliente,Concepto,Total_USDC,Fee_0_5_USDC,Neto_USDC,Estado,Stellar_TxHash'];
-    const rows = settlements.map((s) =>
-      `"${s.orderId}","${s.createdAt}","${s.client}","${s.concept.replace(/"/g, '""')}",${s.totalUSDC.toFixed(2)},${s.feeUSDC.toFixed(2)},${s.netUSDC.toFixed(2)},"${s.status}","${s.settlementTxHash}"`
-    );
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers, ...rows].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `kosmovia_liquidaciones_${Date.now()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const handleDisburse = () => {
-    setIsDisbursing(true);
-    setTimeout(() => {
-      setIsDisbursing(false);
-      setDisbursedNotice('¡Lote liquidado y dispersado exitosamente a tu billetera Stellar!');
-      if (onDisbursePending) {
-        onDisbursePending();
-      }
-      setTimeout(() => setDisbursedNotice(null), 4000);
-    }, 900);
-  };
-
   return (
     docked ? (
       <aside className="wallet-drawer kv-docked-panel" aria-label="Mi Wallet">
@@ -130,30 +88,6 @@ export function WalletDrawer({
           </button>
         </header>
 
-        {/* Barra de pestañas Billetera vs Liquidaciones B2B */}
-        <nav className="wallet-nav-tabs" aria-label="Navegación de Billetera">
-          <button
-            type="button"
-            className={`wallet-nav-tab ${activeTab === 'wallet' ? 'active' : ''}`}
-            onClick={() => setActiveTab('wallet')}
-            aria-label="Saldo y envío"
-            title="Saldo y envío"
-          >
-            <span aria-hidden="true">💳</span> Saldo
-          </button>
-          <button
-            type="button"
-            className={`wallet-nav-tab ${activeTab === 'settlements' ? 'active' : ''}`}
-            onClick={() => setActiveTab('settlements')}
-            aria-label={pendingCount > 0 ? `Liquidaciones B2B, ${pendingCount} pendientes` : 'Liquidaciones B2B'}
-            title="Liquidaciones B2B"
-          >
-            <span aria-hidden="true">📊</span> Cobros B2B
-            {pendingCount > 0 && <span className="tab-pending-badge">{pendingCount}</span>}
-          </button>
-        </nav>
-
-        {activeTab === 'wallet' && (
           <>
             {view === 'overview' && (
               <div className="wallet-drawer-body">
@@ -220,7 +154,19 @@ export function WalletDrawer({
                             {tx.type === 'sent' ? '↗' : '↙'}
                           </div>
                           <div className="wallet-tx-info">
-                            <span className="wallet-tx-user">{tx.counterparty}</span>
+                            <span className="wallet-tx-user">
+                              {tx.counterparty}
+                              {tx.type === 'sent' && tx.unverified ? (
+                                <span
+                                  className="kv-unverified"
+                                  tabIndex={0}
+                                  title="Este pago no pasó por tu PIN. Si no lo hiciste tú, cambia tu PIN y avísanos."
+                                  aria-label="Sin PIN. Este pago no pasó por tu PIN. Si no lo hiciste tú, cambia tu PIN y avísanos."
+                                >
+                                  ⚠ Sin PIN
+                                </span>
+                              ) : null}
+                            </span>
                             <span className="wallet-tx-time">{tx.timestamp}</span>
                           </div>
                           <div className="wallet-tx-amount-col">
@@ -323,110 +269,6 @@ export function WalletDrawer({
               </div>
             )}
           </>
-        )}
-
-        {activeTab === 'settlements' && (
-          <div className="wallet-drawer-body">
-            <div className="settlement-metrics-grid">
-              <div className="settlement-stat-card">
-                <span className="settlement-stat-label">Total Recaudado</span>
-                <span className="settlement-stat-value">{totalInvoiced.toFixed(2)} USDC</span>
-                <span className="settlement-stat-sub">Bruto cobrado</span>
-              </div>
-              <div className="settlement-stat-card">
-                <span className="settlement-stat-label">Fee Pasarela (0.5%)</span>
-                <span className="settlement-stat-value fee">{totalFees.toFixed(2)} USDC</span>
-                <span className="settlement-stat-sub">Retención mínima</span>
-              </div>
-              <div className="settlement-stat-card full-width">
-                <span className="settlement-stat-label">Neto Liquidado</span>
-                <span className="settlement-stat-value highlight">{totalNet.toFixed(2)} USDC</span>
-                <span className="settlement-stat-sub">Disponible para dispersión en Bolivia</span>
-              </div>
-            </div>
-
-            {disbursedNotice && (
-              <div className="settlement-notice-box">
-                {disbursedNotice}
-              </div>
-            )}
-
-            <div className="settlement-actions-row">
-              <button
-                type="button"
-                className="btn-export-csv"
-                onClick={handleExportCSV}
-                disabled={settlements.length === 0}
-                title="Descargar archivo CSV compatible con contabilidad"
-              >
-                📥 Exportar CSV
-              </button>
-              {pendingCount > 0 && (
-                <button
-                  type="button"
-                  className="btn-disburse-batch"
-                  onClick={handleDisburse}
-                  disabled={isDisbursing}
-                >
-                  {isDisbursing ? 'Liquidando...' : `⚡ Liquidar Lote (${pendingCount})`}
-                </button>
-              )}
-            </div>
-
-            <div className="wallet-tx-section">
-              <div className="settlement-section-header">
-                <h3 className="wallet-tx-title">Historial de Cobros B2B</h3>
-                <span className="settlement-count-badge">{settlements.length} órdenes</span>
-              </div>
-
-              <div className="settlement-list">
-                {settlements.length === 0 ? (
-                  <p className="wallet-empty-text">No hay órdenes facturadas todavía. Emite una desde el chat con 💸.</p>
-                ) : (
-                  settlements.map((s) => (
-                    <div key={s.id} className="settlement-item">
-                      <div className="settlement-header-row">
-                        <span className="settlement-order-id">{s.orderId}</span>
-                        <span className={`settlement-status-badge ${s.status.toLowerCase()}`}>
-                          {s.status === 'COMPLETED' ? '✓ Liquidado' : '⏳ Pendiente'}
-                        </span>
-                      </div>
-                      <p className="settlement-concept">{s.concept}</p>
-                      <div className="settlement-meta-row">
-                        <span className="settlement-client">Cliente: {s.client}</span>
-                        <span className="settlement-time">{s.createdAt}</span>
-                      </div>
-                      <div className="settlement-amounts-row">
-                        <div className="amount-col">
-                          <span className="amount-col-label">Total</span>
-                          <span className="amount-col-val">{s.totalUSDC.toFixed(2)}</span>
-                        </div>
-                        <div className="amount-col">
-                          <span className="amount-col-label">Fee 0.5%</span>
-                          <span className="amount-col-val fee">-{s.feeUSDC.toFixed(2)}</span>
-                        </div>
-                        <div className="amount-col">
-                          <span className="amount-col-label">Neto</span>
-                          <span className="amount-col-val net">+{s.netUSDC.toFixed(2)} USDC</span>
-                        </div>
-                      </div>
-                      <div className="settlement-footer-row">
-                        <a
-                          href={`https://stellar.expert/explorer/testnet/tx/${s.settlementTxHash}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="wallet-explorer-link"
-                        >
-                          Auditoría en StellarExpert ↗
-                        </a>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-        )}
       </aside>
     ) : (
     <div className="wallet-drawer-overlay" onClick={onClose} role="dialog" aria-modal="true">
@@ -441,26 +283,6 @@ export function WalletDrawer({
           </button>
         </header>
 
-        {/* Barra de pestañas Billetera vs Liquidaciones B2B */}
-        <nav className="wallet-nav-tabs" aria-label="Navegación de Billetera">
-          <button
-            type="button"
-            className={`wallet-nav-tab ${activeTab === 'wallet' ? 'active' : ''}`}
-            onClick={() => setActiveTab('wallet')}
-          >
-            💳 Saldo & Envío
-          </button>
-          <button
-            type="button"
-            className={`wallet-nav-tab ${activeTab === 'settlements' ? 'active' : ''}`}
-            onClick={() => setActiveTab('settlements')}
-          >
-            📊 Liquidaciones B2B
-            {pendingCount > 0 && <span className="tab-pending-badge">{pendingCount}</span>}
-          </button>
-        </nav>
-
-        {activeTab === 'wallet' && (
           <>
             {view === 'overview' && (
               <div className="wallet-drawer-body">
@@ -527,7 +349,19 @@ export function WalletDrawer({
                             {tx.type === 'sent' ? '↗' : '↙'}
                           </div>
                           <div className="wallet-tx-info">
-                            <span className="wallet-tx-user">{tx.counterparty}</span>
+                            <span className="wallet-tx-user">
+                              {tx.counterparty}
+                              {tx.type === 'sent' && tx.unverified ? (
+                                <span
+                                  className="kv-unverified"
+                                  tabIndex={0}
+                                  title="Este pago no pasó por tu PIN. Si no lo hiciste tú, cambia tu PIN y avísanos."
+                                  aria-label="Sin PIN. Este pago no pasó por tu PIN. Si no lo hiciste tú, cambia tu PIN y avísanos."
+                                >
+                                  ⚠ Sin PIN
+                                </span>
+                              ) : null}
+                            </span>
                             <span className="wallet-tx-time">{tx.timestamp}</span>
                           </div>
                           <div className="wallet-tx-amount-col">
@@ -630,110 +464,6 @@ export function WalletDrawer({
               </div>
             )}
           </>
-        )}
-
-        {activeTab === 'settlements' && (
-          <div className="wallet-drawer-body">
-            <div className="settlement-metrics-grid">
-              <div className="settlement-stat-card">
-                <span className="settlement-stat-label">Total Recaudado</span>
-                <span className="settlement-stat-value">{totalInvoiced.toFixed(2)} USDC</span>
-                <span className="settlement-stat-sub">Bruto cobrado</span>
-              </div>
-              <div className="settlement-stat-card">
-                <span className="settlement-stat-label">Fee Pasarela (0.5%)</span>
-                <span className="settlement-stat-value fee">{totalFees.toFixed(2)} USDC</span>
-                <span className="settlement-stat-sub">Retención mínima</span>
-              </div>
-              <div className="settlement-stat-card full-width">
-                <span className="settlement-stat-label">Neto Liquidado</span>
-                <span className="settlement-stat-value highlight">{totalNet.toFixed(2)} USDC</span>
-                <span className="settlement-stat-sub">Disponible para dispersión en Bolivia</span>
-              </div>
-            </div>
-
-            {disbursedNotice && (
-              <div className="settlement-notice-box">
-                {disbursedNotice}
-              </div>
-            )}
-
-            <div className="settlement-actions-row">
-              <button
-                type="button"
-                className="btn-export-csv"
-                onClick={handleExportCSV}
-                disabled={settlements.length === 0}
-                title="Descargar archivo CSV compatible con contabilidad"
-              >
-                📥 Exportar CSV
-              </button>
-              {pendingCount > 0 && (
-                <button
-                  type="button"
-                  className="btn-disburse-batch"
-                  onClick={handleDisburse}
-                  disabled={isDisbursing}
-                >
-                  {isDisbursing ? 'Liquidando...' : `⚡ Liquidar Lote (${pendingCount})`}
-                </button>
-              )}
-            </div>
-
-            <div className="wallet-tx-section">
-              <div className="settlement-section-header">
-                <h3 className="wallet-tx-title">Historial de Cobros B2B</h3>
-                <span className="settlement-count-badge">{settlements.length} órdenes</span>
-              </div>
-
-              <div className="settlement-list">
-                {settlements.length === 0 ? (
-                  <p className="wallet-empty-text">No hay órdenes facturadas todavía. Emite una desde el chat con 💸.</p>
-                ) : (
-                  settlements.map((s) => (
-                    <div key={s.id} className="settlement-item">
-                      <div className="settlement-header-row">
-                        <span className="settlement-order-id">{s.orderId}</span>
-                        <span className={`settlement-status-badge ${s.status.toLowerCase()}`}>
-                          {s.status === 'COMPLETED' ? '✓ Liquidado' : '⏳ Pendiente'}
-                        </span>
-                      </div>
-                      <p className="settlement-concept">{s.concept}</p>
-                      <div className="settlement-meta-row">
-                        <span className="settlement-client">Cliente: {s.client}</span>
-                        <span className="settlement-time">{s.createdAt}</span>
-                      </div>
-                      <div className="settlement-amounts-row">
-                        <div className="amount-col">
-                          <span className="amount-col-label">Total</span>
-                          <span className="amount-col-val">{s.totalUSDC.toFixed(2)}</span>
-                        </div>
-                        <div className="amount-col">
-                          <span className="amount-col-label">Fee 0.5%</span>
-                          <span className="amount-col-val fee">-{s.feeUSDC.toFixed(2)}</span>
-                        </div>
-                        <div className="amount-col">
-                          <span className="amount-col-label">Neto</span>
-                          <span className="amount-col-val net">+{s.netUSDC.toFixed(2)} USDC</span>
-                        </div>
-                      </div>
-                      <div className="settlement-footer-row">
-                        <a
-                          href={`https://stellar.expert/explorer/testnet/tx/${s.settlementTxHash}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="wallet-explorer-link"
-                        >
-                          Auditoría en StellarExpert ↗
-                        </a>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-        )}
       </aside>
     </div>
     )

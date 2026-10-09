@@ -3,7 +3,7 @@
 import React from 'react';
 import { Community, WalletTransaction } from '../types';
 import { CommunityAvatar } from './CommunityAvatar';
-import { IconChat, IconCompass, IconPlus } from './Icons';
+import { IconChat, IconCompass, IconGrid, IconPlus } from './Icons';
 import { ThemePicker, type ThemeId } from './ThemePicker';
 
 interface CommunityBarProps {
@@ -23,6 +23,9 @@ interface CommunityBarProps {
   onOpenDms?: () => void;
   isDmsActive?: boolean;
   dmUnread?: number;
+  /** Panel Aplicaciones (mini-apps). */
+  onOpenApps?: () => void;
+  isAppsOpen?: boolean;
 }
 
 /**
@@ -44,6 +47,8 @@ export function CommunityBar({
   onOpenDms,
   isDmsActive = false,
   dmUnread = 0,
+  onOpenApps,
+  isAppsOpen = false,
 }: CommunityBarProps) {
   return (
     <aside className="community-bar" aria-label="Comunidades">
@@ -100,6 +105,19 @@ export function CommunityBar({
           </button>
         ) : null}
       </nav>
+
+      {onOpenApps ? (
+        <button
+          type="button"
+          className={`kv-rail-btn kv-rail-apps ${isAppsOpen ? 'active' : ''}`}
+          onClick={onOpenApps}
+          aria-pressed={isAppsOpen}
+          title="Aplicaciones"
+          aria-label="Aplicaciones"
+        >
+          <IconGrid size={20} />
+        </button>
+      ) : null}
 
       <div className="kv-rail-bottom">
         {onChangeTheme ? <ThemePicker theme={theme} onChange={onChangeTheme} /> : null}

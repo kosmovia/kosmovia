@@ -206,7 +206,7 @@ test("las consultas de pagos van parametrizadas", () => {
   });
   assert.ok(!ins.text.includes("drop table"));
   assert.match(ins.text, /on conflict \(op_id\) do nothing/);
-  assert.equal(ins.values.length, 9);
+  assert.equal(ins.values.length, 11);
   for (const query of [q.paymentByOpForSender(hostile, hostile), q.paymentsOfWallet(hostile, 50)]) {
     assert.ok(!query.text.includes("drop table"));
   }

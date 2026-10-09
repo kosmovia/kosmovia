@@ -12,10 +12,10 @@ import { tokenStore } from "./token-store.ts";
 
 export type ApiResult<T> =
   | { ok: true; status: number; data: T }
-  | { ok: false; status: number; error: string; code?: string };
+  | { ok: false; status: number; error: string; code?: string; extra?: Record<string, unknown> };
 
 export interface ApiInit {
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
 }
 
@@ -41,6 +41,8 @@ async function parse<T>(res: Response): Promise<ApiResult<T>> {
     status: res.status,
     error: typeof body.error === "string" ? body.error : "Algo salió mal. Intenta de nuevo.",
     code: typeof body.code === "string" ? body.code : undefined,
+    // Datos extra de algunos errores (attemptsLeft, lockedUntil, remaining…).
+    extra: body && typeof body === "object" ? (body as Record<string, unknown>) : undefined,
   };
 }
 

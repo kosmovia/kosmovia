@@ -32,7 +32,7 @@ export function QuickInvoiceModal({
     <div className="modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <header className="modal-header">
-          <h3 className="modal-title">Emitir Solicitud de Cobro (B2B)</h3>
+          <h3 className="modal-title">Crear cobro</h3>
           <button type="button" className="modal-close-btn" onClick={onClose}>
             ✕
           </button>

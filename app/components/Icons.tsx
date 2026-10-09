@@ -179,3 +179,11 @@ export const IconArrowDown = (p: IconProps) => (
     <path d="M12 5v14M19 12l-7 7-7-7" />
   </Svg>
 );
+export const IconGrid = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="4" y="4" width="6.5" height="6.5" rx="1.5" />
+    <rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5" />
+    <rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5" />
+    <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5" />
+  </Svg>
+);

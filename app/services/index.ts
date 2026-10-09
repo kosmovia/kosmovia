@@ -5,7 +5,20 @@ import { IDmService, MockDmService } from './dmService';
 import { ISettlementService, MockSettlementService } from './settlementService';
 import { IWalletService, MockWalletService } from './walletService';
 import { IProfileService, MockProfileService } from './profileService';
-import { ApiAuthService, ApiChatService, ApiCommunityService, ApiDmService, ApiProfileService, ApiWalletService } from './api';
+import { ISecurityService } from './securityService';
+import { MockSecurityService } from './mockSecurityService';
+import { IVaquitaService } from './vaquitaService';
+import { MockVaquitaService } from './mockVaquitaService';
+import {
+  ApiAuthService,
+  ApiChatService,
+  ApiCommunityService,
+  ApiDmService,
+  ApiProfileService,
+  ApiSecurityService,
+  ApiVaquitaService,
+  ApiWalletService,
+} from './api';
 
 /**
  * Service Gateway (Hexagonal Architecture)
@@ -25,6 +38,8 @@ export const dmService: IDmService = api ? new ApiDmService() : new MockDmServic
 export const walletService: IWalletService = api ? new ApiWalletService() : new MockWalletService();
 export const settlementService: ISettlementService = new MockSettlementService();
 export const profileService: IProfileService = api ? new ApiProfileService() : new MockProfileService();
+export const securityService: ISecurityService = api ? new ApiSecurityService() : new MockSecurityService();
+export const vaquitaService: IVaquitaService = api ? new ApiVaquitaService() : new MockVaquitaService();
 
 export * from './authService';
 export * from './chatService';
@@ -33,5 +48,7 @@ export * from './dmService';
 export * from './settlementService';
 export * from './walletService';
 export * from './profileService';
+export * from './securityService';
+export * from './vaquitaService';
 export * from './storage';
 export * from './mockData';

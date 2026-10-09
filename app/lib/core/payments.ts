@@ -220,6 +220,24 @@ export function newPaymentRef(random: (bytes: Uint8Array) => Uint8Array = (b) =>
   return `kv-${Array.from(bytes, (b) => BASE32[b & 31]).join("")}`;
 }
 
+/** Si al permiso del PIN le queda menos que esto, no se firma: se pide confirmar de nuevo. */
+export const MIN_APPROVAL_LEFT_MS = 30 * 1000;
+
+/**
+ * Vida de la transacción cuando la paga un permiso del PIN: la normal, pero nunca
+ * más de lo que le queda al permiso. Así la red no puede aceptar el pago después de
+ * que el permiso venció. Con menos de MIN_APPROVAL_LEFT_MS no se firma.
+ */
+export function approvalTimeoutSec(
+  approvalExpiresAtMs: number,
+  nowMs: number,
+  maxSec = SEND_TIMEOUT_SEC,
+): { ok: true; timeoutSec: number } | { ok: false } {
+  const left = approvalExpiresAtMs - nowMs;
+  if (!Number.isFinite(left) || left < MIN_APPROVAL_LEFT_MS) return { ok: false };
+  return { ok: true, timeoutSec: Math.min(maxSec, Math.floor(left / 1000)) };
+}
+
 /** The options of `sendPayment`: the memo that finds this payment again and its lifetime. */
 export function paymentOptions(memo: string, timeoutSec = SEND_TIMEOUT_SEC) {
   return { memo: { type: "text" as const, value: memo }, timeoutSec };

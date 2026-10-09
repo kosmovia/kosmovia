@@ -23,6 +23,15 @@ export const API_LIMITS = {
   paymentRead: { max: 60, windowMs: MINUTE },
   /** Cambiar roles y borrar canales o comunidades: poco frecuente. */
   communityManage: { max: 60, windowMs: HOUR },
+  /** Cada pedido que verifica o cambia el PIN. Es un freno extra: el bloqueo por intentos fallidos vive en la base. */
+  pinAttempt: { max: 10, windowMs: MINUTE },
+  securityRead: { max: 60, windowMs: MINUTE },
+  /** Lista y detalle de vaquitas; el detalle se vuelve a pedir al ver la pantalla. */
+  vaquitaRead: { max: 120, windowMs: MINUTE },
+  vaquitaCreate: { max: 10, windowMs: HOUR },
+  /** Cada pedido consulta la base y el pago; quien aporta lo hace pocas veces. */
+  vaquitaContribute: { max: 30, windowMs: 10 * MINUTE },
+  vaquitaManage: { max: 30, windowMs: HOUR },
 } as const;
 
 export type LimitKind = keyof typeof API_LIMITS;
@@ -42,6 +51,12 @@ const MESSAGES: Record<LimitKind, string> = {
   paymentRecord: "Registraste muchos pagos seguidos. Espera un momento e intenta de nuevo.",
   paymentRead: "Demasiadas consultas. Espera un momento.",
   communityManage: "Hiciste muchos cambios seguidos. Espera un momento e intenta de nuevo.",
+  pinAttempt: "Demasiados intentos con el PIN. Espera un momento e intenta de nuevo.",
+  securityRead: "Demasiadas consultas. Espera un momento.",
+  vaquitaRead: "Demasiadas consultas. Espera un momento.",
+  vaquitaCreate: "Creaste muchas vaquitas seguidas. Espera un momento e intenta de nuevo.",
+  vaquitaContribute: "Intentaste vincular muchos aportes seguidos. Espera un momento e intenta de nuevo.",
+  vaquitaManage: "Hiciste muchos cambios seguidos. Espera un momento e intenta de nuevo.",
 };
 
 /** A 429 Response when `profileId` is over the limit for `kind`, else null (and the hit is recorded). */
