@@ -4,6 +4,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { securityService } from '../services';
 import { SecurityError, type PayAsset, type PaymentApproval } from '../services/securityService';
 import { PIN_LENGTH, PinPad } from './PinPad';
+import { createApprovalSlot, type Slot } from './approvalSlot';
 import { fmtAmount, fmtCountdown, fmtDateTime, pinErrorText } from './pinErrors';
 
 export interface ApprovalRequest {
@@ -28,12 +29,7 @@ export function usePaymentApproval(): RequestApproval {
 
 type Step = 'loading' | 'create' | 'confirm' | 'forgot' | 'reset';
 
-interface Pending {
-  /** Cada solicitud tiene su propio id: solo ella puede resolver su promesa. */
-  id: number;
-  req: ApprovalRequest;
-  resolve: (a: PaymentApproval | null) => void;
-}
+type Pending = Slot<ApprovalRequest, PaymentApproval>;
 
 const SETUP_LATER_KEY = 'kosmovia_pin_setup_later';
 
@@ -48,31 +44,27 @@ function setupPostponed(): boolean {
 
 export function PaymentGuardProvider({ children }: { children: React.ReactNode }) {
   const [pending, setPending] = useState<Pending | null>(null);
-  const pendingRef = useRef<Pending | null>(null);
-  const seq = useRef(0);
+  // Cada solicitud tiene su propio id: solo ella puede resolver su promesa (ver approvalSlot.ts).
+  const slot = useRef(createApprovalSlot<ApprovalRequest, PaymentApproval>()).current;
   const [setupOpen, setSetupOpen] = useState(false);
 
   const request = useCallback<RequestApproval>((req) => {
     return new Promise((resolve) => {
       // Si ya había una petición abierta, se cancela: solo se muestra una a la vez.
-      pendingRef.current?.resolve(null);
-      const next: Pending = { id: ++seq.current, req, resolve };
-      pendingRef.current = next;
-      setPending(next);
+      setPending(slot.open(req, resolve));
     });
-  }, []);
+  }, [slot]);
 
   /** Resuelve SOLO la solicitud `id`; si ya fue cancelada o reemplazada, no hace nada. */
-  const finish = useCallback((id: number, approval: PaymentApproval | null) => {
-    const p = pendingRef.current;
-    if (!p || p.id !== id) return;
-    pendingRef.current = null;
-    setPending(null);
-    p.resolve(approval);
-  }, []);
+  const finish = useCallback(
+    (id: number, approval: PaymentApproval | null) => {
+      if (slot.finish(id, approval)) setPending(null);
+    },
+    [slot],
+  );
 
   /** ¿Sigue siendo `id` la solicitud activa? Una respuesta tardía de otra no debe usarse. */
-  const isActive = useCallback((id: number) => pendingRef.current?.id === id, []);
+  const isActive = slot.isActive;
 
   // Al abrir la plataforma con sesión: si todavía no tiene PIN, se le ofrece crearlo (una vez).
   useEffect(() => {
@@ -171,7 +163,7 @@ function SetupPinDialog({ onClose }: { onClose: (postpone: boolean) => void }) {
       await securityService.setPin(pin);
       if (alive.current) onClose(false);
     } catch (err) {
-      if (!alive.current || !isActive(id)) return;
+      if (!alive.current) return;
       setBusy(false);
       if (err instanceof SecurityError && err.code === 'pin_exists') {
         onClose(false);
@@ -449,7 +441,7 @@ function ApprovalDialog({
             : 'Listo, tu PIN nuevo quedó activo.',
       );
     } catch (err) {
-      if (!alive.current) return;
+      if (!alive.current || !isActive(id)) return;
       setBusy(false);
       if (err instanceof SecurityError && err.code === 'pin_exists') {
         goConfirm();

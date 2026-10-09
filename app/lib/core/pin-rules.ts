@@ -1,4 +1,4 @@
-import { fromStroops, toStroops } from "./payments.ts";
+import { approvalTimeoutSec, checkAmount, fromStroops, toStroops } from "./payments.ts";
 
 /**
  * Reglas puras del PIN de pagos: formato, PINs triviales, bloqueo progresivo,
@@ -208,6 +208,35 @@ export function approvalMatches(approval: ApprovalFacts, payment: PaymentFacts, 
   if (payment.paidAt < approval.createdAt - APPROVAL_GRACE_MS) return false;
   if (approval.pinVersion !== pin.version && !(pin.setAt !== null && payment.paidAt < pin.setAt)) return false;
   return true;
+}
+
+/**
+ * Antes de firmar: ¿el permiso sirve para ESTE pago? Mismo destino (el que se
+ * aprobó con el PIN, ya resuelto a una G…), mismo activo y monto, y con tiempo
+ * de sobra (si le quedan menos de 30 s no se firma). Si sirve, `timeoutSec` es la
+ * vida que debe tener la transacción: nunca más que lo que le queda al permiso.
+ */
+export function checkApprovalForPayment(
+  approval: { toWallet: string; asset: string; amount: number | string; expiresAt: string },
+  payment: { destination: string; asset: "USDC" | "XLM"; amount: string },
+  now: number,
+): { ok: true; timeoutSec: number } | { ok: false; code: "destination" | "amount" | "expired"; error: string } {
+  if (payment.destination !== approval.toWallet) {
+    return {
+      ok: false,
+      code: "destination",
+      error: "El destino no coincide con el que confirmaste con tu PIN. No se envió nada; confírmalo de nuevo.",
+    };
+  }
+  const approved = checkAmount(String(approval.amount), payment.asset);
+  if (!approved.ok || approval.asset !== payment.asset || approved.amount !== payment.amount) {
+    return { ok: false, code: "amount", error: "La confirmación del PIN no coincide con este pago. Confírmalo de nuevo." };
+  }
+  const life = approvalTimeoutSec(Date.parse(approval.expiresAt), now);
+  if (!life.ok) {
+    return { ok: false, code: "expired", error: "Se venció (o está por vencer) la confirmación del PIN. Confírmala de nuevo." };
+  }
+  return { ok: true, timeoutSec: life.timeoutSec };
 }
 
 /** ¿La sesión se emitió hace poco como para olvidar el PIN? `iatMs` es el `iat` del JWT en ms. */

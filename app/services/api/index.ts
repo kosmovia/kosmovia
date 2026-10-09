@@ -17,7 +17,6 @@ import { renderAvatar } from '../../lib/core/avatar/generator.ts';
 import { fetchBalances, shortAddress } from '../../lib/core/pollar-horizon.ts';
 import {
   ADDRESS_RE,
-  approvalTimeoutSec,
   attemptDeadlineMs,
   checkAmount,
   classifyWithPhase,
@@ -28,6 +27,7 @@ import {
   rejectionReason,
 } from '../../lib/core/payments.ts';
 import { forgetPayment, rememberPayment } from '../../lib/core/payment-memory.ts';
+import { checkApprovalForPayment } from '../../lib/core/pin-rules.ts';
 
 export { ApiSecurityService } from './security';
 export { ApiVaquitaService } from './vaquita';
@@ -605,20 +605,14 @@ export class ApiWalletService implements IWalletService {
       destination = profile.wallet;
     } else throw new ApiError('Por ahora solo se puede pagar a un @usuario o a una dirección G….');
     if (destination === me) throw new ApiError('No puedes enviarte a ti mismo.');
-    if (destination !== approval.toWallet) {
-      throw new ApiError('El destino no coincide con el que confirmaste con tu PIN. No se envió nada; confírmalo de nuevo.');
-    }
 
     const checked = checkAmount(String(input.amount), input.asset);
     if (!checked.ok) throw new ApiError(checked.error);
-    const approved = checkAmount(String(approval.amount), approval.asset);
-    if (!approved.ok || approval.asset !== input.asset || approved.amount !== checked.amount) {
-      throw new ApiError('La confirmación del PIN no coincide con este pago. Confírmalo de nuevo.');
-    }
-
-    // La transacción no puede vivir más que el permiso; con menos de 30 s no se firma.
-    const life = approvalTimeoutSec(Date.parse(approval.expiresAt), Date.now());
-    if (!life.ok) throw new ApiError('Se venció (o está por vencer) la confirmación del PIN. Confírmala de nuevo.');
+    // Destino, activo y monto iguales a lo aprobado, y tiempo de sobra: la transacción no puede
+    // vivir más que el permiso, y con menos de 30 s no se firma.
+    const fit = checkApprovalForPayment(approval, { destination, asset: input.asset, amount: checked.amount }, Date.now());
+    if (!fit.ok) throw new ApiError(fit.error);
+    const life = fit;
 
     const memo = newPaymentRef();
     const startedAt = new Date().toISOString();
