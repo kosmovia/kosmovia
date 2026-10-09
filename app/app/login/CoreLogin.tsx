@@ -17,7 +17,7 @@ export function CoreLogin() {
     <div className="login-page-container">
       <div className="login-box">
         <div className="login-header">
-          <span className="login-brand-icon"><img src="/brand/kosmovia-logo.png" alt="" width={56} height={56} className="kv-brand-img" /></span>
+          <span className="login-brand-icon"><img src="/brand/kosmovia-icon.svg" alt="" width={56} height={56} className="kv-brand-img" /></span>
           <h1 className="login-title">Ingresar a Kosmovia</h1>
           <p className="login-subtitle">Comunidades, canales y chat en Stellar</p>
         </div>

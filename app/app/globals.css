@@ -1373,9 +1373,9 @@ html, body {
 }
 
 .landing-brand-logo {
-  font-size: 22px;
-  color: var(--accent);
-  text-shadow: 0 0 16px var(--accent-glow);
+  display: block;
+  width: 30px;
+  height: 30px;
 }
 
 .landing-nav-actions {

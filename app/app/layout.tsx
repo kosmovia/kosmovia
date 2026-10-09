@@ -3,6 +3,7 @@ import './globals.css';
 import { CoreProviders } from '../components/CoreProviders';
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://kosmovia.onrender.com'),
   title: 'Kosmovia · Comunidades y Chat',
   description: 'Plataforma de comunidades descentralizada para Stellar. Explora, conecta y pertenece.',
 };
@@ -11,7 +12,7 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
-  themeColor: '#07060f',
+  themeColor: '#05080C',
 };
 
 export default function RootLayout({

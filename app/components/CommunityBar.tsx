@@ -56,7 +56,7 @@ export function CommunityBar({
       >
         {/* Logo provisorio (segunda ronda, variación 2). */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/brand/kosmovia-logo.png" alt="" width={48} height={48} className="kv-brand-img" />
+        <img src="/brand/kosmovia-icon.svg" alt="" width={48} height={48} className="kv-brand-img" />
       </button>
 
       <button

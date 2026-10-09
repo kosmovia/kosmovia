@@ -8,7 +8,7 @@ export default function LandingPage() {
     <div className="landing-wrapper">
       <header className="landing-nav">
         <Link href="/" className="landing-brand">
-          <span className="landing-brand-logo">🌌</span>
+          <img src="/brand/kosmovia-mark.svg" alt="" width={30} height={30} className="landing-brand-logo" />
           <span>Kosmovia</span>
         </Link>
         <div className="landing-nav-actions">
