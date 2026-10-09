@@ -1,6 +1,6 @@
 # Kosmovia · logo
 
-El símbolo es una **K con una órbita**: la comunidad (la K) y el movimiento de pagos (la órbita y el punto). Plano, sin brillo ni degradados.
+El símbolo es una **K con una órbita y dos cuerpos**: la comunidad (la K) y lo que se mueve a su alrededor, pagos y personas (un planeta hueco arriba y una luna llena abajo). La órbita se corta alrededor de cada cuerpo, para que se lea que pasan por ella. Plano, sin brillo ni degradados.
 
 ## Colores
 

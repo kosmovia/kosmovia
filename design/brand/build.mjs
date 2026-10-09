@@ -23,9 +23,28 @@ const arc = (t0, t1, n = 72) => {
   return d;
 };
 
+// Variante del símbolo: cuerpos sobre la órbita (t en grados, radio, estilo) y aire
+// (gap) que separa los cuerpos de la órbita. Estilos: solid | hollow | saturn.
+const BASE = { bodies: [{ t: -14, r: 66, style: 'hollow' }, { t: 200, r: 32 }], gap: 18, orbit: 1 };
+const V = { ...BASE };
+
+function body({ t, r, style = 'solid' }, fill) {
+  const [x, y] = pt(t), c = `cx="${x.toFixed(1)}" cy="${y.toFixed(1)}"`;
+  if (style === 'hollow') return `<circle ${c} r="${r - 11}" fill="none" stroke="${fill}" stroke-width="22"/>`;
+  if (style === 'saturn')
+    return `<circle ${c} r="${r * 0.72}" fill="${fill}"/><ellipse ${c} rx="${r * 1.45}" ry="${r * 0.42}" transform="rotate(24 ${x.toFixed(1)} ${y.toFixed(1)})" fill="none" stroke="${fill}" stroke-width="12"/>`;
+  return `<circle ${c} r="${r}" fill="${fill}"/>`;
+}
+
 // sw: grosor de la órbita (más grueso para íconos chicos).
-function mark(fill = C.cyan, sw = 30) {
-  const dot = pt(-14);
+function mark(fill = C.cyan, sw0 = 30) {
+  const sw = sw0 * V.orbit;
+  const maskId = 'm' + Math.random().toString(36).slice(2, 8);
+  const mask = V.gap
+    ? `<mask id="${maskId}" maskUnits="userSpaceOnUse" x="-2000" y="-2000" width="5000" height="5000"><rect x="-2000" y="-2000" width="5000" height="5000" fill="#fff"/>${V.bodies
+        .map((bd) => { const [x, y] = pt(bd.t); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${bd.r + V.gap}" fill="#000"/>`; })
+        .join('')}</mask>`
+    : '';
   // El brazo superior de la K se funde con la órbita en t=-30°: los bordes llegan tangentes.
   const T0 = -30, r = (T0 * Math.PI) / 180;
   const [tx, ty] = pt(T0);
@@ -34,7 +53,7 @@ function mark(fill = C.cyan, sw = 30) {
   const outP = [tx - (nrm[0] * sw) / 2, ty - (nrm[1] * sw) / 2], inP = [tx + (nrm[0] * sw) / 2, ty + (nrm[1] * sw) / 2];
   const f = (p) => p.map((v) => v.toFixed(1)).join(' ');
   const outC = [outP[0] - 90 * u[0], outP[1] - 90 * u[1]], inC = [inP[0] - 50 * u[0], inP[1] - 50 * u[1]];
-  return `<g fill="none" stroke="${fill}" stroke-width="${sw}">
+  return `${mask}<g fill="none" stroke="${fill}" stroke-width="${sw}"${V.gap ? ` mask="url(#${maskId})"` : ''}>
     <path d="${arc(140, 232)}" stroke-linecap="round"/>
     <path d="${arc(T0 - 0.3, 83)}" stroke-linecap="butt"/>
   </g>
@@ -43,8 +62,36 @@ function mark(fill = C.cyan, sw = 30) {
     <rect x="412" y="830" width="40" height="40"/>
     <path d="M504 568 L690 398 Q${f(outC)} ${f(outP)} L${f(inP)} Q${f(inC)} 784 394 L504 662 Z"/>
     <path d="M546 660 L604 606 Q620 592 636 608 L868 846 Q884 866 860 882 L784 882 Q770 882 760 870 Z"/>
-    <circle cx="${dot[0].toFixed(1)}" cy="${dot[1].toFixed(1)}" r="46"/>
-  </g>`;
+  </g>
+  ${V.bodies.map((bd) => body(bd, fill)).join('')}`;
+}
+
+// node build.mjs variantes → solo arma la hoja de comparación de variantes.
+if (process.argv[2] === 'variantes') {
+  const variants = [
+    BASE,
+    { bodies: [{ t: -14, r: 66 }, { t: 200, r: 32 }, { t: 42, r: 22 }], gap: 18, orbit: 1 },
+    { bodies: [{ t: -14, r: 74, style: 'saturn' }, { t: 200, r: 32 }], gap: 18, orbit: 1 },
+    { bodies: [{ t: -14, r: 66, style: 'hollow' }, { t: 200, r: 32 }], gap: 18, orbit: 1 },
+    { bodies: [{ t: -14, r: 74 }, { t: 200, r: 38 }], gap: 22, orbit: 1.45 },
+  ];
+  const S = 300, tiles = [];
+  for (const [i, v] of variants.entries()) {
+    Object.assign(V, v);
+    const big = squareSvg(await bbox(30), { pad: 0.14, bg: C.bg, radius: 0.22 });
+    const small = squareSvg(await bbox(44), { pad: 0.16, bg: C.bg, radius: 0.22, sw: 44 });
+    const left = 30 + i * (S + 30);
+    tiles.push({ input: await sharp(Buffer.from(big), { density: 200 }).resize(S, S).png().toBuffer(), left, top: 30 });
+    let x = left;
+    for (const sz of [64, 32, 16]) {
+      tiles.push({ input: await sharp(Buffer.from(small), { density: 200 }).resize(sz, sz).png().toBuffer(), left: x, top: S + 60 });
+      x += sz + 24;
+    }
+  }
+  await sharp({ create: { width: 30 + variants.length * (S + 30), height: S + 160, channels: 4, background: '#1b2633' } })
+    .composite(tiles).png().toFile('_variantes.png');
+  console.log('variantes ok');
+  process.exit(0);
 }
 
 // Caja del símbolo medida con sharp (para centrarlo de verdad).
