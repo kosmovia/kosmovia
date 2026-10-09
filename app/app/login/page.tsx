@@ -56,6 +56,7 @@ function DemoLogin() {
           >
             {isLoading ? 'Ingresando...' : 'Ingresar a la Plataforma →'}
           </button>
+          <p className="legal-consent">Al continuar aceptas los <Link href="/terminos">Términos</Link> y la <Link href="/privacidad">Política de Privacidad</Link>.</p>
         </form>
 
         <Link href="/" className="login-back-link">

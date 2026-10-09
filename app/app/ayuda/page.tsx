@@ -1,0 +1,27 @@
+import type { Metadata } from 'next';
+import Link from 'next/link';
+import LegalLayout from '../../components/LegalLayout';
+
+export const metadata: Metadata = {
+  title: 'Ayuda · Kosmovia',
+  description: 'Guía de la beta: cómo entrar, usar tu wallet y PIN, enviar USDC de prueba, crear comunidades y participar en Vaquita.',
+};
+
+export default function AyudaPage() {
+  return <LegalLayout title="Guía de uso y ayuda"
+    intro="Kosmovia está en beta y usa Stellar testnet. Todos los saldos y pagos son de prueba, sin valor monetario. Sigue estos pasos para empezar."
+    sections={[
+      { id: 'entrar', title: '1. Entra a Kosmovia', content: <ol><li>Abre <Link href="/login">Iniciar sesión</Link>.</li><li>Elige Google, email o conectar Freighter y completa los pasos de acceso.</li><li>Con Google o email, Pollar crea y custodia tu wallet. Con Freighter, conectas tu wallet propia: revisa que use testnet y confirma lo que te solicite.</li></ol> },
+      { id: 'wallet', title: '2. Revisa tu wallet y saldo de prueba', content: <><p>Abre tu wallet para ver tu dirección pública, saldo de USDC de prueba y movimientos. Ese saldo sirve para probar funciones; no se puede tratar como dinero real.</p><p>Si no tienes saldo de prueba, no envíes fondos reales para intentar recargarlo. Consulta al equipo en el repositorio indicado al final.</p></> },
+      { id: 'pin', title: '3. Crea tu PIN de pagos', content: <ol><li>Abre la configuración de seguridad de tu cuenta.</li><li>Crea y confirma un PIN de seis dígitos que no compartas con nadie.</li><li>Úsalo para confirmar cada pago. Se guarda como hash y sirve como confirmación dentro de Kosmovia; no es una barrera criptográfica ni sustituye la seguridad de tu wallet.</li></ol> },
+      { id: 'enviar', title: '4. Envía USDC a un @usuario', content: <ol><li>Abre tu wallet y elige enviar.</li><li>Busca el @usuario y revisa que sea la persona correcta.</li><li>Ingresa el monto de USDC de prueba y revisa el resumen.</li><li>Confirma con tu PIN y, si usas Freighter, completa la confirmación que solicite tu wallet.</li><li>Consulta el comprobante. Una operación confirmada en Stellar no se puede deshacer.</li></ol> },
+      { id: 'recibir', title: '5. Recibe con un enlace o QR', content: <ol><li>Abre la opción de recibir en tu wallet.</li><li>Copia tu enlace de recepción o muestra el código QR.</li><li>Compártelo con quien hará el envío y revisa tus movimientos cuando se confirme. Tu dirección de wallet es pública; tu PIN no se comparte.</li></ol> },
+      { id: 'comunidad', title: '6. Crea una comunidad, canales y categorías', content: <ol><li>Elige crear una comunidad e indica su nombre y descripción.</li><li>Dentro de la comunidad, crea canales para organizar las conversaciones.</li><li>Crea categorías y agrupa los canales por tema.</li><li>Comparte la invitación y explica las reglas a quienes se unan.</li></ol> },
+      { id: 'mensajes', title: '7. Envía mensajes privados', content: <p>Abre el perfil de la persona y elige enviar un mensaje privado. Continúa la conversación desde tus mensajes directos. No compartas tu PIN ni claves, aunque alguien diga ser parte del equipo.</p> },
+      { id: 'cobros', title: '8. Usa #cobros y #verificacion-pagos', content: <ol><li>En tu comunidad, usa el canal <strong>#cobros</strong> para publicar un cobro con su concepto y monto de prueba.</li><li>Antes de pagar, revisa quién cobra, el monto y el destinatario; confirma con tu PIN.</li><li>Consulta los comprobantes en <strong>#verificacion-pagos</strong> y revisa el registro de Stellar para verificar la operación. El comprobante corresponde a testnet, sin dinero real.</li></ol> },
+      { id: 'vaquita', title: '9. Aplicaciones y Vaquita', content: <ol><li>Abre <strong>Aplicaciones</strong> y selecciona <strong>Vaquita</strong>, la mini-app de aportes colectivos.</li><li>Para crear una vaquita, completa su nombre, objetivo y los datos solicitados; revisa y confirma.</li><li>Para aportar, abre una vaquita, elige el monto de prueba y confirma el pago con tu PIN.</li><li>Comparte el enlace de la vaquita para invitar a otras personas y consulta los aportes registrados. Vaquita nunca ve tu PIN ni las claves de tu wallet.</li></ol> },
+      { id: 'recuperar-pin', title: 'Si olvidas tu PIN', content: <ol><li>Abre la configuración de seguridad e inicia el restablecimiento del PIN.</li><li>El restablecimiento se activa a las 24 horas; no cambia el PIN de inmediato.</li><li>Durante la espera, puedes cancelar la solicitud con tu PIN actual si lo recuerdas.</li><li>Cuando se active, sigue las instrucciones para crear un nuevo PIN. Si no solicitaste el cambio, revisa el acceso a tu cuenta y contacta al equipo.</li></ol> },
+      { id: 'preguntas', title: 'Preguntas frecuentes', content: <><h3>¿Es dinero real?</h3><p>No. La beta usa testnet y el USDC de prueba no tiene valor monetario.</p><h3>¿Cuánto cuesta?</h3><p>Es gratis durante la beta, sin comisiones.</p><h3>¿Quién guarda mi wallet?</h3><p>Con Google o email, Pollar crea y custodia tu wallet. Con Freighter, tú controlas tu wallet propia. Kosmovia no guarda tus claves privadas ni frases semilla.</p></> },
+      { id: 'contacto', title: '¿Necesitas más ayuda?', content: <p>Contacta a kosmovia (por ahora en nuestro repositorio de GitHub: <a href="https://github.com/kosmovia/kosmovia">github.com/kosmovia/kosmovia</a>). Describe el problema sin publicar tu PIN, claves, mensajes privados ni otros datos sensibles.</p> },
+    ]} />;
+}

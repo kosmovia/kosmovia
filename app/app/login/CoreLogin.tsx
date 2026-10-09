@@ -51,6 +51,7 @@ function Buttons() {
       <button type="button" className="btn-login-submit" onClick={loginFreighter} disabled={busy}>
         Conectar Freighter
       </button>
+      <p className="legal-consent">Al continuar aceptas los <Link href="/terminos">Términos</Link> y la <Link href="/privacidad">Política de Privacidad</Link>.</p>
       <span className="form-hint" role="status">
         {session.step === 'loading' && !isLoading
           ? 'Abriendo tu sesión… (con Freighter, firma el mensaje)'

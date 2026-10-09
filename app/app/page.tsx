@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import SiteFooter from '../components/SiteFooter';
 
 export default function LandingPage() {
   return (
@@ -72,11 +73,7 @@ export default function LandingPage() {
         </article>
       </section>
 
-      <footer className="landing-footer">
-        <p>
-          Kosmovia © 2026 · Construido en el programa Stellar Elite Bolivia (TechRebel) · Testnet
-        </p>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }
