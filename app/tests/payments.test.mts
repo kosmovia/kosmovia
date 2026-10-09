@@ -11,6 +11,7 @@ import {
   classifySubmit,
   classifyWithPhase,
   cleanNote,
+  fetchTxOperations,
   fromStroops,
   historyReaches,
   memoCandidates,
@@ -95,9 +96,32 @@ test("pickPayment acepta un pago de USDC o XLM de tu wallet", () => {
     asset: "USDC",
     amount: "5.0000000",
     createdAt: "2026-10-04T11:59:00.000Z",
+    memo: null,
   });
   const xlm = pickPayment([op({ asset_type: "native", asset_code: undefined, asset_issuer: undefined })], ME, NOW);
   assert.ok(xlm.ok && xlm.payment.asset === "XLM");
+});
+
+test("pickPayment lee el memo de texto de la transacción (la referencia que ata el permiso del PIN)", () => {
+  const memo = (transaction: unknown) => {
+    const r = pickPayment([op({ transaction })], ME, NOW);
+    return r.ok ? r.payment.memo : "no-ok";
+  };
+  assert.equal(memo({ memo_type: "text", memo: "kv-abcdefghijklmnop" }), "kv-abcdefghijklmnop");
+  assert.equal(memo({ memo_type: "text", memo: " kv-abcdefghijklmnop " }), "kv-abcdefghijklmnop");
+  assert.equal(memo({ memo_type: "id", memo: "123" }), null, "un memo que no es de texto no es una referencia");
+  assert.equal(memo({ memo_type: "none" }), null);
+  assert.equal(memo(undefined), null);
+});
+
+test("fetchTxOperations pide las operaciones con su transacción (join=transactions) para leer el memo", async () => {
+  let url = "";
+  const fake = (async (input: string) => {
+    url = String(input);
+    return new Response(JSON.stringify({ _embedded: { records: [] } }), { status: 200 });
+  }) as unknown as typeof fetch;
+  await fetchTxOperations(HASH, fake);
+  assert.match(url, /\/transactions\/[0-9a-f]{64}\/operations\?limit=20&join=transactions$/);
 });
 
 test("pickPayment rechaza lo que no se puede reclamar", () => {

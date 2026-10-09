@@ -38,13 +38,14 @@ import {
   lockDurationMs,
   nextFailureState,
   parseDailyLimit,
+  reservationCounts,
   pepperKey,
   sessionIsFresh,
   stateAfterSuccess,
   validatePin,
   verifyPinHash,
   type ApprovalFacts,
-  type CurrentPin,
+  type PaymentFacts,
   type FailureState,
 } from "../lib/core/pin.ts";
 import { SESSION_COOKIE, signSessionCookie } from "../lib/core/session-cookie.ts";
@@ -208,6 +209,8 @@ const ALICE = Keypair.random().publicKey();
 const BOB = Keypair.random().publicKey();
 const CAROL = Keypair.random().publicKey();
 const aliceId = profileIdFromWallet(ALICE);
+const MEMO_A = "kv-aaaaaaaaaaaaaaaa";
+const MEMO_B = "kv-bbbbbbbbbbbbbbbb";
 const approvalOk: ApprovalFacts = {
   profileId: aliceId,
   toWallet: BOB,
@@ -216,12 +219,11 @@ const approvalOk: ApprovalFacts = {
   createdAt: T0,
   expiresAt: T0 + APPROVAL_TTL_MS,
   usedAt: null,
-  pinVersion: 3,
+  memo: MEMO_A,
+  revokedAt: null,
 };
-/** El PIN vigente: versión 3, puesto una hora antes del permiso. */
-const PIN_NOW = { version: 3, setAt: T0 - 3_600_000 };
-const matches = (a: ApprovalFacts, p: typeof paymentOk, pin: CurrentPin = PIN_NOW) => approvalMatches(a, p, pin);
-const paymentOk = { profileId: aliceId, toWallet: BOB, asset: "USDC", amount: "5", paidAt: T0 + 20_000 };
+const matches = (a: ApprovalFacts, p: PaymentFacts) => approvalMatches(a, p);
+const paymentOk: PaymentFacts = { profileId: aliceId, toWallet: BOB, asset: "USDC", amount: "5", memo: MEMO_A, paidAt: T0 + 20_000 };
 
 test("approvalMatches: mismo perfil, destino, activo, monto exacto, sin usar y a tiempo", () => {
   assert.equal(matches(approvalOk, paymentOk), true);
@@ -246,9 +248,9 @@ test("approvalMatches: usado, vencido o anterior al permiso -> unverified", () =
   assert.equal(matches(approvalOk, { ...paymentOk, paidAt: expiry + APPROVAL_GRACE_MS }), true, "justo en la holgura");
   assert.equal(matches(approvalOk, { ...paymentOk, paidAt: expiry + APPROVAL_GRACE_MS + 1 }), false);
   assert.equal(matches(approvalOk, { ...paymentOk, paidAt: expiry + 10 * 60_000 }), false);
-  // Un pago anterior al permiso no lo puede usar.
-  assert.equal(matches(approvalOk, { ...paymentOk, paidAt: T0 - APPROVAL_GRACE_MS }), true);
-  assert.equal(matches(approvalOk, { ...paymentOk, paidAt: T0 - APPROVAL_GRACE_MS - 1 }), false);
+  // No hay tolerancia hacia atrás: lo que ata el permiso al pago es el memo que el servidor generó
+  // al aprobar, no la cercanía de las fechas (un pago anterior al PIN no puede llevar ese memo).
+  assert.equal(matches(approvalOk, { ...paymentOk, paidAt: T0 - 30_000 }), true, "con su memo, la fecha de creación no es condición");
 });
 
 test("sessionIsFresh: la sesión tiene que ser de hace menos de 10 minutos", () => {
@@ -260,21 +262,49 @@ test("sessionIsFresh: la sesión tiene que ser de hace menos de 10 minutos", () 
   assert.equal(sessionIsFresh(NaN, T0), false);
 });
 
-test("approvalMatches: la versión del PIN decide (vigente, o el pago cerró antes del cambio)", () => {
-  // Permiso de la versión vigente: cuenta.
+test("approvalMatches (#6): el memo del pago tiene que ser el que generó el servidor al aprobar", () => {
   assert.equal(matches(approvalOk, paymentOk), true);
-  // Permiso de un PIN anterior y el pago cerró DESPUÉS del cambio: no cuenta (unverified).
-  const changedBefore = { version: 4, setAt: T0 - 10_000 };
-  assert.equal(matches(approvalOk, paymentOk, changedBefore), false);
-  // Permiso de un PIN anterior pero el pago cerró ANTES del cambio: el permiso valía entonces, cuenta.
-  const changedAfter = { version: 4, setAt: T0 + 60_000 };
-  assert.equal(matches(approvalOk, paymentOk, changedAfter), true);
-  // Justo en el instante del cambio ya es "después".
-  assert.equal(matches(approvalOk, paymentOk, { version: 4, setAt: paymentOk.paidAt }), false);
-  // Sin saber cuándo cambió: lo más seguro es no contarlo.
-  assert.equal(matches(approvalOk, paymentOk, { version: 4, setAt: null }), false);
-  // La misma versión siempre cuenta, aunque el PIN se haya puesto antes.
-  assert.equal(matches({ ...approvalOk, pinVersion: 9 }, paymentOk, { version: 9, setAt: T0 - 1 }), true);
+  // Un pago hecho antes del PIN (directo por Pollar) lleva otro memo: no se verifica con un permiso posterior.
+  assert.equal(matches(approvalOk, { ...paymentOk, memo: MEMO_B }), false);
+  assert.equal(matches(approvalOk, { ...paymentOk, memo: null }), false, "sin memo de texto, no hay permiso que valga");
+  assert.equal(matches({ ...approvalOk, memo: MEMO_B }, paymentOk), false);
+  // Iguales en todo lo demás (destino, activo, monto, fecha) pero con el memo equivocado: unverified.
+  assert.equal(matches(approvalOk, { ...paymentOk, memo: MEMO_B, paidAt: T0 + 1_000 }), false);
+});
+
+test("approvalMatches (#4): revoked_at es inmutable por permiso; el pago tiene que cerrar antes de la revocación", () => {
+  const revoked = { ...approvalOk, revokedAt: T0 + 40_000 };
+  assert.equal(matches(revoked, { ...paymentOk, paidAt: T0 + 20_000 }), true, "cerró antes de la revocación: cuenta");
+  assert.equal(matches(revoked, { ...paymentOk, paidAt: T0 + 40_000 }), false, "justo en la revocación ya no");
+  assert.equal(matches(revoked, { ...paymentOk, paidAt: T0 + 50_000 }), false, "después de la revocación no cuenta");
+  // El escenario de la revisión: revocado en T+20 s; un segundo cambio de PIN en T+40 s NO lo rehabilita,
+  // porque ya no se compara con el último cambio sino con la hora fija de SU revocación.
+  const firstRevocation = { ...approvalOk, revokedAt: T0 + 20_000 };
+  assert.equal(matches(firstRevocation, { ...paymentOk, paidAt: T0 + 30_000 }), false);
+  // La holgura de expiración es aparte: revocado o no, pasada la holgura del vencimiento nunca cuenta.
+  assert.equal(matches({ ...approvalOk, revokedAt: T0 + APPROVAL_TTL_MS + 10 * 60_000 }, { ...paymentOk, paidAt: approvalOk.expiresAt + APPROVAL_GRACE_MS + 1 }), false);
+  assert.equal(matches(approvalOk, { ...paymentOk, paidAt: approvalOk.expiresAt + APPROVAL_GRACE_MS }), true);
+});
+
+test("límite en 24 h móviles (#5): un permiso reserva hasta 24 h después del último instante en que su pago podía cerrar", () => {
+  const h = 60 * 60 * 1000;
+  const expiresAt = T0 + APPROVAL_TTL_MS;
+  // La revisión: A aprobado en T0 (paga en T0+4 min). 24 h + 1 s después de T0 ya no estaba en el cómputo por created_at.
+  assert.equal(reservationCounts(expiresAt, T0 + 24 * h + 1_000), true, "sigue contando");
+  assert.equal(reservationCounts(expiresAt, T0 + 24 * h + APPROVAL_TTL_MS), true, "hasta que pase su último instante de pago");
+  assert.equal(reservationCounts(expiresAt, expiresAt + APPROVAL_GRACE_MS + 24 * h), false, "recién entonces se libera");
+  assert.equal(reservationCounts(expiresAt, expiresAt + APPROVAL_GRACE_MS + 24 * h - 1), true);
+  // Garantía: si A cierra en [creación, expiresAt+holgura] y B cierra desde su creación t, A y B solo
+  // pueden estar a < 24 h si A todavía cuenta cuando se aprueba B.
+  const latestCloseA = expiresAt + APPROVAL_GRACE_MS;
+  for (const t of [T0, T0 + 12 * h, latestCloseA + 24 * h - 1, latestCloseA + 24 * h, latestCloseA + 24 * h + 1, T0 + 48 * h]) {
+    const withinOneWindow = t - latestCloseA < 24 * h; // B puede cerrar en t: A pudo cerrar a menos de 24 h
+    assert.equal(reservationCounts(expiresAt, t), withinOneWindow, `t=${t - T0}`);
+  }
+  const spent = q.approvedLast24h("p", APPROVAL_GRACE_MS);
+  assert.match(spent.text, /a\.expires_at > now\(\) - interval '24 hours' - \$2::double precision \* interval '1 millisecond'/);
+  assert.ok(!spent.text.includes("a.created_at"), "ya no se cuenta desde created_at");
+  assert.deepEqual(spent.values, ["p", APPROVAL_GRACE_MS]);
 });
 
 test("approvalTimeoutSec: la transacción nunca vive más que el permiso y con menos de 30 s no se firma", () => {
@@ -391,7 +421,7 @@ const POLICY = { maxAttempts: 5, baseMs: 15 * 60_000, maxMs: LOCK_MAX_MS, maxLev
 test("el SQL del PIN va parametrizado (nada del usuario entra al texto)", () => {
   const queries = [
     q.securityRow(HOSTILE),
-    q.approvedLast24h(HOSTILE),
+    q.approvedLast24h(HOSTILE, 1),
     q.lockSecurityForPin(HOSTILE),
     q.activatePendingPin(HOSTILE),
     q.reservePinAttempt(HOSTILE, POLICY),
@@ -399,15 +429,15 @@ test("el SQL del PIN va parametrizado (nada del usuario entra al texto)", () => 
     q.createPin(HOSTILE, HOSTILE, HOSTILE),
     q.changePin(HOSTILE, HOSTILE, HOSTILE, 1),
     q.securityForReset(HOSTILE),
-    q.resetPinNow(HOSTILE, HOSTILE, HOSTILE),
     q.setPendingPin(HOSTILE, HOSTILE, HOSTILE, PIN_RESET_DELAY_MS),
-    q.cancelPendingPin(HOSTILE),
-    q.expirePendingApprovals(HOSTILE),
+    q.cancelPendingPin(HOSTILE, 1),
     q.setDailyLimits(HOSTILE, HOSTILE, null, 1),
     q.lockSecurityRow(HOSTILE, 1),
-    q.insertApproval({ profileId: HOSTILE, toWallet: HOSTILE, asset: HOSTILE, amount: HOSTILE, ttlMs: APPROVAL_TTL_MS, pinVersion: 1 }),
-    q.claimApproval({ approvalId: HOSTILE, profileId: HOSTILE, toWallet: HOSTILE, asset: HOSTILE, amount: HOSTILE, paidAt: HOSTILE, graceMs: 1 }),
+    q.insertApproval({ profileId: HOSTILE, toWallet: HOSTILE, asset: HOSTILE, amount: HOSTILE, ttlMs: APPROVAL_TTL_MS, pinVersion: 1, memo: HOSTILE }),
+    q.claimApproval({ approvalId: HOSTILE, profileId: HOSTILE, toWallet: HOSTILE, asset: HOSTILE, amount: HOSTILE, memo: HOSTILE, paidAt: HOSTILE, graceMs: 1 }),
     q.linkApproval(HOSTILE, HOSTILE),
+    q.lockPaymentOfSender(HOSTILE, HOSTILE),
+    q.verifyPayment(HOSTILE, HOSTILE),
   ];
   for (const query of queries) {
     assert.ok(!query.text.includes("drop table"), query.text);
@@ -428,17 +458,42 @@ test("reservePinAttempt: un solo UPDATE atómico que cuenta el intento y se nieg
   assert.deepEqual(query.values, ["p", 5, 900_000, 86_400_000, 30]);
 });
 
-test("claimApproval: perfil, destino, activo, monto exacto, sin usar y dentro de la vida del permiso", () => {
-  const query = q.claimApproval({ approvalId: "a", profileId: "p", toWallet: "w", asset: "USDC", amount: "5", paidAt: "2026-10-09T12:00:00Z", graceMs: 60_000 });
+test("claimApproval: perfil, destino, activo, monto exacto, MEMO, sin usar, vigente y no revocado antes del pago", () => {
+  const query = q.claimApproval({ approvalId: "a", profileId: "p", toWallet: "w", asset: "USDC", amount: "5", memo: MEMO_A, paidAt: "2026-10-09T12:00:00Z", graceMs: 60_000 });
   assert.match(query.text, /set used_at = now\(\)/);
   for (const part of [
-    "a.id = $1::uuid", "a.profile_id = $2", "a.to_wallet = $3", "a.asset = $4", "a.amount = $5::numeric", "a.used_at is null",
-    "$6::timestamptz <= a.expires_at +", "$6::timestamptz >= a.created_at -",
-    "from public.payment_security s", "(a.pin_version = s.pin_version or $6::timestamptz < s.pin_set_at)",
+    "a.id = $1::uuid", "a.profile_id = $2", "a.to_wallet = $3", "a.asset = $4", "a.amount = $5::numeric", "a.memo = $8", "a.used_at is null",
+    "$6::timestamptz <= a.expires_at +", "(a.revoked_at is null or $6::timestamptz < a.revoked_at)",
   ]) {
     assert.ok(query.text.includes(part), part);
   }
-  assert.equal(query.values.length, 7);
+  // Sin tolerancia hacia atrás (#6) y sin comparar contra el último cambio de PIN (#4).
+  assert.ok(!query.text.includes("a.created_at"), "ya no hay holgura contra created_at");
+  assert.ok(!query.text.includes("pin_set_at") && !query.text.includes("payment_security"), "ya no se compara con pin_set_at");
+  assert.equal(query.values.length, 8);
+  assert.equal(query.values[7], MEMO_A);
+});
+
+test("revocar (#4): cambiar o activar un PIN fija revoked_at una sola vez y no mueve expires_at", () => {
+  for (const text of [q.changePin("p", "h", "s", 1).text, q.activatePendingPin("p").text]) {
+    assert.match(text, /set revoked_at = now\(\)/);
+    assert.match(text, /used_at is null and revoked_at is null/, "solo los que todavía no estaban revocados");
+    assert.ok(!text.includes("set expires_at"), "expires_at no se toca");
+  }
+});
+
+test("cancelar el reset (#5 tabla): exige la versión del PIN verificado", () => {
+  const query = q.cancelPendingPin("p", 4);
+  assert.match(query.text, /pin_version = \$2/);
+  assert.deepEqual(query.values, ["p", 4]);
+});
+
+test("completar un pago ya registrado sin permiso (#7): se bloquea el registro y se actualiza approval_id/unverified", () => {
+  const lock = q.lockPaymentOfSender("1", ALICE);
+  assert.match(lock.text, /where py\.op_id = \$1 and py\.from_wallet = \$2 for update$/);
+  const verify = q.verifyPayment("pay", "appr");
+  assert.match(verify.text, /set approval_id = \$2::uuid, unverified = false/);
+  assert.match(verify.text, /where id = \$1 and unverified and approval_id is null/);
 });
 
 test("pagos: el SQL guarda approval_id y unverified, y a quien recibe no se le marca", () => {
@@ -589,7 +644,7 @@ const T = {
   change: "with chg as (",
   pending: "update public.payment_security set pending_pin_hash = $2",
   cancel: "update public.payment_security set pending_pin_hash = null",
-  expire: "update public.payment_approvals set expires_at = now()",
+  revoke: "set revoked_at = now()",
   limits: "update public.payment_security set daily_limit",
   lockRow: "select s.daily_limit_usdc::text",
   spent: "select a.asset, coalesce(sum",
@@ -661,13 +716,15 @@ function pinWorld(w: PinWorld = {}) {
     }
     if (text.startsWith(T.change)) return w.versionMoved ? [] : [{ profile_id: aliceId }];
     if (text.startsWith(T.pending)) return [{ pending_pin_at: "2026-10-10T12:00:00.000000Z" }];
-    if (text.startsWith(T.cancel)) return [{ profile_id: aliceId }];
+    if (text.startsWith(T.cancel)) return w.versionMoved ? [] : [{ profile_id: aliceId }];
     if (text.startsWith(T.limits)) return w.versionMoved ? [] : [{ profile_id: aliceId }];
     if (text.startsWith(T.lockRow)) {
       return w.versionMoved ? [] : [{ daily_limit_usdc: w.limit ?? "100.0000000", daily_limit_xlm: "1000.0000000" }];
     }
     if (text.startsWith(T.spent)) return [{ asset: "USDC", spent: w.spent ?? "0" }];
-    if (text.startsWith(T.insertApproval)) return [{ id: APPROVAL_ID, expires_at: "2026-10-09T12:05:00.000000Z" }];
+    if (text.startsWith(T.insertApproval)) {
+      return [{ id: APPROVAL_ID, expires_at: "2026-10-09T12:05:00.000000Z", server_now: "2026-10-09T12:00:00.000000Z" }];
+    }
     return [];
   };
 }
@@ -779,7 +836,7 @@ test(
     // Un solo statement: sube la versión, borra el reset pendiente e invalida los permisos pendientes.
     assert.match(change.text, /pin_version = pin_version \+ 1/);
     assert.match(change.text, /pending_pin_hash = null, pending_pin_salt = null, pending_pin_at = null/);
-    assert.match(change.text, /update public\.payment_approvals set expires_at = now\(\)/);
+    assert.match(change.text, /update public\.payment_approvals set revoked_at = now\(\)/);
     assert.match(change.text, /where profile_id = \$1 and pin_hash is not null and pin_version = \$4/);
   }),
 );
@@ -921,9 +978,8 @@ test(
     const res = await pinReset(req("/api/security/pin/reset", "POST", { pin: GOOD_PIN }, sessionAt(Date.now() - 2 * 60_000)));
     assert.equal(res.status, 204);
     const now = queryOf(calls, T.createPin);
-    assert.ok(now && !now.text.includes("where s.pin_hash is null"));
+    assert.ok(now && now.text.includes("where s.pin_hash is null"), "el primer PIN solo se pone si SIGUE sin haber uno");
     assert.equal(await verifyPinHash(GOOD_PIN, SECRET_BYTES, { hash: now.values[1] as string, salt: now.values[2] as string }), true);
-    assert.ok(has(calls, T.expire));
     assert.ok(!has(calls, T.pending));
   }),
 );
@@ -979,7 +1035,7 @@ test(
 
     const ok = await pinResetCancel(req("/api/security/pin/reset", "DELETE", { pin: GOOD_PIN }));
     assert.equal(ok.status, 204);
-    assert.deepEqual(queryOf(calls, T.cancel)?.values, [aliceId]);
+    assert.deepEqual(queryOf(calls, T.cancel)?.values, [aliceId, 3], "con la versión del PIN verificado");
   }),
 );
 
@@ -993,7 +1049,7 @@ test(
     assert.match(activate!.text, /pin_hash = s\.pending_pin_hash/);
     assert.match(activate!.text, /pin_version = s\.pin_version \+ 1/);
     assert.match(activate!.text, /s\.pending_pin_at <= now\(\)/);
-    assert.match(activate!.text, /update public\.payment_approvals set expires_at = now\(\)/, "invalida los permisos pendientes en el mismo statement");
+    assert.match(activate!.text, /update public\.payment_approvals set revoked_at = now\(\)/, "revoca los permisos pendientes en el mismo statement");
     assert.match(activate!.text, /failed_attempts = 0, lock_level = 0, locked_until = null/);
   }),
 );
@@ -1081,9 +1137,12 @@ test(
         asset: "USDC",
         amount: 5,
         expiresAt: "2026-10-09T12:05:00.000000Z",
+        serverNow: "2026-10-09T12:00:00.000000Z",
+        memo: queryOf(calls, T.insertApproval)?.values[6],
       });
       const insert = queryOf(calls, T.insertApproval);
-      assert.deepEqual(insert?.values, [aliceId, BOB, "USDC", "5.0000000", 5 * 60_000, 4], "5 minutos y la versión del PIN verificado");
+      assert.deepEqual(insert?.values.slice(0, 6), [aliceId, BOB, "USDC", "5.0000000", 5 * 60_000, 4], "5 minutos y la versión del PIN verificado");
+      assert.match(insert?.values[6] as string, /^kv-[a-z2-7]{16}$/, "el servidor genera la referencia del pago");
       assert.deepEqual(queryOf(calls, T.lockRow)?.values, [aliceId, 4], "la fila se bloquea exigiendo esa versión");
       assert.ok(calls.some((c) => c.text === "begin") && calls.some((c) => c.text === "commit"), "dentro de una transacción");
       resetApiLimits();
@@ -1168,17 +1227,6 @@ test(
     const ok = await approvePost(req("/api/security/approve", "POST", { to: "bob", asset: "USDC", amount: 10, pin: GOOD_PIN }));
     assert.equal(ok.status, 201);
   }),
-);
-
-test(
-  "límite diario: cuenta TODOS los permisos de las últimas 24 h, usados o no, vencidos o no (no se libera cupo)",
-  () => {
-    const spent = q.approvedLast24h("p");
-    assert.match(spent.text, /a\.created_at > now\(\) - interval '24 hours'/);
-    assert.ok(!spent.text.includes("used_at"), "no filtra por usados");
-    assert.ok(!spent.text.includes("expires_at"), "no filtra por vigentes");
-    assert.deepEqual(spent.values, ["p"]);
-  },
 );
 
 test(
@@ -1394,3 +1442,212 @@ test(
     assert.match(calls[0].text, /\(py\.unverified and py\.from_wallet = \$1\) as unverified/);
   }),
 );
+
+// -- segunda revisión adversarial
+
+test(
+  "reset (#3): si otro pedido crea el primer PIN en paralelo, el reset NO lo pisa: se relee bajo bloqueo y queda pendiente 24 h",
+  withApiEnv(async () => {
+    const stored = await storedPin();
+    let resetReads = 0;
+    const calls = installPool(
+      pinWorld({
+        stored,
+        extra: (text) => {
+          if (text.includes(T.forReset)) {
+            resetReads++;
+            // La primera lectura no ve fila (todavía no había PIN); la segunda, ya con el PIN del otro pedido.
+            return resetReads === 1 ? [] : [{ has_pin: true, has_pending: false, pending_pin_at: null }];
+          }
+          if (text.startsWith(T.createPin)) return []; // el upsert pierde la carrera: `where pin_hash is null` no actualiza
+          return undefined;
+        },
+      }),
+    );
+    const res = await pinReset(req("/api/security/pin/reset", "POST", { pin: "135792" }, sessionAt(Date.now() - 60_000)));
+    assert.equal(res.status, 202, "no es 204 'created': el PIN del otro pedido sigue vigente");
+    assert.equal((await res.json()).pendingPinAt, "2026-10-10T12:00:00.000000Z");
+    assert.equal(resetReads, 2);
+    const attempt = queryOf(calls, T.createPin);
+    assert.ok(attempt?.text.includes("where s.pin_hash is null"), "el upsert solo actualiza si no hay PIN");
+    assert.ok(has(calls, T.pending), "y sigue el flujo del PIN existente");
+    assert.ok(calls.findIndex((c) => c.text.startsWith(T.createPin)) < indexOf(calls, T.pending));
+  }),
+);
+
+test(
+  "DELETE /api/security/pin/reset (tabla #5): si el PIN cambió después de verificarlo = 409 pin_changed",
+  withApiEnv(async () => {
+    const stored = await storedPin();
+    installPool(pinWorld({ stored, pendingAt: "2026-10-10T08:00:00.000000Z", versionMoved: true }));
+    const res = await pinResetCancel(req("/api/security/pin/reset", "DELETE", { pin: GOOD_PIN }));
+    assert.equal(res.status, 409);
+    assert.equal((await res.json()).code, "pin_changed");
+  }),
+);
+
+test(
+  "POST /api/payments (#6): el memo del pago en Horizon es el que se compara con el memo del permiso",
+  withApiEnv(async () => {
+    const withMemo = paymentsPool({ claimMatches: true });
+    const res = await withFakeHorizon(horizonOps({ transaction: { memo_type: "text", memo: MEMO_A } }), () =>
+      paymentsPost(req("/api/payments", "POST", { hash: HASH, approvalId: APPROVAL_ID })),
+    );
+    assert.equal(res.status, 201);
+    assert.equal(queryOf(withMemo, T.claim)?.values[7], MEMO_A, "el memo viene de Horizon, no del cuerpo");
+    resetApiLimits();
+    // Un pago sin memo de texto: el memo del permiso no puede coincidir (comparar con null nunca da verdadero).
+    const noMemo = paymentsPool({ claimMatches: false });
+    const res2 = await withFakeHorizon(horizonOps({ transaction: { memo_type: "none" } }), () =>
+      paymentsPost(req("/api/payments", "POST", { hash: HASH, approvalId: APPROVAL_ID, memo: MEMO_A })),
+    );
+    assert.equal(res2.status, 201);
+    assert.equal(queryOf(noMemo, T.claim)?.values[7], null, "un memo mandado en el cuerpo no cuenta");
+    assert.deepEqual(queryOf(noMemo, T.insertPayment)?.values.slice(9), [null, true]);
+  }),
+);
+
+function latePool(opts: { claimMatches: boolean; existingUnverified?: boolean; raceLost?: boolean }) {
+  let verified = false;
+  let byOpReads = 0;
+  return installPool((text) => {
+    if (text.includes(BY_OP)) {
+      byOpReads++;
+      if (opts.raceLost && byOpReads === 1) return []; // todavía no estaba registrado al empezar
+      return [paymentRow(opts.existingUnverified !== false && !verified)];
+    }
+    if (text.startsWith("select py.id, py.unverified")) return [{ id: paymentRow(true).id, unverified: opts.existingUnverified !== false && !verified }];
+    if (text.startsWith(T.claim)) return opts.claimMatches ? [{ id: APPROVAL_ID }] : [];
+    if (text.startsWith("update public.payments set approval_id")) {
+      verified = true;
+      return [{ id: paymentRow(true).id }];
+    }
+    if (text.startsWith(T.insertPayment)) return []; // la operación ya existe
+    return [];
+  });
+}
+
+test(
+  "POST /api/payments (#7): un registro 'unverified' que otro pedido guardó sin permiso se completa cuando llega el permiso correcto",
+  withApiEnv(async () => {
+    const calls = latePool({ claimMatches: true });
+    const res = await postPayment({ approvalId: APPROVAL_ID });
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).payment.unverified, false);
+    const order = [
+      calls.findIndex((c) => c.text === "begin"),
+      indexOf(calls, "select py.id, py.unverified"),
+      indexOf(calls, T.claim),
+      indexOf(calls, "update public.payments set approval_id"),
+      indexOf(calls, T.link),
+      calls.findIndex((c) => c.text === "commit"),
+    ];
+    assert.deepEqual([...order].sort((a, b) => a - b), order, "begin < bloquear registro < consumir < actualizar < ligar < commit");
+    assert.ok(order.every((i) => i >= 0));
+    assert.deepEqual(queryOf(calls, "update public.payments set approval_id")?.values, [paymentRow(true).id, APPROVAL_ID]);
+    assert.ok(!has(calls, T.insertPayment), "no inserta otro pago");
+  }),
+);
+
+test(
+  "POST /api/payments (#7): también si la carrera se perdió en el INSERT (rollback) y el registro existente quedó 'unverified'",
+  withApiEnv(async () => {
+    const calls = latePool({ claimMatches: true, raceLost: true });
+    const res = await postPayment({ approvalId: APPROVAL_ID });
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).payment.unverified, false);
+    assert.ok(calls.some((c) => c.text === "rollback"), "la primera transacción se deshizo");
+    assert.ok(has(calls, "update public.payments set approval_id"));
+  }),
+);
+
+test(
+  "POST /api/payments (#7): si el permiso no coincide, el registro existente se queda como está; si ya estaba verificado, no se toca",
+  withApiEnv(async () => {
+    const stays = latePool({ claimMatches: false });
+    const res = await postPayment({ approvalId: APPROVAL_ID });
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).payment.unverified, true);
+    assert.ok(!has(stays, "update public.payments set approval_id") && !has(stays, T.link));
+    resetApiLimits();
+    const done = latePool({ claimMatches: true, existingUnverified: false });
+    const res2 = await postPayment({ approvalId: APPROVAL_ID });
+    assert.equal(res2.status, 200);
+    assert.ok(!has(done, T.claim) && !done.some((c) => c.text === "begin"), "un pago ya verificado no consume otro permiso");
+    resetApiLimits();
+    const noApproval = latePool({ claimMatches: true });
+    const res3 = await postPayment({});
+    assert.equal(res3.status, 200);
+    assert.ok(!has(noApproval, T.claim), "sin permiso no hay nada que completar");
+  }),
+);
+
+test("checkApprovalForPayment (#8): el tiempo restante sale de expiresAt − serverNow, no del reloj del navegador", () => {
+  const S = T0; // hora del servidor al aprobar
+  const R = T0 - 120_000; // el navegador tiene el reloj atrasado 2 minutos: así marca "ahora" al recibir la respuesta
+  const approval = {
+    toWallet: BOB,
+    asset: "USDC",
+    amount: 5,
+    expiresAt: new Date(S + 60_000).toISOString(), // al permiso le quedan 60 s reales
+    serverNow: new Date(S).toISOString(),
+    receivedAt: R,
+  };
+  const payment = { destination: BOB, asset: "USDC" as const, amount: "5.0000000" };
+  // 5 s después de recibirlo (según el mismo reloj atrasado): quedan 55 s, no 175.
+  assert.deepEqual(checkApprovalForPayment(approval, payment, R + 5_000), { ok: true, timeoutSec: 55 });
+  // Con el cálculo viejo (expiresAt − reloj local) habría dado 175 s: la transacción viviría 2 min más que el permiso.
+  const { serverNow: _s, receivedAt: _r, ...legacy } = approval;
+  assert.deepEqual(checkApprovalForPayment(legacy, payment, R + 5_000), { ok: true, timeoutSec: 175 });
+  // A 31 s de vencer según el servidor todavía se firma (con 31 s); a menos de 30 s se pide confirmar de nuevo.
+  assert.deepEqual(checkApprovalForPayment(approval, payment, R + 29_000), { ok: true, timeoutSec: 31 });
+  const late = checkApprovalForPayment(approval, payment, R + 31_000);
+  assert.ok(!late.ok && late.code === "expired");
+});
+
+test(
+  "POST /api/security/approve (#8): devuelve serverNow (hora de la base) y el memo; el cliente le suma su hora de recepción",
+  withApiEnv(async () => {
+    const calls = await approveWorld();
+    const res = await approvePost(req("/api/security/approve", "POST", { to: "bob", asset: "USDC", amount: 5, pin: GOOD_PIN }));
+    const body = await res.json();
+    assert.equal(body.serverNow, "2026-10-09T12:00:00.000000Z");
+    assert.equal(Date.parse(body.expiresAt) - Date.parse(body.serverNow), APPROVAL_TTL_MS, "expiresAt − serverNow = la vida del permiso");
+    assert.match(body.memo, /^kv-[a-z2-7]{16}$/);
+    assert.match(queryOf(calls, T.insertApproval)!.text, /returning id, .*as expires_at, .*now\(\).*as server_now/);
+    const src = readFileSync(new URL("../services/api/security.ts", import.meta.url), "utf8");
+    assert.match(src, /receivedAt: Date\.now\(\)/);
+  }),
+);
+
+test("0012_pin_ajustes_2.sql: memo del permiso (único) y revoked_at inmutable", () => {
+  const sql = readFileSync(new URL("../db/migrations/0012_pin_ajustes_2.sql", import.meta.url), "utf8");
+  assert.match(sql, /alter table public\.payment_approvals add column if not exists memo text null/);
+  assert.match(sql, /alter table public\.payment_approvals add column if not exists revoked_at timestamptz null/);
+  assert.match(sql, /memo ~ '\^kv-\[a-z2-7\]\{16\}\$'/);
+  assert.match(sql, /create unique index if not exists payment_approvals_memo_key\s+on public\.payment_approvals \(memo\) where memo is not null/);
+  assert.ok(!/create table (?!if not exists)/i.test(sql));
+  for (const add of sql.match(/add constraint (\w+)/g) ?? []) {
+    assert.ok(sql.includes(`drop constraint if exists ${add.replace("add constraint ", "")}`), add);
+  }
+  assert.ok(!/drop table|drop column/i.test(sql));
+});
+
+test("sendPayment (api, #6): usa EXACTAMENTE el memo que generó el servidor y ya no inventa uno", () => {
+  const src = readFileSync(new URL("../services/api/index.ts", import.meta.url), "utf8");
+  const body = src.slice(src.indexOf("async sendPayment(input: SendPaymentInput)"));
+  assert.match(body, /const memo = approval\.memo;/);
+  assert.match(body, /MEMO_RE\.test\(memo/);
+  assert.ok(!body.includes("newPaymentRef("), "el cliente no genera la referencia");
+  assert.match(body, /paymentOptions\(memo, life\.timeoutSec\)/);
+});
+
+test("documentación (#1 y #2): el contrato y la UI dicen con claridad lo que el PIN no cierra", () => {
+  const contract = readFileSync(new URL("../services/securityService.ts", import.meta.url), "utf8");
+  assert.match(contract, /no una\s+\*?\s*barrera criptográfica/);
+  assert.match(contract, /reutilizar un permiso ya dado para firmar otro pago/);
+  assert.match(contract, /prueba de identidad nueva/);
+  assert.match(contract, /memo/);
+  const settings = readFileSync(new URL("../components/SecuritySettings.tsx", import.meta.url), "utf8");
+  assert.match(settings, /No bloquea la firma de tu wallet/);
+});

@@ -42,8 +42,9 @@ export async function GET(request: Request): Promise<Response> {
  *
  * `approvalId` is the PIN permission from POST /api/security/approve. Once the
  * payment is verified on Horizon it is consumed only if it is this profile's,
- * unused, and matches the destination, asset and exact amount of the payment
- * (and the payment closed within its life). Otherwise the payment is recorded
+ * unused, and matches the destination, asset, exact amount AND memo of the payment
+ * (the memo is the reference the server generated when approving, so a payment sent
+ * before the PIN can't carry it), and the payment closed within its life. Otherwise the payment is recorded
  * all the same (the money already moved) but marked `unverified: true` for the
  * sender. A missing or bad `approvalId` never makes the record fail.
  *
@@ -123,6 +124,7 @@ function save(session: Session, p: VerifiedPayment, note: string | null, approva
       registeredBy: session.profileId,
       paidAt: p.createdAt,
       approvalId,
+      memo: p.memo,
     });
     if (outcome.status === "conflict") return failure(409, "Ese pago ya está registrado.", "payment_exists");
     return json({ payment: outcome.payment }, outcome.status === "created" ? 201 : 200);

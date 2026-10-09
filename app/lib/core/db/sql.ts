@@ -759,6 +759,8 @@ export interface NewPayment {
   paidAt: string;
   /** El permiso (PIN) que respalda este pago, ya consumido; null si no hubo. */
   approvalId?: string | null;
+  /** El memo del pago en Horizon, solo para consumir el permiso (no se guarda en `payments`). */
+  memo?: string | null;
   /** Sin permiso válido: se guarda igual (el dinero ya se movió) pero se marca. Por defecto: `!approvalId`. */
   unverified?: boolean;
 }
@@ -827,15 +829,20 @@ export const securityRow = (profileId: string): Query => ({
 });
 
 /**
- * Lo aprobado en las últimas 24 h móviles, por activo: TODOS los permisos creados
- * (usados o no, vencidos o no). Un permiso que no se usó no libera cupo: no hay
- * forma de saber que el pago no va a llegar.
+ * Lo reservado por los permisos, por activo, para el límite de 24 h móviles: TODOS los
+ * permisos (usados o no, vencidos o no) cuyo último instante de pago, `expires_at` más
+ * la holgura `$2` (ms), todavía cae dentro de las últimas 24 h. Así un permiso reserva
+ * cupo hasta 24 h después del último momento en que su pago podía cerrar y verificarse
+ * (no solo 24 h desde que se creó): dos pagos verificados dentro de una misma ventana de
+ * 24 h nunca suman más que el límite. Un permiso sin usar no libera cupo. (Misma regla
+ * que pin-rules.reservationCounts.)
  */
-export const approvedLast24h = (profileId: string): Query => ({
+export const approvedLast24h = (profileId: string, graceMs: number): Query => ({
   text:
     "select a.asset, coalesce(sum(a.amount), 0)::text as spent from public.payment_approvals a " +
-    "where a.profile_id = $1 and a.created_at > now() - interval '24 hours' group by a.asset",
-  values: [profileId],
+    "where a.profile_id = $1 and a.expires_at > now() - interval '24 hours' - $2::double precision * interval '1 millisecond' " +
+    "group by a.asset",
+  values: [profileId, graceMs],
 });
 
 export interface LockPolicy {
@@ -853,8 +860,8 @@ export const lockSecurityForPin = (profileId: string): Query => ({
 
 /**
  * Si un "olvidé mi PIN" ya cumplió sus 24 h, el PIN pendiente pasa a ser el PIN
- * (versión + 1, sin fallos ni bloqueo) y los permisos pendientes vencen, todo en
- * el mismo statement. Devuelve la fila solo si activó algo.
+ * (versión + 1, sin fallos ni bloqueo) y los permisos pendientes se revocan (`revoked_at`, una sola
+ * vez), todo en el mismo statement. Devuelve la fila solo si activó algo.
  */
 export const activatePendingPin = (profileId: string): Query => ({
   text:
@@ -863,8 +870,8 @@ export const activatePendingPin = (profileId: string): Query => ({
     "pin_version = s.pin_version + 1, failed_attempts = 0, lock_level = 0, locked_until = null, " +
     "pending_pin_hash = null, pending_pin_salt = null, pending_pin_at = null, updated_at = now() " +
     "where s.profile_id = $1 and s.pending_pin_hash is not null and s.pending_pin_at <= now() returning s.profile_id), " +
-    "inv as (update public.payment_approvals set expires_at = now() " +
-    "where profile_id = $1 and used_at is null and expires_at > now() and exists (select 1 from act) returning id) " +
+    "inv as (update public.payment_approvals set revoked_at = now() " +
+    "where profile_id = $1 and used_at is null and revoked_at is null and exists (select 1 from act) returning id) " +
     "select profile_id from act",
   values: [profileId],
 });
@@ -914,8 +921,8 @@ export const createPin = (profileId: string, hash: string, salt: string): Query 
 
 /**
  * Cambia un PIN que ya existe (el actual ya se verificó, en la versión `expectedVersion`):
- * versión + 1, borra un reset pendiente y vence los permisos pendientes, en un solo
- * statement. Sin fila = el PIN cambió mientras tanto (o no hay PIN).
+ * versión + 1, borra un reset pendiente y revoca los permisos pendientes (`revoked_at`,
+ * una sola vez), en un solo statement. Sin fila = el PIN cambió mientras tanto (o no hay PIN).
  */
 export const changePin = (profileId: string, hash: string, salt: string, expectedVersion: number): Query => ({
   text:
@@ -924,8 +931,8 @@ export const changePin = (profileId: string, hash: string, salt: string, expecte
     "failed_attempts = 0, lock_level = 0, locked_until = null, " +
     "pending_pin_hash = null, pending_pin_salt = null, pending_pin_at = null, updated_at = now() " +
     "where profile_id = $1 and pin_hash is not null and pin_version = $4 returning profile_id), " +
-    "inv as (update public.payment_approvals set expires_at = now() " +
-    "where profile_id = $1 and used_at is null and expires_at > now() and exists (select 1 from chg) returning id) " +
+    "inv as (update public.payment_approvals set revoked_at = now() " +
+    "where profile_id = $1 and used_at is null and revoked_at is null and exists (select 1 from chg) returning id) " +
     "select profile_id from chg",
   values: [profileId, hash, salt, expectedVersion],
 });
@@ -938,17 +945,6 @@ export const securityForReset = (profileId: string): Query => ({
   values: [profileId],
 });
 
-/** Quien todavía no tenía PIN: el primero se pone al instante (versión + 1, sin bloqueo). */
-export const resetPinNow = (profileId: string, hash: string, salt: string): Query => ({
-  text:
-    "insert into public.payment_security as s (profile_id, pin_hash, pin_salt, pin_set_at, pin_version, updated_at) " +
-    "values ($1, $2, $3, now(), 1, now()) on conflict (profile_id) do update set " +
-    "pin_hash = excluded.pin_hash, pin_salt = excluded.pin_salt, pin_set_at = now(), pin_version = s.pin_version + 1, " +
-    "failed_attempts = 0, lock_level = 0, locked_until = null, " +
-    "pending_pin_hash = null, pending_pin_salt = null, pending_pin_at = null, updated_at = now() returning s.profile_id",
-  values: [profileId, hash, salt],
-});
-
 /** "Olvidé mi PIN" con PIN existente: el nuevo queda pendiente y se activa en `delayMs`. El actual sigue valiendo. */
 export const setPendingPin = (profileId: string, hash: string, salt: string, delayMs: number): Query => ({
   text:
@@ -958,20 +954,15 @@ export const setPendingPin = (profileId: string, hash: string, salt: string, del
   values: [profileId, hash, salt, delayMs],
 });
 
-/** Cancela el reset pendiente (quien llama ya verificó el PIN actual). */
-export const cancelPendingPin = (profileId: string): Query => ({
+/**
+ * Cancela el reset pendiente (quien llama ya verificó el PIN actual, en la versión
+ * `expectedVersion`). Sin fila = el PIN cambió mientras tanto.
+ */
+export const cancelPendingPin = (profileId: string, expectedVersion: number): Query => ({
   text:
     "update public.payment_security set pending_pin_hash = null, pending_pin_salt = null, pending_pin_at = null, updated_at = now() " +
-    "where profile_id = $1 and pending_pin_hash is not null returning profile_id",
-  values: [profileId],
-});
-
-/** Permisos todavía vigentes y sin usar: vencen ya. (Un pago que cerró antes sigue pudiendo usarlos; ver claimApproval.) */
-export const expirePendingApprovals = (profileId: string): Query => ({
-  text:
-    "update public.payment_approvals set expires_at = now() " +
-    "where profile_id = $1 and used_at is null and expires_at > now() returning id",
-  values: [profileId],
+    "where profile_id = $1 and pin_hash is not null and pin_version = $2 returning profile_id",
+  values: [profileId, expectedVersion],
 });
 
 /**
@@ -1002,14 +993,16 @@ export interface NewApproval {
   ttlMs: number;
   /** La versión del PIN con la que se verificó. */
   pinVersion: number;
+  /** La referencia (memo de texto) que el pago debe llevar; la genera el servidor. */
+  memo: string;
 }
 
 export const insertApproval = (a: NewApproval): Query => ({
   text:
-    "insert into public.payment_approvals (profile_id, to_wallet, asset, amount, method, expires_at, pin_version) " +
-    "values ($1, $2, $3, $4::numeric, 'pin', now() + $5::double precision * interval '1 millisecond', $6) " +
-    `returning id, ${isoUs("expires_at")} as expires_at`,
-  values: [a.profileId, a.toWallet, a.asset, a.amount, a.ttlMs, a.pinVersion],
+    "insert into public.payment_approvals (profile_id, to_wallet, asset, amount, method, expires_at, pin_version, memo) " +
+    "values ($1, $2, $3, $4::numeric, 'pin', now() + $5::double precision * interval '1 millisecond', $6, $7) " +
+    `returning id, ${isoUs("expires_at")} as expires_at, ${isoUs("now()")} as server_now`,
+  values: [a.profileId, a.toWallet, a.asset, a.amount, a.ttlMs, a.pinVersion, a.memo],
 });
 
 export interface ApprovalClaim {
@@ -1018,27 +1011,48 @@ export interface ApprovalClaim {
   toWallet: string;
   asset: string;
   amount: string;
+  /** El memo de texto del pago en Horizon (null si no lleva: entonces no hay permiso que valga). */
+  memo: string | null;
   paidAt: string;
   graceMs: number;
 }
 
 /**
  * Consume el permiso de un pago ya verificado en Horizon: mismo perfil, destino,
- * activo y monto exacto, sin usar, el pago cerró dentro de su vida (con holgura) y
- * el permiso es de la versión de PIN vigente o el pago cerró antes de que el PIN
- * cambiara. Una sola vez: el UPDATE solo toca filas con `used_at is null`. Misma
- * regla que pin-rules.approvalMatches.
+ * activo y monto exacto, el MEMO del pago es el que el servidor generó al aprobar
+ * (eso ata el permiso al pago y prueba que el PIN fue antes), sin usar, el pago cerró
+ * a más tardar `graceMs` después de que venció el permiso y antes de que el permiso se
+ * revocara (`revoked_at`, fijo desde la primera revocación). Una sola vez: el UPDATE
+ * solo toca filas con `used_at is null`. Misma regla que pin-rules.approvalMatches.
  */
 export const claimApproval = (c: ApprovalClaim): Query => ({
   text:
-    "update public.payment_approvals a set used_at = now() from public.payment_security s " +
-    "where s.profile_id = a.profile_id and a.id = $1::uuid and a.profile_id = $2 and a.to_wallet = $3 and a.asset = $4 " +
-    "and a.amount = $5::numeric and a.used_at is null " +
+    "update public.payment_approvals a set used_at = now() " +
+    "where a.id = $1::uuid and a.profile_id = $2 and a.to_wallet = $3 and a.asset = $4 " +
+    "and a.amount = $5::numeric and a.memo = $8 and a.used_at is null " +
     "and $6::timestamptz <= a.expires_at + $7::double precision * interval '1 millisecond' " +
-    "and $6::timestamptz >= a.created_at - $7::double precision * interval '1 millisecond' " +
-    "and (a.pin_version = s.pin_version or $6::timestamptz < s.pin_set_at) " +
+    "and (a.revoked_at is null or $6::timestamptz < a.revoked_at) " +
     "returning a.id",
-  values: [c.approvalId, c.profileId, c.toWallet, c.asset, c.amount, c.paidAt, c.graceMs],
+  values: [c.approvalId, c.profileId, c.toWallet, c.asset, c.amount, c.paidAt, c.graceMs, c.memo],
+});
+
+/**
+ * Un pago ya registrado de `wallet`, bloqueado para verificarlo después: si otro
+ * pedido lo registró antes sin permiso (`unverified`), quien trae el permiso correcto
+ * puede completarlo.
+ */
+export const lockPaymentOfSender = (opId: string, wallet: string): Query => ({
+  text:
+    "select py.id, py.unverified from public.payments py where py.op_id = $1 and py.from_wallet = $2 for update",
+  values: [opId, wallet],
+});
+
+/** Liga un pago que estaba `unverified` con el permiso que ahora sí se consumió. */
+export const verifyPayment = (paymentId: string, approvalId: string): Query => ({
+  text:
+    "update public.payments set approval_id = $2::uuid, unverified = false " +
+    "where id = $1 and unverified and approval_id is null returning id",
+  values: [paymentId, approvalId],
 });
 
 /** Une el permiso consumido con el pago guardado. */

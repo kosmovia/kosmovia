@@ -20,7 +20,7 @@ import {
   attemptDeadlineMs,
   checkAmount,
   classifyWithPhase,
-  newPaymentRef,
+  MEMO_RE,
   paymentOptions,
   pollarAsset,
   rejectionText,
@@ -614,7 +614,9 @@ export class ApiWalletService implements IWalletService {
     if (!fit.ok) throw new ApiError(fit.error);
     const life = fit;
 
-    const memo = newPaymentRef();
+    // La referencia del pago la puso el servidor al aprobar: el permiso solo respalda un pago que la lleve.
+    const memo = approval.memo;
+    if (!MEMO_RE.test(memo ?? '')) throw new ApiError('La confirmación del PIN no trae una referencia válida. Confírmala de nuevo.');
     const startedAt = new Date().toISOString();
     rememberPayment(me, { memo, startedAt, toWallet: destination, toLabel: raw, amount: checked.amount, asset: input.asset, note: '' });
     let outcome: Awaited<ReturnType<PollarClient['sendPayment']>> | undefined;

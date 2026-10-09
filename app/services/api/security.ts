@@ -73,13 +73,15 @@ export class ApiSecurityService implements ISecurityService {
     return request<SecurityStatus>('/api/security/limits', { method: 'PUT', body: { ...limits, pin } });
   }
 
-  approve(input: ApproveInput): Promise<PaymentApproval> {
+  async approve(input: ApproveInput): Promise<PaymentApproval> {
     // El monto se normaliza igual que en sendPayment, así el permiso y el pago llevan exactamente el mismo.
     const checked = checkAmount(String(input.amount), input.asset);
     const amount = checked.ok ? checked.amount : String(input.amount);
-    return request<PaymentApproval>('/api/security/approve', {
+    const approval = await request<PaymentApproval>('/api/security/approve', {
       method: 'POST',
       body: { to: input.to, asset: input.asset, amount, pin: input.pin },
     });
+    // Para medir cuánto le queda al permiso sin fiarse del reloj del navegador (ver checkApprovalForPayment).
+    return { ...approval, receivedAt: Date.now() };
   }
 }

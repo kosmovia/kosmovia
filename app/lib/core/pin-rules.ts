@@ -162,18 +162,14 @@ export interface ApprovalFacts {
   asset: string;
   /** Decimal con hasta 7 lugares. */
   amount: string;
+  /** La referencia (memo de texto) que el servidor generó al aprobar y que el pago debe llevar. */
+  memo: string;
   /** Epoch ms. */
   createdAt: number;
   expiresAt: number;
   usedAt: number | null;
-  /** La versión del PIN con la que se verificó el permiso. */
-  pinVersion: number;
-}
-
-/** El PIN vigente al registrar el pago: su versión y cuándo se puso (epoch ms; null si no se sabe). */
-export interface CurrentPin {
-  version: number;
-  setAt: number | null;
+  /** Cuándo se revocó (cambio o reset del PIN); null si no. Se fija una sola vez. */
+  revokedAt: number | null;
 }
 
 export interface PaymentFacts {
@@ -181,33 +177,51 @@ export interface PaymentFacts {
   toWallet: string;
   asset: string;
   amount: string;
+  /** El memo de texto de la transacción en Horizon; null si no lleva. */
+  memo: string | null;
   /** Cierre del ledger (`paid_at`), epoch ms. */
   paidAt: number;
 }
 
 /**
- * ¿Este permiso respalda este pago? Mismo perfil, mismo destino, mismo activo,
- * monto exacto, sin usar, y el pago cerró dentro de la vida del permiso (con
- * APPROVAL_GRACE_MS de holgura a cada lado por la diferencia de relojes).
- *
- * Versión del PIN (decisión más segura): el permiso cuenta si se hizo con la
- * versión de PIN vigente, o si el pago cerró ANTES de que el PIN cambiara (el
- * permiso era válido cuando se pagó, aunque el registro llegue tarde). Un pago
- * que cierra después del cambio con un permiso del PIN anterior no cuenta:
- * queda sin verificar. El UPDATE de sql.claimApproval aplica lo mismo en la base.
+ * ¿Este permiso respalda este pago? Mismo perfil, destino, activo y monto exacto,
+ * sin usar, y el MEMO del pago en Horizon es el que el servidor generó al aprobar.
+ * Esa referencia es lo que ata el permiso al pago y prueba el orden: el servidor la
+ * inventa al dar el permiso, así que un pago hecho antes del PIN no puede llevarla
+ * (por eso ya no hay tolerancia hacia atrás en la fecha de creación). Además:
+ *  - el pago cerró a más tardar APPROVAL_GRACE_MS después de que venció el permiso
+ *    (holgura por la diferencia entre el reloj de la base y el cierre del ledger), y
+ *  - el permiso no se revocó antes de que el pago cerrara: `revokedAt` es la hora en
+ *    que un cambio o reset del PIN lo invalidó, se fija una sola vez y no se compara
+ *    con cambios posteriores (un segundo cambio no lo rehabilita).
+ * El UPDATE de sql.claimApproval aplica lo mismo en la base.
  */
-export function approvalMatches(approval: ApprovalFacts, payment: PaymentFacts, pin: CurrentPin): boolean {
+export function approvalMatches(approval: ApprovalFacts, payment: PaymentFacts): boolean {
   if (approval.usedAt !== null) return false;
   if (approval.profileId !== payment.profileId) return false;
   if (approval.toWallet !== payment.toWallet) return false;
   if (approval.asset !== payment.asset) return false;
+  if (payment.memo === null || approval.memo !== payment.memo) return false;
   const a = toStroops(approval.amount);
   const p = toStroops(payment.amount);
   if (a === null || p === null || a !== p) return false;
   if (payment.paidAt > approval.expiresAt + APPROVAL_GRACE_MS) return false;
-  if (payment.paidAt < approval.createdAt - APPROVAL_GRACE_MS) return false;
-  if (approval.pinVersion !== pin.version && !(pin.setAt !== null && payment.paidAt < pin.setAt)) return false;
+  if (approval.revokedAt !== null && payment.paidAt >= approval.revokedAt) return false;
   return true;
+}
+
+/**
+ * Ventana del límite de 24 h móviles. Un permiso reserva cupo hasta 24 h después del
+ * último instante en que su pago podía cerrar y verificarse (`expiresAt` + holgura).
+ * Así, si al aprobar B todavía cuenta A, dos pagos verificados que caigan juntos en
+ * cualquier ventana de 24 h nunca suman más que el límite: un pago de A cierra como
+ * mucho en `A.expiresAt + holgura`, y B (aprobado en `t`) cierra desde `t`; A y B solo
+ * pueden estar a menos de 24 h si `A.expiresAt + holgura > t − 24 h`. (Lo mismo, visto
+ * desde A, lo garantiza la reserva de A cuando B ya existía.) El SQL de approvedLast24h
+ * usa exactamente esta condición.
+ */
+export function reservationCounts(expiresAt: number, now: number): boolean {
+  return expiresAt + APPROVAL_GRACE_MS > now - 24 * 60 * 60 * 1000;
 }
 
 /**
@@ -215,9 +229,19 @@ export function approvalMatches(approval: ApprovalFacts, payment: PaymentFacts, 
  * aprobó con el PIN, ya resuelto a una G…), mismo activo y monto, y con tiempo
  * de sobra (si le quedan menos de 30 s no se firma). Si sirve, `timeoutSec` es la
  * vida que debe tener la transacción: nunca más que lo que le queda al permiso.
+ *
+ * El tiempo que le queda NO se mide con el reloj del navegador contra `expiresAt`
+ * (un reloj atrasado alargaría la vida de la transacción): se usa la diferencia
+ * `expiresAt − serverNow`, las dos horas de la base, restándole lo que pasó en el
+ * navegador desde que llegó la respuesta (`receivedAt`, hora local de ese momento;
+ * solo cuenta la duración, no el desfase del reloj). Sin `serverNow`/`receivedAt`
+ * se cae al reloj local. Límite: el SDK de Pollar solo acepta una duración relativa
+ * (`timeoutSec`), no un `maxTime` absoluto, así que queda el error de la hora a la
+ * que Pollar construye la transacción; la holgura de APPROVAL_GRACE_MS al registrar
+ * lo absorbe.
  */
 export function checkApprovalForPayment(
-  approval: { toWallet: string; asset: string; amount: number | string; expiresAt: string },
+  approval: { toWallet: string; asset: string; amount: number | string; expiresAt: string; serverNow?: string; receivedAt?: number },
   payment: { destination: string; asset: "USDC" | "XLM"; amount: string },
   now: number,
 ): { ok: true; timeoutSec: number } | { ok: false; code: "destination" | "amount" | "expired"; error: string } {
@@ -232,7 +256,13 @@ export function checkApprovalForPayment(
   if (!approved.ok || approval.asset !== payment.asset || approved.amount !== payment.amount) {
     return { ok: false, code: "amount", error: "La confirmación del PIN no coincide con este pago. Confírmalo de nuevo." };
   }
-  const life = approvalTimeoutSec(Date.parse(approval.expiresAt), now);
+  const expiresAt = Date.parse(approval.expiresAt);
+  const serverNow = approval.serverNow ? Date.parse(approval.serverNow) : NaN;
+  const left =
+    Number.isFinite(serverNow) && typeof approval.receivedAt === "number"
+      ? expiresAt - serverNow - Math.max(0, now - approval.receivedAt)
+      : expiresAt - now;
+  const life = approvalTimeoutSec(now + left, now);
   if (!life.ok) {
     return { ok: false, code: "expired", error: "Se venció (o está por vencer) la confirmación del PIN. Confírmala de nuevo." };
   }

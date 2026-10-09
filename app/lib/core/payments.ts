@@ -100,6 +100,8 @@ export interface HorizonOperation {
   asset_code?: string;
   asset_issuer?: string;
   amount?: string;
+  /** Viene con `join=transactions`: el memo de la transacción. */
+  transaction?: { memo_type?: string; memo?: string };
 }
 
 export interface VerifiedPayment {
@@ -110,6 +112,8 @@ export interface VerifiedPayment {
   asset: PaymentAsset;
   amount: string;
   createdAt: string;
+  /** El memo de texto de la transacción (la referencia del pago); null si no lleva uno de texto. */
+  memo: string | null;
 }
 
 export type Verification =
@@ -161,6 +165,7 @@ export function pickPayment(ops: HorizonOperation[], wallet: string, now = Date.
       asset,
       amount: fromStroops(stroops),
       createdAt: new Date(at).toISOString(),
+      memo: op.transaction?.memo_type === "text" && typeof op.transaction.memo === "string" ? op.transaction.memo.trim() : null,
     },
   };
 }
@@ -179,7 +184,7 @@ export async function fetchTxOperations(
   fetchImpl: typeof fetch = fetch,
 ): Promise<HorizonLookup> {
   try {
-    const res = await fetchImpl(`${HORIZON_URL}/transactions/${hash}/operations?limit=20`, {
+    const res = await fetchImpl(`${HORIZON_URL}/transactions/${hash}/operations?limit=20&join=transactions`, {
       headers: { Accept: "application/json" },
       cache: "no-store",
       signal: AbortSignal.timeout(8_000),

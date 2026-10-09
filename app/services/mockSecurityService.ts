@@ -5,7 +5,7 @@
  * puras que el servidor (lib/core/pin-rules.ts): formato, PIN trivial, bloqueo
  * progresivo, límites y topes de monto.
  */
-import { checkAmount } from '../lib/core/payments.ts';
+import { checkAmount, newPaymentRef } from '../lib/core/payments.ts';
 import {
   APPROVAL_TTL_MS,
   DEFAULT_DAILY_LIMIT,
@@ -256,6 +256,9 @@ export class MockSecurityService implements ISecurityService {
       asset: input.asset,
       amount: Number(checked.amount),
       expiresAt: new Date(now + APPROVAL_TTL_MS).toISOString(),
+      serverNow: new Date(now).toISOString(),
+      memo: newPaymentRef(),
+      receivedAt: now,
     };
   }
 }

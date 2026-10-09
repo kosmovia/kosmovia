@@ -5,21 +5,29 @@
  * Qué es y qué NO es: el PIN es un control de la app más detección, no una
  * barrera criptográfica. Los pagos los firma Pollar desde el navegador, así que
  * quien pueda ejecutar código en la página puede llamar a Pollar sin pasar por
- * el PIN. Lo que sí hace el servidor: exige el PIN para dar el permiso, aplica el
- * límite diario a los permisos y, cuando un pago llega sin permiso válido, lo
- * guarda marcado como `unverified` para avisarle al dueño.
+ * el PIN, o reutilizar un permiso ya dado para firmar otro pago: el dinero sale antes
+ * de que el servidor pueda enterarse. Lo que sí hace el servidor: exige el PIN para dar
+ * el permiso, aplica el límite diario a los permisos y, cuando un pago llega sin permiso
+ * válido, lo guarda marcado como `unverified` para avisarle al dueño. Cerrar esto de
+ * verdad exige cambiar cómo firma Pollar (que el permiso se consuma en el paso que
+ * autoriza la firma); mientras tanto no se promete más que la detección.
+ *
+ * Tampoco hay una prueba de identidad nueva al crear o reiniciar el PIN: una sesión
+ * robada puede instalar el primer PIN de quien aún no tiene, o programar un reemplazo
+ * (que tarda 24 h y el dueño puede cancelar con su PIN actual).
  *
  * Flujo de un pago:
  * 1. La UI llama a `approve({ to, asset, amount, pin })`. El servidor verifica
  *    el PIN, el bloqueo y el límite diario, resuelve `to` (@usuario o G…) y
  *    devuelve un permiso de un solo uso, atado a ese destino, activo y monto,
- *    que vence en 5 minutos.
+ *    que vence en 5 minutos y trae una referencia (`memo`) que generó el servidor.
  * 2. La UI llama a `walletService.sendPayment({ ..., approval })`, que revisa que
- *    `to` sea el destino aprobado, paga a `approval.toWallet` y manda
+ *    `to` sea el destino aprobado, paga a `approval.toWallet` CON ese `memo` y manda
  *    `approval.id` al registrar el pago.
- * 3. Al registrar, el servidor consume el permiso. Un pago que llega sin
- *    permiso válido igual se guarda (el dinero ya se movió), pero marcado como
- *    `unverified` para avisarle al dueño.
+ * 3. Al registrar, el servidor consume el permiso solo si el memo del pago en
+ *    Horizon es el del permiso (así el permiso queda atado a ese pago y un pago hecho
+ *    antes del PIN no puede verificarse después). Un pago que llega sin permiso
+ *    válido igual se guarda (el dinero ya se movió), pero marcado como `unverified`.
  */
 
 export type PayAsset = 'USDC' | 'XLM';
@@ -50,6 +58,12 @@ export interface PaymentApproval {
   amount: number;
   /** ISO. */
   expiresAt: string;
+  /** ISO, la hora del servidor al crear el permiso: `expiresAt − serverNow` es cuánto le queda sin depender del reloj del navegador. */
+  serverNow: string;
+  /** Referencia del pago (memo de texto de Stellar) generada por el servidor: el pago tiene que firmarse con este memo. */
+  memo: string;
+  /** Hora local (ms) a la que llegó la respuesta; la pone el cliente. Con `serverNow` mide el tiempo restante. */
+  receivedAt?: number;
 }
 
 export interface ApproveInput {

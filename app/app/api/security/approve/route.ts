@@ -17,10 +17,13 @@ const shortAddress = (address: string) => `${address.slice(0, 4)}…${address.sl
  * fallidos), resuelve el destino (@usuario con o sin @, o una dirección G…; no
  * puede ser la propia wallet), revisa el monto con las mismas reglas de un pago
  * y el límite diario, y entrega un permiso de UN solo uso, atado a ese destino,
- * activo y monto, que vale 5 minutos. El pago se firma después en el navegador
+ * activo y monto, que vale 5 minutos y lleva una referencia (`memo`) que
+ * genera el servidor: el pago tiene que firmarse con ESE memo, y solo así el permiso lo
+ * respalda (un pago hecho antes del PIN no puede llevarla). `serverNow` es la hora de la
+ * base, para medir cuánto le queda al permiso sin depender del reloj del navegador. El pago se firma después en el navegador
  * (Pollar) y al registrarlo en POST /api/payments se consume este permiso.
  *
- * -> 201 { id, toWallet, toLabel, asset, amount, expiresAt }
+ * -> 201 { id, toWallet, toLabel, asset, amount, expiresAt, serverNow, memo }
  *    400 invalid_recipient | invalid_amount | invalid_pin
  *    403 limit_exceeded { remaining }
  *    409 no_pin | pin_changed | 422 wrong_pin { attemptsLeft } | 423 locked { lockedUntil }
@@ -75,7 +78,16 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
     return json(
-      { id: approval.id, toWallet, toLabel, asset, amount: Number(checked.amount), expiresAt: approval.expiresAt },
+      {
+        id: approval.id,
+        toWallet,
+        toLabel,
+        asset,
+        amount: Number(checked.amount),
+        expiresAt: approval.expiresAt,
+        serverNow: approval.serverNow,
+        memo: approval.memo,
+      },
       201,
     );
   });

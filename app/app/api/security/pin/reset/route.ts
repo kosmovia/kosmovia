@@ -1,7 +1,7 @@
 import { failure, handled, json } from "../../../../../lib/core/api-route.ts";
 import * as repo from "../../../../../lib/core/db/repo.ts";
 import { sessionIsFresh, validatePin } from "../../../../../lib/core/pin-rules.ts";
-import { noContent, pinFailure, pinFromBody, pinRouteEntry, pinSecret } from "../../../../../lib/core/security-route.ts";
+import { noContent, pinChanged, pinFailure, pinFromBody, pinRouteEntry, pinSecret } from "../../../../../lib/core/security-route.ts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -58,7 +58,7 @@ export async function POST(request: Request): Promise<Response> {
  * respeta el bloqueo): quien robó la sesión no lo sabe.
  *
  * -> 204 (también si no había nada pendiente)
- *    400 invalid_pin | 409 no_pin | 422 wrong_pin { attemptsLeft } | 423 locked { lockedUntil }
+ *    400 invalid_pin | 409 no_pin | pin_changed | 422 wrong_pin { attemptsLeft } | 423 locked { lockedUntil }
  */
 export async function DELETE(request: Request): Promise<Response> {
   const entry = await pinRouteEntry(request);
@@ -72,7 +72,8 @@ export async function DELETE(request: Request): Promise<Response> {
   return handled("DELETE /api/security/pin/reset", async () => {
     const outcome = await repo.checkPin(session.profileId, pin.pin, secret);
     if (!outcome.ok) return pinFailure(outcome);
-    await repo.cancelPinReset(session.profileId);
+    // Solo si el PIN sigue siendo el que se acaba de verificar (misma versión), como las demás acciones.
+    if (!(await repo.cancelPinReset(session.profileId, outcome.pinVersion))) return pinChanged();
     return noContent();
   });
 }

@@ -177,7 +177,8 @@ export function SecuritySettings() {
           <h4 style={{ margin: 0, fontSize: 14 }}>PIN de pagos</h4>
           <p className="settings-tab-desc" style={{ margin: '4px 0 0' }}>
             Se pide cada vez que envías dinero desde Kosmovia. Es una protección de la app: un pago que salga sin pasar por el PIN queda
-            marcado como «Sin PIN» en tu historial.
+            marcado como «Sin PIN» en tu historial. No bloquea la firma de tu wallet en este navegador: si alguien con tu sesión abierta paga sin pasar por
+            aquí, solo lo detectamos y lo marcamos.
           </p>
         </div>
         <span className={`kv-sec-badge ${hasPin ? 'on' : 'off'}`}>{hasPin ? 'PIN activo' : 'Crea tu PIN'}</span>

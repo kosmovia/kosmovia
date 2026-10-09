@@ -25,6 +25,7 @@ import {
   type Role,
 } from "../authz.ts";
 import { isUuid } from "../ids.ts";
+import { newPaymentRef } from "../payments.ts";
 import {
   APPROVAL_GRACE_MS,
   APPROVAL_TTL_MS,
@@ -601,40 +602,65 @@ class AlreadyRecorded extends Error {}
  * returns the existing row to its sender and a conflict to anyone else.
  *
  * `approvalId` (lo que mandó el cliente, sin confiar en él) es el permiso del
- * PIN. Se consume solo si es de este perfil y coincide con destino, activo y
- * monto exacto del pago verificado, sin usar, dentro de su vida y de la versión
- * de PIN vigente (o el pago cerró antes del cambio). Si no, el pago se guarda
- * igual (el dinero ya se movió) con `unverified = true`: nunca se rechaza.
+ * PIN. Se consume solo si es de este perfil y coincide con destino, activo y monto
+ * exacto del pago verificado, el MEMO del pago en Horizon es el que el servidor generó
+ * al aprobar, está sin usar, dentro de su vida y no revocado antes de que el pago
+ * cerrara. Si no, el pago se guarda igual (el dinero ya se movió) con
+ * `unverified = true`: nunca se rechaza.
  *
- * Orden: primero la idempotencia (¿ya existe esa operación?), luego UNA
- * transacción con consumir el permiso + insertar el pago + ligarlos. Si algo falla
- * o la operación se registró en paralelo, todo se deshace junto: el permiso nunca
- * queda gastado sin pago ni se libera por un error de transporte ambiguo.
+ * Orden: primero la idempotencia (¿ya existe esa operación?), luego UNA transacción
+ * con consumir el permiso + insertar el pago + ligarlos. Si la operación se registró
+ * en paralelo, todo se deshace junto y se devuelve el registro existente; si ese
+ * quedó `unverified` y ahora llega el permiso correcto, se completa (ver `completeLate`).
+ * Un error de transporte nunca "libera" el permiso a mano: el rollback lo deshace.
  */
 export async function recordPayment(p: Omit<q.NewPayment, "unverified">): Promise<RecordOutcome> {
-  const already = await one<PaymentWire>(q.paymentByOpForSender(p.opId, p.fromWallet));
-  if (already) return { status: "existing", payment: already };
-
   const candidate = p.approvalId && isUuid(p.approvalId) ? p.approvalId : null;
+
+  const claim = async (query: TxQuery): Promise<string | null> => {
+    if (!candidate) return null;
+    const row = (
+      await query<{ id: string }>(
+        q.claimApproval({
+          approvalId: candidate,
+          profileId: p.registeredBy,
+          toWallet: p.toWallet,
+          asset: p.asset,
+          amount: p.amount,
+          memo: p.memo ?? null,
+          paidAt: p.paidAt,
+          graceMs: APPROVAL_GRACE_MS,
+        }),
+      )
+    )[0];
+    return row?.id ?? null;
+  };
+
+  /**
+   * El registro ya existía. Si quedó `unverified` (otro pedido lo guardó antes, sin
+   * permiso) y este trae el permiso correcto: se bloquea el registro, se consume el
+   * permiso y se actualiza `approval_id`/`unverified` en una transacción.
+   */
+  const completeLate = async (existing: PaymentWire): Promise<RecordOutcome> => {
+    if (!existing.unverified || !candidate) return { status: "existing", payment: existing };
+    const upgraded = await transaction(async (query) => {
+      const locked = (await query<{ id: string; unverified: boolean }>(q.lockPaymentOfSender(p.opId, p.fromWallet)))[0];
+      if (!locked || !locked.unverified) return null;
+      const claimed = await claim(query);
+      if (!claimed) return null;
+      await query(q.verifyPayment(locked.id, claimed));
+      await query(q.linkApproval(claimed, locked.id));
+      return (await query<PaymentWire>(q.paymentByOpForSender(p.opId, p.fromWallet)))[0] ?? null;
+    });
+    return { status: "existing", payment: upgraded ?? existing };
+  };
+
+  const already = await one<PaymentWire>(q.paymentByOpForSender(p.opId, p.fromWallet));
+  if (already) return completeLate(already);
+
   try {
     const created = await transaction(async (query) => {
-      let claimed: string | null = null;
-      if (candidate) {
-        const row = (
-          await query<{ id: string }>(
-            q.claimApproval({
-              approvalId: candidate,
-              profileId: p.registeredBy,
-              toWallet: p.toWallet,
-              asset: p.asset,
-              amount: p.amount,
-              paidAt: p.paidAt,
-              graceMs: APPROVAL_GRACE_MS,
-            }),
-          )
-        )[0];
-        claimed = row?.id ?? null;
-      }
+      const claimed = await claim(query);
       const inserted = (await query<PaymentWire>(q.insertPayment({ ...p, approvalId: claimed, unverified: claimed === null })))[0];
       if (!inserted) throw new AlreadyRecorded();
       if (claimed) await query(q.linkApproval(claimed, inserted.id));
@@ -645,7 +671,7 @@ export async function recordPayment(p: Omit<q.NewPayment, "unverified">): Promis
     if (!(err instanceof AlreadyRecorded)) throw err;
     // Otra petición registró esa operación justo antes: se devuelve la suya (o conflicto si es de otra persona).
     const existing = await one<PaymentWire>(q.paymentByOpForSender(p.opId, p.fromWallet));
-    return existing ? { status: "existing", payment: existing } : { status: "conflict" };
+    return existing ? completeLate(existing) : { status: "conflict" };
   }
 }
 
@@ -689,7 +715,7 @@ export async function getSecurityStatus(profileId: string): Promise<SecurityStat
   await run(q.activatePendingPin(profileId));
   const [row, spent] = await Promise.all([
     one<SecurityRow>(q.securityRow(profileId)),
-    run<{ asset: string; spent: string }>(q.approvedLast24h(profileId)),
+    run<{ asset: string; spent: string }>(q.approvedLast24h(profileId, APPROVAL_GRACE_MS)),
   ]);
   const spentOf = (asset: SecurityAsset) => Number(spent.find((s) => s.asset === asset)?.spent ?? 0);
   return {
@@ -783,11 +809,15 @@ export async function requestPinReset(profileId: string, pin: string, secret: Bu
   const stored = await hashPin(pin, secret);
   return transaction<ResetOutcome>(async (query) => {
     await query(q.activatePendingPin(profileId));
-    const row = (await query<{ has_pin: boolean; has_pending: boolean; pending_pin_at: string | null }>(q.securityForReset(profileId)))[0];
+    type ResetRow = { has_pin: boolean; has_pending: boolean; pending_pin_at: string | null };
+    let row = (await query<ResetRow>(q.securityForReset(profileId)))[0];
     if (!row || !row.has_pin) {
-      await query(q.resetPinNow(profileId, stored.hash, stored.salt));
-      await query(q.expirePendingApprovals(profileId));
-      return { status: "created" };
+      // El primer PIN solo se pone si SIGUE sin haber uno (`where pin_hash is null`): `for update` no
+      // protege una fila que todavía no existe, así que otro pedido pudo crearlo entre la lectura y aquí.
+      if ((await query(q.createPin(profileId, stored.hash, stored.salt)))[0]) return { status: "created" };
+      // Perdió la carrera: ahora la fila existe. Se relee bajo bloqueo y sigue el flujo de PIN existente.
+      row = (await query<ResetRow>(q.securityForReset(profileId)))[0];
+      if (!row || !row.has_pin) throw new Error("pin_state_unstable");
     }
     if (row.has_pending && row.pending_pin_at) return { status: "pending_exists", pendingPinAt: row.pending_pin_at };
     const set = (await query<{ pending_pin_at: string }>(q.setPendingPin(profileId, stored.hash, stored.salt, PIN_RESET_DELAY_MS)))[0];
@@ -795,9 +825,12 @@ export async function requestPinReset(profileId: string, pin: string, secret: Bu
   });
 }
 
-/** Cancela un reset pendiente (quien llama ya verificó el PIN actual). true si había uno. */
-export async function cancelPinReset(profileId: string): Promise<boolean> {
-  return (await one(q.cancelPendingPin(profileId))) !== null;
+/**
+ * Cancela un reset pendiente (quien llama ya verificó el PIN actual, en la versión
+ * `expectedVersion`). false si el PIN cambió mientras tanto.
+ */
+export async function cancelPinReset(profileId: string, expectedVersion: number): Promise<boolean> {
+  return (await one(q.cancelPendingPin(profileId, expectedVersion))) !== null;
 }
 
 /** Guarda los límites ya validados si el PIN sigue en la versión verificada. false si cambió (o no hay PIN). */
@@ -810,7 +843,7 @@ export async function updateDailyLimits(
 }
 
 export type ApprovalOutcome =
-  | { ok: true; id: string; expiresAt: string }
+  | { ok: true; id: string; expiresAt: string; memo: string; serverNow: string }
   | { ok: false; reason: "pin_changed" }
   | { ok: false; reason: "limit_exceeded"; remaining: number };
 
@@ -828,13 +861,14 @@ export async function createApproval(
   return transaction<ApprovalOutcome>(async (query) => {
     const locked = (await query<{ daily_limit_usdc: string; daily_limit_xlm: string }>(q.lockSecurityRow(profileId, p.pinVersion)))[0];
     if (!locked) return { ok: false, reason: "pin_changed" };
-    const spentRows = await query<{ asset: string; spent: string }>(q.approvedLast24h(profileId));
+    const spentRows = await query<{ asset: string; spent: string }>(q.approvedLast24h(profileId, APPROVAL_GRACE_MS));
     const spent = spentRows.find((s) => s.asset === p.asset)?.spent ?? "0";
     const limit = p.asset === "USDC" ? locked.daily_limit_usdc : locked.daily_limit_xlm;
     const decision = limitDecision(limit, spent, p.amount);
     if (!decision.ok) return { ok: false, reason: "limit_exceeded", remaining: decision.remaining };
+    const memo = newPaymentRef();
     const row = (
-      await query<{ id: string; expires_at: string }>(
+      await query<{ id: string; expires_at: string; server_now: string }>(
         q.insertApproval({
           profileId,
           toWallet: p.toWallet,
@@ -842,10 +876,11 @@ export async function createApproval(
           amount: p.amount,
           ttlMs: APPROVAL_TTL_MS,
           pinVersion: p.pinVersion,
+          memo,
         }),
       )
     )[0];
-    return { ok: true, id: row.id, expiresAt: row.expires_at };
+    return { ok: true, id: row.id, expiresAt: row.expires_at, memo, serverNow: row.server_now };
   });
 }
 
