@@ -184,11 +184,11 @@ export const en: Deck = {
           { v: "no", text: "No community" }, { v: "yes", text: "Wallet and payments" },
           { v: "yes", text: "On-chain records" }, { v: "partial", text: "Money" },
         ] },
-        { name: "Towns", cells: [
+        { name: "Towns · US$35 M+ (a16z crypto, Coinbase Ventures)", cells: [
           { v: "yes", text: "Discord-style group chat" }, { v: "partial", text: "Crypto on Base: tips and memberships" },
           { v: "yes", text: "On-chain" }, { v: "partial", text: "Crypto-native users, English, global" },
         ] },
-        { name: "Farcaster", cells: [
+        { name: "Farcaster · US$180 M (a16z, Paradigm)", cells: [
           { v: "partial", text: "Public social feed and channels" }, { v: "partial", text: "Crypto wallet, needs Web3 know-how" },
           { v: "yes", text: "On-chain" }, { v: "partial", text: "Crypto natives; mini-apps (our inspiration)" },
         ] },
@@ -345,11 +345,11 @@ export const es: Deck = {
           { v: "no", text: "Sin comunidad" }, { v: "yes", text: "Wallet y pagos" },
           { v: "yes", text: "Registros en la red" }, { v: "partial", text: "Dinero" },
         ] },
-        { name: "Towns", cells: [
+        { name: "Towns · US$35 M+ (a16z crypto, Coinbase Ventures)", cells: [
           { v: "yes", text: "Chat grupal estilo Discord" }, { v: "partial", text: "Cripto en Base: propinas y membresías" },
           { v: "yes", text: "En la red (on-chain)" }, { v: "partial", text: "Usuarios cripto, en inglés, global" },
         ] },
-        { name: "Farcaster", cells: [
+        { name: "Farcaster · US$180 M (a16z, Paradigm)", cells: [
           { v: "partial", text: "Red social pública con canales" }, { v: "partial", text: "Wallet cripto, pide saber de Web3" },
           { v: "yes", text: "En la red (on-chain)" }, { v: "partial", text: "Público cripto; sus mini-apps nos inspiran" },
         ] },
