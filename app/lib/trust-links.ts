@@ -8,8 +8,9 @@ export const TRUST_LINKS = [
 /** Redes oficiales confirmadas por el equipo y enlaces públicos del proyecto. */
 export const SOCIAL_LINKS = [
   { label: 'Telegram', href: 'https://t.me/kosmovia_official' },
-  { label: 'Instagram', href: 'https://www.instagram.com/kosmovia_official/' },
-  { label: 'X', href: 'https://x.com/kosmovia_official' },
+  { label: 'Instagram', href: 'https://www.instagram.com/kosmovia.io/' },
+  { label: 'TikTok', href: 'https://www.tiktok.com/@kosmovia0' },
+  { label: 'X', href: 'https://x.com/kosmoviaio' },
   { label: 'GitHub del proyecto', href: 'https://github.com/kosmovia/kosmovia' },
-  { label: 'Sitio web', href: 'https://kosmovia.onrender.com' },
+  { label: 'Sitio web', href: 'https://kosmovia.vercel.app' },
 ] as const;
