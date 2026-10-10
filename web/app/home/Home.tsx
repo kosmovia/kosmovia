@@ -5,7 +5,6 @@ import CosmicScene from "./CosmicScene";
 import Nav from "./Nav";
 import {
   IconApps,
-  IconArrow,
   IconChat,
   IconCheck,
   IconCode,
@@ -31,41 +30,9 @@ const NAV = [
 ];
 
 const ROADMAP = [
-  {
-    stage: "Hecho · octubre 2026",
-    status: "done",
-    title: "La base, funcionando",
-    items: [
-      "Comunidades, canales, mensajes directos y archivos",
-      "Wallet en USDC y pagos a cualquier @usuario",
-      "PIN de pagos, límite diario y aviso de pagos sin PIN",
-      "Mini-apps: Vaquita, Retos y Aprende Stellar",
-      "App instalable y notificaciones",
-    ],
-  },
-  {
-    stage: "Próximo",
-    status: "next",
-    title: "Comunidades que cobran",
-    items: [
-      "Chat en tiempo real",
-      "Bot puente con Telegram: cobra el acceso a tu grupo",
-      "Membresías de pago",
-      "Pasanaku con contrato en Soroban",
-      "SDK para que otros creen mini-apps",
-    ],
-  },
-  {
-    stage: "Antes de mainnet",
-    status: "later",
-    title: "Listo para dinero real",
-    items: [
-      "Auditoría de seguridad externa",
-      "Revisión legal de términos y privacidad",
-      "Confirmación del PIN en la firma de la wallet",
-      "De Bolivia a Latinoamérica",
-    ],
-  },
+  { stage: "Hecho · oct 2026", status: "done", title: "La base", items: ["Comunidades, chat y archivos", "Wallet USDC y pagos con PIN", "Mini-apps y notificaciones"] },
+  { stage: "Próximo", status: "next", title: "Comunidades que cobran", items: ["Chat en tiempo real", "Bot de Telegram y membresías", "Pasanaku en Soroban"] },
+  { stage: "Antes de mainnet", status: "later", title: "Dinero real", items: ["Auditoría de seguridad", "Revisión legal", "De Bolivia a Latinoamérica"] },
 ] as const;
 
 const FEATURES: { icon: ReactNode; title: string; text: string }[] = [
@@ -122,13 +89,6 @@ const SAFETY = [
   "Tu wallet la custodia Pollar si entras con Google o email. También puedes conectar tu propia wallet Freighter.",
 ];
 
-const FAQ = [
-  { q: "¿Es dinero real?", a: "No. Kosmovia está en beta sobre Stellar testnet, la red de pruebas. Los dólares digitales que ves son de prueba y no tienen valor real." },
-  { q: "¿Cuánto cuesta?", a: "Es gratis durante la beta." },
-  { q: "¿Quién guarda mi wallet?", a: "Si entras con Google o email, tu wallet la custodia Pollar, nuestro proveedor de wallets, y no necesitas frase semilla. Si prefieres, puedes conectar tu propia wallet Freighter." },
-  { q: "¿Necesito saber de cripto?", a: "No. Entras con Google o email y usas Kosmovia como una app de chat y pagos. Si te da curiosidad, Aprende Stellar te explica lo básico en lecciones de 2 minutos." },
-  { q: "¿Qué es USDC?", a: "Es un dólar digital: una moneda diseñada para valer siempre 1 dólar. En la beta usas USDC de prueba." },
-];
 
 const SOCIALS = [
   { name: "Telegram", href: "https://t.me/kosmovia_official", path: <path d="M21.5 4.2 2.9 11.4c-.9.3-.9 1.1-.2 1.4l4.7 1.5 1.8 5.6c.2.6.9.8 1.3.4l2.6-2.4 4.9 3.6c.6.4 1.3.1 1.5-.6l3.2-15.2c.2-.9-.5-1.5-1.2-1.5zM8.6 13.6l9.1-5.7c.4-.3.8.2.4.5l-7 6.3-.3 3.3-2.2-4.4z" /> },
@@ -363,7 +323,6 @@ export default function Home() {
           <div className="kv-wrap">
             <p className="kv-eyebrow">Hoja de ruta</p>
             <h2>Primero Bolivia, después el mundo</h2>
-            <p className="kv-sub">Lo que ya está hecho y lo que viene, sin promesas que no podamos cumplir.</p>
             <ol className="kv-grid kv-grid-3 kv-roadmap">
               {ROADMAP.map((r) => (
                 <li key={r.stage} className={`kv-card kv-stage kv-stage-${r.status}`}>
@@ -377,45 +336,9 @@ export default function Home() {
                 </li>
               ))}
             </ol>
-            <p className="kv-links-inline">
-              <a href="/es/pitch#12">Ver la hoja de ruta en el pitch</a>
-            </p>
           </div>
         </section>
 
-        {/* FAQ */}
-        <section id="preguntas" className="kv-section">
-          <div className="kv-wrap kv-narrow">
-            <p className="kv-eyebrow">Preguntas frecuentes</p>
-            <h2>Lo que más nos preguntan</h2>
-            <div className="kv-faq">
-              {FAQ.map((f) => (
-                <details key={f.q}>
-                  <summary>{f.q}</summary>
-                  <p>{f.a}</p>
-                </details>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Cierre */}
-        <section className="kv-section kv-close">
-          <div className="kv-wrap kv-center">
-            <h2>Súmate a la beta</h2>
-            <p className="kv-sub">Gratis, en Stellar testnet. Entra con Google o email y prueba Kosmovia con tu comunidad.</p>
-            <div className="kv-cta-row kv-cta-center">
-              <a className="kv-btn kv-btn-primary kv-btn-lg" href={LOGIN}>
-                Ingresar
-              </a>
-              <Link className="kv-btn kv-btn-ghost kv-btn-lg" href="/pitch">
-                Ver el pitch <IconArrow />
-              </Link>
-            </div>
-            <p className="kv-follow">Síguenos</p>
-            <Socials label="Redes sociales de Kosmovia" />
-          </div>
-        </section>
       </main>
 
       <footer className="kv-footer">

@@ -171,3 +171,11 @@ html:has(.kv-root) { background: #061314; }
 .kv-root .kv-stage-next .kv-stage-label { color: #00f2fe; }
 .kv-root .kv-stage-later .kv-stage-label { color: #f5c26b; }
 .kv-root .kv-stage-done { border-color: rgba(46, 230, 166, .35); }
+
+/* Hoja de ruta: siempre 3 columnas en escritorio, 1 en celular. */
+.kv-root .kv-roadmap { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.kv-root .kv-roadmap .kv-stage { padding: 20px; }
+.kv-root .kv-roadmap h3 { margin: 0 0 6px; }
+@media (max-width: 720px) {
+  .kv-root .kv-roadmap { grid-template-columns: 1fr; }
+}
