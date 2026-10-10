@@ -1200,4 +1200,10 @@ export const SCHEMA_TABLES = [
   "payment_approvals",
   "vaquitas",
   "vaquita_contributions",
+  "retos",
+  "academia_progress",
+  "academia_missions",
+  "push_subscriptions",
+  "notification_prefs",
+  "attachments",
 ] as const;

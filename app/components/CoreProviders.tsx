@@ -8,6 +8,7 @@ import { usePollarAuth } from '../lib/core/usePollarAuth.ts';
 import { tokenStore } from '../lib/core/token-store.ts';
 import { apiRequest } from '../lib/core/api-client.ts';
 import { CoreCreateProfile } from './CoreCreateProfile';
+import { FirstRunTrust } from './TrustWelcome';
 import { SERVICES_MODE } from '../services';
 
 /**
@@ -41,8 +42,7 @@ export function useCoreSession(): { step: 'logged-out' | 'loading' | 'ready' | '
  * montarse).
  */
 export function CoreGate({ children }: { children: React.ReactNode }) {
-  if (SERVICES_MODE !== 'api') return <>{children}</>;
-  return <Gate>{children}</Gate>;
+  return <FirstRunTrust>{SERVICES_MODE === 'api' ? <Gate>{children}</Gate> : children}</FirstRunTrust>;
 }
 
 function Gate({ children }: { children: React.ReactNode }) {
@@ -53,11 +53,17 @@ function Gate({ children }: { children: React.ReactNode }) {
 
 function SessionGate({ children }: { children: React.ReactNode }) {
   const session = useCoreSession();
+  const [loginUrl, setLoginUrl] = useState('/login');
+  useEffect(() => {
+    // Mantener el destino del aviso cuando hace falta volver a ingresar.
+    const next = '/plataforma' + window.location.search;
+    setLoginUrl('/login?next=' + encodeURIComponent(next));
+  }, []);
   if (session.step === 'ready') return <ProfileGate>{children}</ProfileGate>;
   if (session.step === 'logged-out') {
     return (
       <Notice text="Entra con tu wallet para ver la plataforma.">
-        <Link href="/login" className="btn-login-submit" style={{ display: 'inline-block', marginTop: 16 }}>
+        <Link href={loginUrl} className="btn-login-submit" style={{ display: 'inline-block', marginTop: 16 }}>
           Ingresar →
         </Link>
       </Notice>

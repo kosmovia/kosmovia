@@ -165,6 +165,11 @@ export class MockSecurityService implements ISecurityService {
     save(state);
   }
 
+  /** Para otras pantallas demo que piden el PIN (conectar una mini-app): lo verifica con el mismo bloqueo. */
+  async verifyPin(pin: string): Promise<void> {
+    await this.verify(load(), pin);
+  }
+
   async getStatus(): Promise<SecurityStatus> {
     return toStatus(load(), Date.now());
   }

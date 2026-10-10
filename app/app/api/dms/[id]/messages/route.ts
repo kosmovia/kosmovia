@@ -3,6 +3,9 @@ import { limitedResponse } from "../../../../../lib/core/api-limits.ts";
 import { failure, handled, json, readJsonBody, requireGate, type Params } from "../../../../../lib/core/api-route.ts";
 import * as repo from "../../../../../lib/core/db/repo.ts";
 import { isUuid } from "../../../../../lib/core/ids.ts";
+import { checkMarkers, previewText } from "../../../../../lib/core/attachments-rules.ts";
+import * as attachments from "../../../../../lib/core/db/attachments-repo.ts";
+import { notifyDm } from "../../../../../lib/core/push-triggers.ts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,6 +40,8 @@ export async function GET(request: Request, ctx: Params<{ id: string }>): Promis
  * POST /api/dms/[id]/messages { content }
  *
  * El autor es la sesión. Solo las dos personas de la conversación (para otra, 404).
+ * Puede llevar hasta 4 marcadores `[ARCHIVO:<id>]` (ver POST /api/attachments): cada id tiene que ser
+ * de quien escribe, de esta conversación y no estar usado (si no, 400 `attachment_invalid`).
  * -> 201 { message } | 400 invalid_input | 404 | 429
  */
 export async function POST(request: Request, ctx: Params<{ id: string }>): Promise<Response> {
@@ -51,13 +56,20 @@ export async function POST(request: Request, ctx: Params<{ id: string }>): Promi
   if (!body.ok) return body.response;
   const input = parseMessageCreate(body.value);
   if (!input.ok) return failure(400, input.error, "invalid_input");
+  const markers = checkMarkers(input.value.content);
+  if (!markers.ok) return failure(400, markers.error, markers.code);
 
   return handled("POST /api/dms/:id/messages", async () => {
-    const result = await repo.postDmMessage(threadId, auth.session.profileId, input.value.content);
+    const result =
+      markers.ids.length === 0
+        ? await repo.postDmMessage(threadId, auth.session.profileId, input.value.content)
+        : await attachments.postDmMessageWithAttachments(threadId, auth.session.profileId, input.value.content, markers.ids);
     if (!result.ok) {
       if ("notFound" in result) return failure(404, "Conversación no encontrada.", "not_found");
       return failure(result.denied.status, result.denied.error, result.denied.code);
     }
+    // El aviso push muestra "📎 Archivo", nunca el marcador crudo.
+    notifyDm(threadId, auth.session.profileId, previewText(input.value.content));
     return json({ message: result.value }, 201);
   });
 }

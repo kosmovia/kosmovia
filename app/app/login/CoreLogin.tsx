@@ -22,6 +22,7 @@ export function CoreLogin() {
           <p className="login-subtitle">Comunidades, canales y chat en Stellar</p>
         </div>
         {pollar.configured ? <Buttons /> : <p className="form-hint">{pollar.message}</p>}
+        <Link href="/bienvenida" className="login-back-link">Guía, confianza y comunidad ↗</Link>
         <Link href="/" className="login-back-link">
           ← Volver a la página principal
         </Link>
@@ -36,7 +37,11 @@ function Buttons() {
   const session = useCoreSession();
 
   useEffect(() => {
-    if (session.step === 'ready') router.replace('/plataforma');
+    if (session.step === 'ready') {
+      const next = new URLSearchParams(window.location.search).get('next');
+      // Solo destinos de la plataforma local; no aceptar redirecciones externas.
+      router.replace(next === '/plataforma' || next?.startsWith('/plataforma?') ? next : '/plataforma');
+    }
   }, [session.step, router]);
 
   const busy = isLoading || session.step === 'loading';

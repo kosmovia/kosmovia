@@ -3,6 +3,7 @@
 import React from 'react';
 import { DmThread, User } from '../types';
 import { AvatarFace } from './AvatarFace';
+import { previewText } from '../lib/core/attachments-rules.ts';
 
 interface DmListProps {
   threads: DmThread[];
@@ -33,7 +34,7 @@ export function DmList({ threads, activeThreadId, onSelectThread, currentUser, o
           sorted.map((t) => {
             const isActive = t.id === activeThreadId;
             const preview = t.lastMessage
-              ? `${t.lastMessage.authorId === currentUser.id ? 'Tú: ' : ''}${t.lastMessage.content.startsWith('[COBRO_B2B:') ? 'Cobro en USDC' : t.lastMessage.content}`
+              ? `${t.lastMessage.authorId === currentUser.id ? 'Tú: ' : ''}${t.lastMessage.content.startsWith('[COBRO_B2B:') ? 'Cobro en USDC' : previewText(t.lastMessage.content)}`
               : 'Sin mensajes todavía';
             return (
               <button

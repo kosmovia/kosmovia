@@ -21,6 +21,7 @@ import { CommunitySettingsModal } from '../../components/CommunitySettingsModal'
 import { DmList } from '../../components/DmList';
 import { sortChannels } from '../../components/channelUtils';
 import type { UpdateChannelInput } from '../../services';
+import { logoutThisDevice, syncThisDeviceSubscription } from '../../lib/core/push-client';
 import { Channel, Community, DmThread, Message, User, WalletTransaction } from '../../types';
 import {
   authService,
@@ -101,15 +102,17 @@ function PlataformaContent() {
 
   // Estados de Billetera Stellar
   const isWalletOpen = rightPanel === 'wallet';
-  const [balanceUSDC, setBalanceUSDC] = useState<number>(185.0);
-  const [balanceXLM, setBalanceXLM] = useState<number>(42.8);
+  const [balanceUSDC, setBalanceUSDC] = useState<number>(SERVICES_MODE === 'api' ? 0 : 185.0);
+  const [balanceXLM, setBalanceXLM] = useState<number>(SERVICES_MODE === 'api' ? 0 : 42.8);
   const [publicKey, setPublicKey] = useState<string>('GD26UBYVEYYVVOVCMOLPMIKPWQRFV34LK3I7LHBNTUGYHYIKFMEREH2A');
-  const [transactions, setTransactions] = useState<WalletTransaction[]>(INITIAL_TRANSACTIONS);
+  const [transactions, setTransactions] = useState<WalletTransaction[]>(SERVICES_MODE === 'api' ? [] : INITIAL_TRANSACTIONS);
   // Borrador de integración: estado visible del pago (antes solo iba a la consola).
   const [payNotice, setPayNotice] = useState<{ kind: 'info' | 'ok' | 'error'; text: string } | null>(null);
   // En modo api no se muestra nada hasta tener los datos reales (sin parpadeo de los de ejemplo).
   const [ready, setReady] = useState<boolean>(SERVICES_MODE !== 'api');
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [messageLoadError, setMessageLoadError] = useState<string | null>(null);
+  const [messageRetry, setMessageRetry] = useState(0);
   // Tarjeta de perfil abierta (desde el chat o la lista de miembros) y "Transferir" a esa persona.
   const [profileCardUser, setProfileCardUser] = useState<User | null>(null);
   const [sendTo, setSendTo] = useState<{ recipient: string; nonce: number } | null>(null);
@@ -156,12 +159,15 @@ function PlataformaContent() {
 
     async function loadInitialData() {
       try {
-        let [user, comms, pk, balances, txs] = await Promise.all([
-          authService.getCurrentUser(),
-          communityService.getCommunities(),
+        // La wallet puede estar temporalmente caída sin impedir usar las comunidades.
+        const walletData = Promise.allSettled([
           walletService.getPublicKey(),
           walletService.getBalances(''),
           walletService.getTransactions(''),
+        ]);
+        let [user, comms] = await Promise.all([
+          authService.getCurrentUser(),
+          communityService.getCommunities(),
         ]);
 
         if (!isMounted) return;
@@ -182,15 +188,14 @@ function PlataformaContent() {
         if (invitedTarget) {
           setActiveCommunityId(invitedTarget.id);
           if (invitedTarget.channels.length > 0) setActiveChannelId(invitedTarget.channels[0].id);
-          window.history.replaceState(null, '', '/plataforma');
+          const remaining = new URL(window.location.href);
+          remaining.searchParams.delete('c');
+          window.history.replaceState(null, '', remaining.pathname + remaining.search);
         }
 
         setCurrentUser(user);
         setCommunities(comms);
-        setPublicKey(pk);
-        setBalanceUSDC(balances.usdc);
-        setBalanceXLM(balances.xlm);
-        setTransactions(txs);
+        setPublicKey(user.wallet ?? '');
 
         if (!invitedTarget && comms.length > 0 && !comms.some((c) => c.id === activeCommunityId)) {
           setActiveCommunityId(comms[0].id);
@@ -199,6 +204,17 @@ function PlataformaContent() {
           }
         }
         setReady(true);
+        const [pkResult, balanceResult, txResult] = await walletData;
+        if (!isMounted) return;
+        if (pkResult.status === 'fulfilled') setPublicKey(pkResult.value);
+        if (balanceResult.status === 'fulfilled') {
+          setBalanceUSDC(balanceResult.value.usdc);
+          setBalanceXLM(balanceResult.value.xlm);
+        }
+        if (txResult.status === 'fulfilled') setTransactions(txResult.value);
+        if ([pkResult, balanceResult, txResult].some((result) => result.status === 'rejected')) {
+          setPayNotice({ kind: 'error', text: 'No se pudo actualizar la wallet. Puedes seguir chateando y reintentar desde Mi Wallet.' });
+        }
       } catch (err) {
         console.error('[PlataformaPage] Error loading initial service data:', err);
         if (isMounted) setLoadError(errorText(err, 'No se pudieron cargar tus datos.'));
@@ -211,6 +227,50 @@ function PlataformaContent() {
       isMounted = false;
     };
   }, []);
+
+  // Vincula este dispositivo a la sesión actual sin pedir permisos automáticamente.
+  useEffect(() => {
+    if (ready && SERVICES_MODE === 'api') void syncThisDeviceSubscription(currentUser.id).catch(() => {});
+  }, [ready, currentUser.id]);
+
+  // Los avisos abren el chat exacto; solo destinos accesibles al usuario.
+  useEffect(() => {
+    if (!ready) return;
+    const params = new URLSearchParams(window.location.search);
+    const dm = params.get('dm');
+    const channel = params.get('channel');
+    const wallet = params.get('panel') === 'wallet';
+    if (!dm && !channel && !wallet) return;
+    let alive = true;
+    const consume = () => {
+      const url = new URL(window.location.href);
+      for (const key of ['dm', 'channel', 'panel']) url.searchParams.delete(key);
+      window.history.replaceState(null, '', url.pathname + url.search);
+    };
+    if (wallet) setRightPanel('wallet');
+    if (channel && !dm) {
+      const community = communities.find((c) => c.channels.some((ch) => ch.id === channel));
+      if (community) {
+        setView('community');
+        setActiveCommunityId(community.id);
+        setActiveChannelId(channel);
+      } else setPayNotice({ kind: 'error', text: 'Ese canal ya no está disponible para tu cuenta.' });
+      consume();
+    } else if (dm) {
+      void dmService.getThreads().then((threads) => {
+        if (!alive) return;
+        setDmThreads(threads);
+        if (threads.some((thread) => thread.id === dm)) {
+          setView('dms');
+          setActiveThreadId(dm);
+        } else setPayNotice({ kind: 'error', text: 'Esa conversación ya no está disponible para tu cuenta.' });
+        consume();
+      }).catch(() => {
+        if (alive) setPayNotice({ kind: 'error', text: 'No se pudo abrir la conversación del aviso. Reintenta al recargar.' });
+      });
+    } else consume();
+    return () => { alive = false; };
+  }, [ready, communities]);
 
   const seenKey = `kosmovia:pagos-vistos:${publicKey}`;
   useEffect(() => {
@@ -318,7 +378,8 @@ function PlataformaContent() {
 
   // Suscripción en tiempo real y carga de mensajes por canal (o conversación) activo
   useEffect(() => {
-    if (!chatId) return;
+    if (!ready || !chatId) return;
+    setMessageLoadError(null);
     const activeChannelId = chatId;
     let isMounted = true;
 
@@ -329,6 +390,8 @@ function PlataformaContent() {
         [activeChannelId]: msgs,
       }));
       if (inDm) void refreshThreads(); // abrirla la marca como leída
+    }).catch((err) => {
+      if (isMounted) setMessageLoadError(errorText(err, 'No se pudieron cargar los mensajes.'));
     });
 
     const unsubscribe = msgSvc.subscribeToMessages(
@@ -365,7 +428,7 @@ function PlataformaContent() {
       unsubscribe();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatId, inDm]);
+  }, [chatId, inDm, ready, messageRetry]);
 
   const handleChangeTheme = (next: ThemeId) => {
     setTheme(next);
@@ -399,8 +462,9 @@ function PlataformaContent() {
     return text.includes('no_shared_community') ? 'Solo puedes escribirle a quien comparte una comunidad contigo.' : text;
   };
 
-  const handleSendMessage = async (text: string) => {
-    if (!text.trim() || !chatId) return;
+  /** Publica en el chat abierto. Devuelve el id del mensaje, o null si no se pudo (el error ya se avisó). */
+  const postToActiveChat = async (text: string): Promise<string | null> => {
+    if (!text.trim() || !chatId) return null;
     const targetId = chatId;
 
     try {
@@ -415,10 +479,16 @@ function PlataformaContent() {
         };
       });
       if (inDm) void refreshThreads();
+      return sentMsg.id;
     } catch (err) {
       console.error('[PlataformaPage] Error sending message:', err);
       setPayNotice({ kind: 'error', text: errorText(err, 'No se pudo enviar el mensaje.') });
+      return null;
     }
+  };
+
+  const handleSendMessage = async (text: string): Promise<boolean> => {
+    return Boolean(await postToActiveChat(text));
   };
 
   const handleEditMessage = async (messageId: string, content: string): Promise<boolean> => {
@@ -723,7 +793,7 @@ function PlataformaContent() {
   const handleLogout = async () => {
     try {
       const client = (globalThis as { __kosmoviaPollarClient?: { logout: () => unknown } }).__kosmoviaPollarClient;
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => {});
+      await logoutThisDevice();
       await Promise.resolve(client?.logout());
     } finally {
       window.location.href = '/login';
@@ -964,6 +1034,9 @@ function PlataformaContent() {
         community={activeCommunity}
         messages={chatId ? messagesByChannel[chatId] || [] : []}
         onSendMessage={handleSendMessage}
+        attachmentTarget={chatId ? { scope: inDm ? 'dm' : 'channel', id: chatId } : undefined}
+        messageLoadError={messageLoadError}
+        onRetryMessages={() => setMessageRetry((n) => n + 1)}
         onToggleMobileMenu={() => setIsMobileOpen((prev) => !prev)}
         onToggleMemberList={inDm ? undefined : () => togglePanel('members')}
         isMemberListOpen={isMemberListOpen && !inDm}
@@ -978,7 +1051,7 @@ function PlataformaContent() {
         onOpenProfile={setProfileCardUser}
         onRefreshWallet={SERVICES_MODE === 'api' ? () => void refreshWallet() : undefined}
         isRefreshingWallet={isRefreshingWallet}
-        notifications={{ transactions, unread: unreadPayments, onOpen: markPaymentsSeen }}
+        notifications={{ transactions, unread: unreadPayments + dmUnreadTotal, onOpen: markPaymentsSeen }}
         balanceUSDC={balanceUSDC}
         onOpenQuickInvoice={inDm ? undefined : () => setIsQuickInvoiceOpen(true)}
         onPayInvoice={handlePayInvoice}
@@ -1003,7 +1076,16 @@ function PlataformaContent() {
       />
 
       {rightPanel === 'notifications' ? (
-        <NotificationsPanel transactions={transactions} onClose={() => setRightPanel(null)} />
+        <NotificationsPanel
+          transactions={transactions}
+          threads={dmThreads}
+          onOpenThread={(id) => {
+            setView('dms');
+            handleSelectThread(id);
+            setRightPanel(null);
+          }}
+          onClose={() => setRightPanel(null)}
+        />
       ) : null}
 
       {rightPanel === 'apps' ? (
@@ -1011,8 +1093,16 @@ function PlataformaContent() {
           key={appsTarget?.nonce ?? 0}
           initialAppId={appsTarget ? 'vaquita' : undefined}
           initialParams={appsTarget ? { vaquitaId: appsTarget.vaquitaId } : undefined}
-          shareToChannel={async (text) => {
-            await handleSendMessage(text);
+          // `share` de una mini-app publica en el CANAL abierto; en un mensaje directo no hay canal y no se ofrece.
+          activeChannel={inDm ? null : { id: activeChannel.id, name: activeChannel.name }}
+          theme={theme}
+          shareToChannel={(text) => (inDm ? Promise.resolve(null) : postToActiveChat(text))}
+          onPaid={async (tx) => {
+            // Un pago de una mini-app: igual que un envío normal, se actualiza el historial y el saldo.
+            setTransactions((prev) => [tx, ...prev]);
+            const balances = await walletService.getBalances(publicKey);
+            setBalanceUSDC(balances.usdc);
+            setBalanceXLM(balances.xlm);
           }}
           community={activeCommunity}
           currentUser={currentUser}

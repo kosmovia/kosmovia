@@ -1,15 +1,18 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { securityService } from '../services';
+import { miniappService, securityService } from '../services';
+import type { MiniAppConnection } from '../services/miniappService';
 import { SecurityError, type PayAsset, type SecurityStatus } from '../services/securityService';
+import { MINI_APPS, PERMISSION_LABELS } from './apps/registry';
 import { PIN_LENGTH, PinPad } from './PinPad';
 import { fmtAmount, fmtCountdown, fmtDateTime, pinErrorText } from './pinErrors';
+import './apps/miniapp-host.css';
 
 const ASSETS: PayAsset[] = ['USDC', 'XLM'];
 type Mode = 'idle' | 'pin' | 'limits' | 'cancel';
 
-/** Pestaña "Seguridad" de la configuración de cuenta: PIN de pagos y límite diario. */
+/** Pestaña "Seguridad" de la configuración de cuenta: PIN de pagos, límite diario y apps conectadas. */
 export function SecuritySettings() {
   const [status, setStatus] = useState<SecurityStatus | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -29,6 +32,35 @@ export function SecuritySettings() {
   const [cancelPin, setCancelPin] = useState('');
   const [now, setNow] = useState(() => Date.now());
 
+  // Apps conectadas (mini-apps que la persona autorizó con su PIN)
+  const [apps, setApps] = useState<MiniAppConnection[] | null>(null);
+  const [appsError, setAppsError] = useState(false);
+  const [appBusy, setAppBusy] = useState<string | null>(null);
+
+  const loadApps = useCallback(async () => {
+    try {
+      setApps(await miniappService.listConnections());
+      setAppsError(false);
+    } catch {
+      setAppsError(true);
+    }
+  }, []);
+
+  const disconnectApp = async (appId: string) => {
+    if (appBusy) return;
+    setAppBusy(appId);
+    setMsg(null);
+    try {
+      await miniappService.disconnect(appId);
+      setApps((list) => (list ? list.filter((a) => a.appId !== appId) : list));
+      setMsg({ kind: 'ok', text: 'Desconectaste la app. Para volver a usarla te pedirá tu PIN.' });
+    } catch {
+      setMsg({ kind: 'err', text: 'No se pudo desconectar la app. Intenta de nuevo.' });
+    } finally {
+      setAppBusy(null);
+    }
+  };
+
   const load = useCallback(async () => {
     try {
       const s = await securityService.getStatus();
@@ -42,7 +74,8 @@ export function SecuritySettings() {
 
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadApps();
+  }, [load, loadApps]);
 
   const lockedMs = status?.lockedUntil ? new Date(status.lockedUntil).getTime() - now : 0;
   const locked = lockedMs > 0;
@@ -356,6 +389,57 @@ export function SecuritySettings() {
               {!hasPin ? <span className="form-hint">Crea tu PIN primero.</span> : null}
             </div>
           </>
+        )}
+      </div>
+
+      <div className="kv-sec-block">
+        <h4>Apps conectadas</h4>
+        <p className="settings-tab-desc" style={{ margin: 0 }}>
+          Mini-apps que autorizaste con tu PIN. Pueden pedirte un pago, pero cada pago te vuelve a pedir el PIN.
+        </p>
+        {appsError ? (
+          <p className="kv-sec-msg err" role="alert">
+            No se pudieron cargar tus apps.{' '}
+            <button type="button" className="kv-link-btn" onClick={() => void loadApps()}>
+              Reintentar
+            </button>
+          </p>
+        ) : apps === null ? (
+          <p className="settings-tab-desc" role="status" style={{ margin: 0 }}>
+            Cargando…
+          </p>
+        ) : apps.length === 0 ? (
+          <p className="settings-tab-desc" style={{ margin: 0 }}>
+            No tienes apps conectadas.
+          </p>
+        ) : (
+          <ul className="kv-sec-apps">
+            {apps.map((conn) => {
+              const known = MINI_APPS.find((a) => a.id === conn.appId);
+              const name = known?.name ?? conn.appId;
+              return (
+                <li key={conn.appId} className="kv-sec-app">
+                  <span className="kv-sec-app-icon" aria-hidden="true">
+                    {known?.icon ?? '🧩'}
+                  </span>
+                  <span className="kv-sec-app-text">
+                    <strong>{name}</strong>
+                    <span className="kv-sec-used">{conn.permissions.map((p) => PERMISSION_LABELS[p]).join(' · ') || 'Sin permisos'}</span>
+                    <span className="kv-sec-used">Conectada desde el {fmtDateTime(conn.connectedAt)}</span>
+                  </span>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => void disconnectApp(conn.appId)}
+                    disabled={appBusy !== null}
+                    aria-label={`Desconectar ${name}`}
+                  >
+                    {appBusy === conn.appId ? 'Desconectando…' : 'Desconectar'}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </div>
 

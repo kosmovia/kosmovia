@@ -194,6 +194,8 @@ const QUOTA_MESSAGES: Record<string, string> = {
   categories_per_community: "Esta comunidad ya tiene el máximo de 20 categorías.",
   vaquitas_open_per_community: "Esta comunidad ya tiene el máximo de 20 vaquitas abiertas. Cierra alguna para crear otra.",
   vaquitas_per_hour: "Creaste muchas vaquitas en la última hora. Intenta de nuevo más tarde.",
+  attachments_per_hour: "Subiste muchos archivos en la última hora. Intenta de nuevo más tarde.",
+  attachments_total_bytes: "Llegaste al máximo de 100 MB de archivos. Borra mensajes con archivos para liberar espacio.",
 };
 
 /** Spanish message for a quota trigger of 0002_hardening.sql (`quota_exceeded:<kind>`), else null. */

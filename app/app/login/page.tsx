@@ -4,11 +4,11 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { SERVICES_MODE } from '../../services';
 import { CoreLogin } from './CoreLogin';
+import { FirstRunTrust } from '../../components/TrustWelcome';
 
 export default function LoginPage() {
   // Modo api: login real con Pollar. Modo demo: el login de siempre.
-  if (SERVICES_MODE === 'api') return <CoreLogin />;
-  return <DemoLogin />;
+  return <FirstRunTrust>{SERVICES_MODE === 'api' ? <CoreLogin /> : <DemoLogin />}</FirstRunTrust>;
 }
 
 function DemoLogin() {

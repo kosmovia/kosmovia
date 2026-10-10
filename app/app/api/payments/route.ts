@@ -1,6 +1,7 @@
 import { failure, handled, json, readJsonBody, requireGate, type Session } from "../../../lib/core/api-route.ts";
 import { limitedResponse } from "../../../lib/core/api-limits.ts";
 import * as repo from "../../../lib/core/db/repo.ts";
+import { notifyPayment } from "../../../lib/core/push-triggers.ts";
 import {
   MEMO_RE,
   TX_HASH_RE,
@@ -127,6 +128,7 @@ function save(session: Session, p: VerifiedPayment, note: string | null, approva
       memo: p.memo,
     });
     if (outcome.status === "conflict") return failure(409, "Ese pago ya está registrado.", "payment_exists");
+    if (outcome.status === "created") notifyPayment(outcome.payment, session.profileId);
     return json({ payment: outcome.payment }, outcome.status === "created" ? 201 : 200);
   });
 }

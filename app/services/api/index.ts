@@ -31,6 +31,9 @@ import { checkApprovalForPayment } from '../../lib/core/pin-rules.ts';
 
 export { ApiSecurityService } from './security';
 export { ApiVaquitaService } from './vaquita';
+export { ApiMiniAppService } from './miniapps';
+export { ApiRetosService } from './retos';
+export { ApiAcademiaService } from './academia';
 
 // ------------------------------------------------------------ wire types
 

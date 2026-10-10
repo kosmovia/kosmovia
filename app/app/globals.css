@@ -2838,3 +2838,103 @@ button.kv-app-card:hover { border-color: var(--accent); background: var(--surfac
 .kv-vq-contrib-amt { align-items: flex-end; flex-shrink: 0; font-weight: 700; color: var(--accent); }
 .kv-vq-chatcard { max-width: 340px; display: flex; flex-direction: column; gap: 8px; }
 .kv-vq-chatcard .invoice-concept { margin: 0; }
+
+/* Páginas de confianza y enlaces del sitio */
+.legal-page { min-height: 100vh; background: var(--bg); color: var(--fg); }
+.legal-header, .legal-main { width: min(100% - 32px, 720px); margin-inline: auto; }
+.legal-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding-block: 24px; border-bottom: 1px solid var(--line); }
+.legal-brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; text-decoration: none; }
+.legal-brand img { flex-shrink: 0; }
+.legal-main { padding-block: 32px 48px; font-size: 16px; line-height: 1.7; overflow-wrap: anywhere; }
+.legal-main h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.2; margin-bottom: 12px; }
+.legal-main h2 { font-size: 22px; line-height: 1.35; margin-bottom: 12px; }
+.legal-main h3 { font-size: 17px; margin-top: 18px; }
+.legal-main p + p { margin-top: 12px; }
+.legal-date { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+.legal-note { padding: 16px; margin-bottom: 24px; border: 1px solid var(--accent); border-radius: 12px; background: var(--surface); }
+.legal-note strong { color: var(--accent); }
+.legal-toc { padding: 20px; margin-block: 28px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.legal-main ul, .legal-main ol { padding-left: 24px; }
+.legal-main li + li { margin-top: 8px; }
+.legal-section { margin-top: 32px; scroll-margin-top: 24px; }
+.legal-section p + ul, .legal-section ul + p { margin-top: 12px; }
+.legal-page a, .legal-consent a, .site-footer a { color: var(--accent); text-underline-offset: 3px; }
+.legal-page a:focus-visible, .legal-main:focus-visible, .legal-consent a:focus-visible, .site-footer a:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 2px; }
+.legal-skip { position: absolute; top: 8px; left: 16px; padding: 12px; background: var(--surface); border: 1px solid var(--accent); transform: translateY(-200%); z-index: 10; }
+.legal-skip:focus { transform: translateY(0); }
+.legal-consent { margin-top: 12px; color: var(--muted); font-size: 12px; line-height: 1.6; text-align: center; }
+.site-footer { width: 100%; padding: 24px 16px; border-top: 1px solid var(--line); color: var(--muted); background: var(--bg); font-size: 13px; line-height: 1.6; text-align: center; overflow-wrap: anywhere; }
+.site-footer-links { display: flex; justify-content: center; flex-wrap: wrap; gap: 4px 20px; margin-bottom: 12px; }
+.site-footer-links a { display: inline-flex; align-items: center; min-height: 44px; }
+.site-footer p + p { margin-top: 4px; }
+
+/* Message attachments: shared by channel chat and direct messages. */
+.kv-att-list { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; margin-top: 8px; max-width: 100%; }
+.kv-att-img { display: block; max-width: 100%; padding: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface-alt); cursor: zoom-in; }
+.kv-att-img img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.kv-att-pdf { display: flex; align-items: center; gap: 10px; width: min(360px, 100%); padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-alt); }
+.kv-att-pdf-icon { color: var(--accent); flex-shrink: 0; }
+.kv-att-pdf-text, .kv-att-chip-text { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.kv-att-pdf-name, .kv-att-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.kv-att-pdf-meta, .kv-att-chip-meta { color: var(--muted); font-size: 11px; }
+.kv-att-download { display: inline-flex; align-items: center; gap: 5px; min-height: 40px; color: var(--accent); font-size: 12px; text-decoration: none; flex-shrink: 0; }
+.kv-att-tray-wrap { width: 100%; margin-bottom: 8px; }
+.kv-att-tray { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; }
+.kv-att-chip { display: flex; gap: 8px; align-items: center; width: min(240px, 100%); padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-alt); }
+.kv-att-chip-thumb { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 6px; flex-shrink: 0; overflow: hidden; color: var(--accent); }
+.kv-att-chip-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.kv-att-chip-remove, .kv-att-viewer-close { display: grid; place-items: center; min-width: 40px; min-height: 40px; background: transparent; border: 0; color: var(--fg); cursor: pointer; }
+.kv-att-progress { display: block; height: 3px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.kv-att-progress span { display: block; height: 100%; background: var(--accent); }
+.kv-att-error { color: #fca5a5; font-size: 12px; margin-bottom: 8px; }
+.kv-att-missing, .kv-att-skeleton { padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-alt); color: var(--muted); font: inherit; font-size: 12px; }
+.kv-att-skeleton { width: 200px; max-width: 100%; height: 120px; }
+.kv-att-viewer { position: fixed; inset: 0; z-index: 300; background: rgba(0, 0, 0, .94); display: flex; flex-direction: column; align-items: center; padding: max(12px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); }
+.kv-att-viewer-bar { display: flex; align-items: center; gap: 12px; width: 100%; margin-bottom: 16px; }
+.kv-att-viewer-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.kv-att-viewer-img { max-width: 100%; max-height: calc(100dvh - 100px); object-fit: contain; margin: auto; }
+.kv-att-img:focus-visible, .kv-att-download:focus-visible, .kv-att-chip-remove:focus-visible, .kv-att-viewer-close:focus-visible, .kv-att-missing:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 600px) { .kv-att-pdf { flex-wrap: wrap; } .kv-att-download { min-height: 44px; } .kv-att-chip { width: 100%; } }
+
+
+/* Bienvenida de primera visita: documentos y comunidad antes del ingreso. */
+.kv-welcome-page { min-height: 100dvh; overflow-y: auto; padding: 24px 16px; display: grid; place-items: center; color: var(--fg); background: radial-gradient(ellipse at 50% 0%, var(--accent-glow), transparent 60%), var(--bg); }
+.kv-welcome-card { width: min(100%, 760px); padding: 28px; background: var(--surface); border: 1px solid var(--line); border-radius: 24px; box-shadow: 0 24px 72px rgba(0, 0, 0, .2); }
+.kv-welcome-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.kv-welcome-brand { display: inline-flex; align-items: center; gap: 9px; color: var(--fg); font-size: 19px; font-weight: 750; text-decoration: none; }
+.kv-welcome-beta { border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; color: var(--muted); font-size: 12px; }
+.kv-welcome-hero { max-width: 590px; margin: 28px auto 24px; text-align: center; }
+.kv-welcome-hero > img { margin-bottom: 12px; }
+.kv-welcome-eyebrow { color: var(--accent); font-size: 11px; letter-spacing: .14em; font-weight: 700; }
+.kv-welcome-hero h1 { margin: 8px 0 12px; font-size: clamp(26px, 5vw, 36px); letter-spacing: -.025em; line-height: 1.15; }
+.kv-welcome-hero > p:last-child { font-size: 16px; line-height: 1.6; color: var(--muted); }
+.kv-welcome-features { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.kv-welcome-features li { display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); }
+.kv-welcome-features li > span { font-size: 24px; color: var(--accent); }
+.kv-welcome-features h2 { font-size: 14px; line-height: 1.4; margin-bottom: 5px; }
+.kv-welcome-features p { font-size: 13px; line-height: 1.6; color: var(--muted); }
+.kv-welcome-testnet { margin: 16px 0; padding: 12px 14px; border-radius: 10px; background: var(--accent-glow); font-size: 13px; line-height: 1.6; }
+.kv-welcome-testnet strong { color: var(--accent); }
+.kv-welcome-trust { padding: 18px 0 20px; border-top: 1px solid var(--line); }
+.kv-welcome-trust h2 { font-size: 16px; margin-bottom: 6px; }
+.kv-welcome-trust p { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.kv-welcome-docs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.kv-welcome-docs a { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 44px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 10px; color: var(--accent); text-decoration: none; font-size: 14px; }
+.kv-welcome-docs a:hover { border-color: var(--accent); background: var(--surface-hover); }
+.kv-welcome-continue { width: 100%; display: flex; align-items: center; justify-content: center; gap: 16px; min-height: 48px; border: none; border-radius: 12px; padding: 12px; background: var(--accent); color: var(--bg); text-decoration: none; font: inherit; font-weight: 750; cursor: pointer; }
+.kv-welcome-continue:hover { background: var(--accent-hover); }
+.kv-welcome-community { margin-top: 20px; text-align: center; }
+.kv-welcome-community p { color: var(--muted); font-size: 12px; }
+.kv-welcome-community nav { display: flex; justify-content: center; flex-wrap: wrap; column-gap: 14px; margin-top: 6px; }
+.kv-welcome-community a { display: inline-flex; align-items: center; gap: 3px; min-height: 40px; color: var(--accent); font-size: 12px; text-underline-offset: 4px; }
+.kv-welcome-card a:focus-visible, .kv-welcome-card button:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.kv-welcome-sr { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+@media (max-width: 560px) {
+  .kv-welcome-page { padding: 12px; align-items: start; }
+  .kv-welcome-card { padding: 20px 16px; border-radius: 18px; }
+  .kv-welcome-hero { margin: 24px auto 20px; }
+  .kv-welcome-features { grid-template-columns: 1fr; gap: 8px; }
+  .kv-welcome-features li { flex-direction: row; align-items: center; padding: 12px; gap: 12px; }
+  .kv-welcome-features li > span { width: 30px; flex-shrink: 0; text-align: center; }
+  .kv-welcome-docs a { flex: 1 0 auto; padding-inline: 10px; }
+}

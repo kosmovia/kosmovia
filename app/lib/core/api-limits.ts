@@ -32,6 +32,21 @@ export const API_LIMITS = {
   /** Cada pedido consulta la base y el pago; quien aporta lo hace pocas veces. */
   vaquitaContribute: { max: 30, windowMs: 10 * MINUTE },
   vaquitaManage: { max: 30, windowMs: HOUR },
+  /** Subir o quitar un archivo adjunto (el tope duro de 30 por hora vive en un trigger). */
+  attachmentWrite: { max: 20, windowMs: 10 * MINUTE },
+  /** Cada miniatura del chat es una consulta; el navegador guarda la respuesta una hora. */
+  attachmentRead: { max: 600, windowMs: MINUTE },
+  /** Activar, renovar o quitar un dispositivo y cambiar los avisos. */
+  pushWrite: { max: 30, windowMs: 10 * MINUTE },
+  pushRead: { max: 60, windowMs: MINUTE },
+  /** Retos: el cliente consulta cada pocos segundos (~20 por minuto por pestaña abierta). */
+  retoRead: { max: 240, windowMs: MINUTE },
+  retoCreate: { max: 30, windowMs: HOUR },
+  /** Aceptar, rechazar y jugar. */
+  retoAct: { max: 60, windowMs: MINUTE },
+  academiaRead: { max: 120, windowMs: MINUTE },
+  /** Cada envío corrige un cuestionario; se puede repetir, pero no a ráfagas. */
+  academiaAnswer: { max: 30, windowMs: 10 * MINUTE },
 } as const;
 
 export type LimitKind = keyof typeof API_LIMITS;
@@ -57,6 +72,15 @@ const MESSAGES: Record<LimitKind, string> = {
   vaquitaCreate: "Creaste muchas vaquitas seguidas. Espera un momento e intenta de nuevo.",
   vaquitaContribute: "Intentaste vincular muchos aportes seguidos. Espera un momento e intenta de nuevo.",
   vaquitaManage: "Hiciste muchos cambios seguidos. Espera un momento e intenta de nuevo.",
+  attachmentWrite: "Subiste muchos archivos seguidos. Espera un momento e intenta de nuevo.",
+  attachmentRead: "Demasiadas consultas. Espera un momento.",
+  pushWrite: "Hiciste muchos cambios de notificaciones seguidos. Espera un momento e intenta de nuevo.",
+  pushRead: "Demasiadas consultas. Espera un momento.",
+  retoRead: "Demasiadas consultas. Espera un momento.",
+  retoCreate: "Creaste muchos retos seguidos. Espera un momento e intenta de nuevo.",
+  retoAct: "Vas muy rápido. Espera un momento e intenta de nuevo.",
+  academiaRead: "Demasiadas consultas. Espera un momento.",
+  academiaAnswer: "Enviaste muchas respuestas seguidas. Espera un momento e intenta de nuevo.",
 };
 
 /** A 429 Response when `profileId` is over the limit for `kind`, else null (and the hit is recorded). */

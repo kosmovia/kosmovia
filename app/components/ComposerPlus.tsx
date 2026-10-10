@@ -4,10 +4,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { IconCoin, IconImage, IconPaperclip, IconPlus } from './Icons';
 
 /**
- * Botón [+] a la izquierda del mensaje, como en Towns: cobro B2B y, pronto,
- * foto y archivo. Deja el campo de texto limpio.
+ * Botón [+] del mensaje: fotos, PDF y cobros B2B.
  */
-export function ComposerPlus({ onInvoice }: { onInvoice?: () => void }) {
+export function ComposerPlus({ onInvoice, onPhoto, onFile, disabled = false }: { onInvoice?: () => void; onPhoto?: () => void; onFile?: () => void; disabled?: boolean }) {
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
@@ -31,6 +30,7 @@ export function ComposerPlus({ onInvoice }: { onInvoice?: () => void }) {
         type="button"
         className="kv-composer-icon kv-composer-plus"
         onClick={() => setOpen((prev) => !prev)}
+        disabled={disabled}
         aria-label="Adjuntar o cobrar"
         aria-expanded={open}
         aria-haspopup="menu"
@@ -40,11 +40,11 @@ export function ComposerPlus({ onInvoice }: { onInvoice?: () => void }) {
       </button>
       {open ? (
         <div className="kv-menu kv-menu-up" role="menu" aria-label="Adjuntar">
-          <button type="button" role="menuitem" className="kv-menu-item" disabled title="Próximamente">
-            <IconImage size={16} /> Foto · próximamente
+          <button type="button" role="menuitem" className="kv-menu-item" disabled={disabled || !onPhoto} onClick={() => { setOpen(false); onPhoto?.(); }}>
+            <IconImage size={16} /> Foto o imagen
           </button>
-          <button type="button" role="menuitem" className="kv-menu-item" disabled title="Próximamente">
-            <IconPaperclip size={16} /> Archivo (hasta 1 MB) · próximamente
+          <button type="button" role="menuitem" className="kv-menu-item" disabled={disabled || !onFile} onClick={() => { setOpen(false); onFile?.(); }}>
+            <IconPaperclip size={16} /> Archivo PDF · hasta 5 MB
           </button>
           {onInvoice ? (
             <button

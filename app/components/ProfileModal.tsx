@@ -5,6 +5,7 @@ import { User } from '../types';
 import { AvatarFace } from './AvatarFace';
 import { KosmoFrame } from './KosmoFrame';
 import { SecuritySettings } from './SecuritySettings';
+import { NotificationSettings } from './NotificationSettings';
 
 interface ProfileModalProps {
   user: User;
@@ -25,7 +26,7 @@ export function ProfileModal({
   stellarAddress = 'GD26UBYVEYYVVOVCMOLPMIKPWQRFV34LK3I7LHBNTUGYHYIKFMEREH2A',
   onLogout,
 }: ProfileModalProps) {
-  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'wallets' | 'kyc'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'notifications' | 'wallets' | 'kyc'>('profile');
   const [displayName, setDisplayName] = useState(user.displayName);
   const [bio, setBio] = useState(user.bio || '');
   const [saving, setSaving] = useState(false);
@@ -88,6 +89,13 @@ export function ProfileModal({
             onClick={() => setActiveTab('security')}
           >
             🔐 Seguridad
+          </button>
+          <button
+            type="button"
+            className={`settings-tab-btn ${activeTab === 'notifications' ? 'active' : ''}`}
+            onClick={() => setActiveTab('notifications')}
+          >
+            🔔 Notificaciones
           </button>
           <button
             type="button"
@@ -168,6 +176,9 @@ export function ProfileModal({
 
         {/* Seguridad: PIN de pagos y límite diario */}
         {activeTab === 'security' && <SecuritySettings />}
+
+        {/* Notificaciones push e instalar la app */}
+        {activeTab === 'notifications' && <NotificationSettings />}
 
         {/* Tab 2: Billeteras Vinculadas */}
         {activeTab === 'wallets' && (

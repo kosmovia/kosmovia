@@ -2,9 +2,16 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { IconClose } from './Icons';
+import { MiniAppHost } from './apps/MiniAppHost';
 import { isOpenable, MINI_APPS, PERMISSION_LABELS, type AppProps, type MiniApp } from './apps/registry';
+import type { WalletTransaction } from '../types';
 
-type PanelProps = AppProps & { /** App que se abre al montar el panel. */ initialAppId?: string };
+type PanelProps = AppProps & {
+  /** App que se abre al montar el panel. */
+  initialAppId?: string;
+  /** Un pago de una mini-app ya salió: la plataforma actualiza saldo e historial. */
+  onPaid?: (tx: WalletTransaction) => void | Promise<void>;
+};
 
 /**
  * Panel derecho "Aplicaciones" (mini-apps al estilo Farcaster). Misma anchura y
@@ -12,8 +19,14 @@ type PanelProps = AppProps & { /** App que se abre al montar el panel. */ initia
  * estás en la lista, cierra el panel.
  */
 export function AppsPanel(props: PanelProps) {
-  const { onClose, initialAppId, ...appProps } = props;
+  const { onClose, initialAppId, initialParams, ...hostProps } = props;
   const [openId, setOpenId] = useState<string | null>(initialAppId ?? null);
+  // Los parámetros (p. ej. la vaquita de una tarjeta del chat) valen solo para esa primera apertura.
+  const [params, setParams] = useState(initialParams);
+  const goToList = () => {
+    setOpenId(null);
+    setParams(undefined);
+  };
   const panelRef = useRef<HTMLElement>(null);
   const openApp = MINI_APPS.find((a) => a.id === openId && isOpenable(a)) ?? null;
 
@@ -25,13 +38,12 @@ export function AppsPanel(props: PanelProps) {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key !== 'Escape') return;
     e.stopPropagation();
-    if (openApp) setOpenId(null);
+    if (openApp) goToList();
     else onClose();
   };
 
   const soon = MINI_APPS.filter((a) => !isOpenable(a));
   const ready = MINI_APPS.filter((a) => isOpenable(a));
-  const AppView = openApp?.component;
 
   return (
     <aside
@@ -44,7 +56,7 @@ export function AppsPanel(props: PanelProps) {
       <div className="kv-panel-head">
         {openApp ? (
           <div className="kv-apps-head-app">
-            <button type="button" className="kv-apps-back" onClick={() => setOpenId(null)} aria-label="Volver a Aplicaciones">
+            <button type="button" className="kv-apps-back" onClick={goToList} aria-label="Volver a Aplicaciones">
               <span aria-hidden="true">←</span>
             </button>
             <span className="kv-panel-title">{openApp.name}</span>
@@ -58,9 +70,9 @@ export function AppsPanel(props: PanelProps) {
         </button>
       </div>
 
-      <div className="kv-panel-body">
-        {AppView && openApp ? (
-          <AppView {...appProps} onClose={onClose} />
+      <div className={openApp ? 'kv-panel-body kv-panel-body-app' : 'kv-panel-body'}>
+        {openApp ? (
+          <MiniAppHost {...hostProps} key={openApp.id} app={openApp} initialParams={params} onExit={goToList} />
         ) : (
           <>
             <p className="kv-apps-intro">Mini-apps para usar dentro de tu comunidad.</p>

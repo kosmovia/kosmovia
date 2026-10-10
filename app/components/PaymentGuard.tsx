@@ -14,6 +14,10 @@ export interface ApprovalRequest {
   toLabel?: string;
   asset: PayAsset;
   amount: number;
+  /** Texto corto que se muestra en la confirmación (p. ej. el concepto que pide una mini-app). Solo es información. */
+  note?: string;
+  /** Si el pago lo pide una mini-app, su nombre: la confirmación dice quién lo pide. */
+  appName?: string;
 }
 
 type RequestApproval = (req: ApprovalRequest) => Promise<PaymentApproval | null>;
@@ -484,6 +488,12 @@ function ApprovalDialog({
 
         <div className="modal-body">
           <dl className="kv-pay-summary">
+            {req.appName ? (
+              <div>
+                <dt>Lo pide</dt>
+                <dd>{req.appName}</dd>
+              </div>
+            ) : null}
             <div>
               <dt>Para</dt>
               <dd>{req.toLabel ?? req.to}</dd>
@@ -494,6 +504,12 @@ function ApprovalDialog({
                 {fmtAmount(req.amount)} {req.asset}
               </dd>
             </div>
+            {req.note ? (
+              <div>
+                <dt>Concepto</dt>
+                <dd>{req.note}</dd>
+              </div>
+            ) : null}
             <div>
               <dt>Red</dt>
               <dd>Stellar testnet</dd>

@@ -9,12 +9,25 @@ import { ISecurityService } from './securityService';
 import { MockSecurityService } from './mockSecurityService';
 import { IVaquitaService } from './vaquitaService';
 import { MockVaquitaService } from './mockVaquitaService';
+import { IPushService, MockPushService } from './pushService';
+import { ApiPushService } from './api/push';
+import { IRetosService } from './retosService';
+import { MockRetosService } from './mockRetosService';
+import { IAcademiaService } from './academiaService';
+import { MockAcademiaService } from './mockAcademiaService';
+import { IMiniAppService } from './miniappService';
+import { MockMiniAppService } from './mockMiniappService';
+import { IAttachmentService, MockAttachmentService } from './attachmentService';
+import { ApiAttachmentService } from './api/attachments';
 import {
   ApiAuthService,
   ApiChatService,
   ApiCommunityService,
   ApiDmService,
+  ApiAcademiaService,
+  ApiMiniAppService,
   ApiProfileService,
+  ApiRetosService,
   ApiSecurityService,
   ApiVaquitaService,
   ApiWalletService,
@@ -40,6 +53,11 @@ export const settlementService: ISettlementService = new MockSettlementService()
 export const profileService: IProfileService = api ? new ApiProfileService() : new MockProfileService();
 export const securityService: ISecurityService = api ? new ApiSecurityService() : new MockSecurityService();
 export const vaquitaService: IVaquitaService = api ? new ApiVaquitaService() : new MockVaquitaService();
+export const pushService: IPushService = api ? new ApiPushService() : new MockPushService();
+export const retosService: IRetosService = api ? new ApiRetosService() : new MockRetosService();
+export const academiaService: IAcademiaService = api ? new ApiAcademiaService() : new MockAcademiaService();
+export const miniappService: IMiniAppService = api ? new ApiMiniAppService() : new MockMiniAppService();
+export const attachmentService: IAttachmentService = api ? new ApiAttachmentService() : new MockAttachmentService();
 
 export * from './authService';
 export * from './chatService';
@@ -50,5 +68,10 @@ export * from './walletService';
 export * from './profileService';
 export * from './securityService';
 export * from './vaquitaService';
+export * from './pushService';
+export * from './miniappService';
+export * from './attachmentService';
+export * from './retosService';
+export * from './academiaService';
 export * from './storage';
 export * from './mockData';
