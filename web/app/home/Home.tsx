@@ -364,6 +364,13 @@ export default function Home() {
             <div className="kv-grid kv-team-grid">
               {TEAM.people.map((person) => (
                 <article key={person.name} className="kv-card">
+                  <img
+                    className="kv-team-avatar"
+                    src={`/team/${person.name.toLowerCase().normalize("NFD").replace(/[^a-z]/g, "")}.svg`}
+                    alt={`Avatar Kosmonauta de ${person.name}`}
+                    width={96}
+                    height={96}
+                  />
                   <h3>{person.name}</h3>
                   <p>{person.role}</p>
                 </article>
