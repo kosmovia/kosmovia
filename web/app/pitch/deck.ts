@@ -173,7 +173,7 @@ export const en: Deck = {
     },
     {
       id: "compare", kind: "table", title: "How we are different",
-      caption: "Community chat apps, standalone wallets and Kosmovia compared",
+      caption: "Chat apps, crypto social apps (Towns, Farcaster), standalone wallets and Kosmovia compared",
       cols: ["Community", "Built-in dollars & payments", "Verifiable receipts", "Our focus"],
       rows: [
         { name: "Telegram / WhatsApp / Discord", cells: [
@@ -184,9 +184,17 @@ export const en: Deck = {
           { v: "no", text: "No community" }, { v: "yes", text: "Wallet and payments" },
           { v: "yes", text: "On-chain records" }, { v: "partial", text: "Money" },
         ] },
+        { name: "Towns", cells: [
+          { v: "yes", text: "Discord-style group chat" }, { v: "partial", text: "Crypto on Base: tips and memberships" },
+          { v: "yes", text: "On-chain" }, { v: "partial", text: "Crypto-native users, English, global" },
+        ] },
+        { name: "Farcaster", cells: [
+          { v: "partial", text: "Public social feed and channels" }, { v: "partial", text: "Crypto wallet, needs Web3 know-how" },
+          { v: "yes", text: "On-chain" }, { v: "partial", text: "Crypto natives; mini-apps (our inspiration)" },
+        ] },
         { name: "Kosmovia", highlight: true, cells: [
-          { v: "yes", text: "Channels and mini-apps" }, { v: "yes", text: "USDC on Stellar" },
-          { v: "yes", text: "Receipts in the chat" }, { v: "yes", text: "Bolivia first: vaquitas, Pasanaku next" },
+          { v: "yes", text: "Channels, DMs and mini-apps" }, { v: "yes", text: "USDC on Stellar, sign in with Google" },
+          { v: "yes", text: "Receipts in the chat" }, { v: "yes", text: "Everyday people in LatAm, in Spanish: vaquitas, Pasanaku next" },
         ] },
       ],
     },
@@ -326,7 +334,7 @@ export const es: Deck = {
     },
     {
       id: "compare", kind: "table", title: "En qué nos diferenciamos",
-      caption: "Comparación entre apps de chat, wallets independientes y Kosmovia",
+      caption: "Comparación entre apps de chat, redes sociales cripto (Towns, Farcaster), wallets independientes y Kosmovia",
       cols: ["Comunidad", "Dólares y pagos integrados", "Comprobantes verificables", "Enfoque"],
       rows: [
         { name: "Telegram / WhatsApp / Discord", cells: [
@@ -337,9 +345,17 @@ export const es: Deck = {
           { v: "no", text: "Sin comunidad" }, { v: "yes", text: "Wallet y pagos" },
           { v: "yes", text: "Registros en la red" }, { v: "partial", text: "Dinero" },
         ] },
+        { name: "Towns", cells: [
+          { v: "yes", text: "Chat grupal estilo Discord" }, { v: "partial", text: "Cripto en Base: propinas y membresías" },
+          { v: "yes", text: "En la red (on-chain)" }, { v: "partial", text: "Usuarios cripto, en inglés, global" },
+        ] },
+        { name: "Farcaster", cells: [
+          { v: "partial", text: "Red social pública con canales" }, { v: "partial", text: "Wallet cripto, pide saber de Web3" },
+          { v: "yes", text: "En la red (on-chain)" }, { v: "partial", text: "Público cripto; sus mini-apps nos inspiran" },
+        ] },
         { name: "Kosmovia", highlight: true, cells: [
-          { v: "yes", text: "Canales y mini-apps" }, { v: "yes", text: "USDC en Stellar" },
-          { v: "yes", text: "Recibos en el chat" }, { v: "yes", text: "Bolivia primero: vaquitas, luego Pasanaku" },
+          { v: "yes", text: "Canales, mensajes directos y mini-apps" }, { v: "yes", text: "USDC en Stellar, entras con Google" },
+          { v: "yes", text: "Recibos en el chat" }, { v: "yes", text: "Gente común de Latinoamérica, en español: vaquitas, luego Pasanaku" },
         ] },
       ],
     },
