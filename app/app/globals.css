@@ -2465,6 +2465,32 @@ html, body {
   }
 }
 
+/* ===== Aplicaciones: necesita mas ancho que los otros paneles =====
+   Una mini-app no entra comoda en 256 px. El reparto del ancho es:
+   riel 72 + canales 208 + chat (minimo 300) + panel, asi que la mitad real
+   solo cabe desde ~1160 px; entre 769 y 1159 px el panel flota sobre el chat
+   en vez de aplastarlo (forzarlo daria scroll horizontal), y en movil ocupa
+   todo. Los otros paneles siguen en 256 px. */
+@media (min-width: 1160px) {
+  .kv-docked-panel.kv-apps-panel {
+    width: min(50vw, 760px); min-width: min(50vw, 760px); max-width: 760px;
+    flex: 0 0 min(50vw, 760px);
+  }
+}
+@media (max-width: 1159px) and (min-width: 769px) {
+  .kv-docked-panel.kv-apps-panel {
+    position: absolute; right: 0; top: 0; bottom: 0; z-index: 35;
+    width: min(50vw, 560px); min-width: 0; max-width: 560px; flex: none;
+    box-shadow: -12px 0 32px rgba(0, 0, 0, 0.45);
+  }
+}
+@media (max-width: 768px) {
+  .kv-docked-panel.kv-apps-panel {
+    inset: 0; width: 100vw; min-width: 0; max-width: 100vw;
+    border-left: none; box-shadow: none;
+  }
+}
+
 /* Logo de Kosmovia (provisorio) */
 .kv-brand-img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
 .kv-rail-logo { overflow: hidden; padding: 0; }
