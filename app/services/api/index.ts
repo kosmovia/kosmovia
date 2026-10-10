@@ -72,7 +72,7 @@ type DmThreadWire = {
   last_message_at?: string | null;
 };
 type MemberRow = { role: string; profile: ProfileRow };
-type MessageWire = { id: string; channel_id: string; content: string; created_at: string; edited_at?: string | null; author: AuthorRow };
+type MessageWire = { id: string; channel_id: string; content: string; created_at: string; edited_at?: string | null; author: AuthorRow; paid_by?: string | null };
 type PaymentParty = { username: string } | null;
 type PaymentWire = {
   id: string;
@@ -164,7 +164,7 @@ function toThread(t: DmThreadWire): DmThread {
 const hora = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
 function toMessage(m: MessageWire): Message {
-  return { id: m.id, channelId: m.channel_id, author: toUser(m.author), content: m.content, createdAt: hora(m.created_at), editedAt: m.edited_at ?? undefined };
+  return { id: m.id, channelId: m.channel_id, author: toUser(m.author), content: m.content, createdAt: hora(m.created_at), editedAt: m.edited_at ?? undefined, paidBy: m.paid_by ?? undefined };
 }
 
 // ------------------------------------------------------------ auth
@@ -743,7 +743,7 @@ export class ApiWalletService implements IWalletService {
       const useHash = hash && Date.now() < deadline ? hash : undefined;
       const res = await apiRequest<{ payment?: PaymentWire }>('/api/payments', {
         method: 'POST',
-        body: { hash: useHash, memo, startedAt, note: '', approvalId: approval.id },
+        body: { hash: useHash, memo, startedAt, note: '', approvalId: approval.id, invoiceMessageId: input.invoiceMessageId },
       });
       if (res.ok && res.data.payment) {
         forgetPayment(me);

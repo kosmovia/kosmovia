@@ -1,30 +1,42 @@
 'use client';
 
 import React, { useState } from 'react';
+import { User } from '../types';
 
 interface QuickInvoiceModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (amount: number, concept: string) => void;
+  /** `payerId` null = lo paga cualquier miembro del canal. */
+  onSubmit: (amount: number, concept: string, payerId: string | null) => void;
+  /** Para elegir destinatario. Sin lista, el cobro queda abierto a cualquiera. */
+  members?: User[];
+  /** No tiene sentido cobrarse a uno mismo: se excluye de la lista. */
+  currentUserId?: string;
 }
 
 export function QuickInvoiceModal({
   isOpen,
   onClose,
   onSubmit,
+  members,
+  currentUserId,
 }: QuickInvoiceModalProps) {
   const [amount, setAmount] = useState('');
   const [concept, setConcept] = useState('');
+  const [payerId, setPayerId] = useState('');
 
   if (!isOpen) return null;
+
+  const candidates = (members || []).filter((m) => m.id !== currentUserId);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const num = parseFloat(amount.replace(',', '.'));
     if (isNaN(num) || num < 0.01 || !concept.trim()) return;
-    onSubmit(Math.round(num * 100) / 100, concept.trim().slice(0, 200));
+    onSubmit(Math.round(num * 100) / 100, concept.trim().slice(0, 200), payerId || null);
     setAmount('');
     setConcept('');
+    setPayerId('');
     onClose();
   };
 
@@ -69,6 +81,27 @@ export function QuickInvoiceModal({
               required
             />
           </div>
+
+          {candidates.length > 0 ? (
+            <div className="form-group">
+              <label className="form-label" htmlFor="kv-invoice-payer">
+                ¿Quién debe pagarlo?
+              </label>
+              <select
+                id="kv-invoice-payer"
+                className="form-input"
+                value={payerId}
+                onChange={(e) => setPayerId(e.target.value)}
+              >
+                <option value="">Cualquiera del canal</option>
+                {candidates.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.username}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
 
           <div className="modal-actions">
             <button type="button" className="btn-secondary" onClick={onClose}>

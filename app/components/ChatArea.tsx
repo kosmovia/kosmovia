@@ -32,7 +32,7 @@ interface ChatAreaProps {
   balanceUSDC?: number;
   onOpenQuickInvoice?: () => void;
   /** Paga el cobro a quien lo emitió (`payee` = @usuario del autor). true si el pago salió. */
-  onPayInvoice?: (amount: number, concept: string, payee: string) => Promise<boolean> | void;
+  onPayInvoice?: (amount: number, concept: string, payee: string, invoiceMessageId: string) => Promise<boolean> | void;
   isWalletOpen?: boolean;
   currentUserId?: string;
   /** Abre la tarjeta de perfil de quien escribió (avatar o nombre). */
@@ -258,7 +258,7 @@ export function ChatArea({
   const handlePay = async (msgId: string, amount: number, concept: string, payee: string) => {
     if (paidInvoices[msgId] || payingInvoice || !onPayInvoice) return;
     setPayingInvoice(msgId);
-    const ok = await onPayInvoice(amount, concept, payee);
+    const ok = await onPayInvoice(amount, concept, payee, msgId);
     setPayingInvoice(null);
     if (ok !== false) setPaidInvoices((prev) => ({ ...prev, [msgId]: true }));
   };
@@ -396,7 +396,8 @@ export function ChatArea({
           messages.map((msg, index) => {
             // Detectar si el mensaje es una tarjeta de cobro B2B interactiva
             const isInvoice = msg.content.startsWith('[COBRO_B2B:');
-            let invoiceData: { amount: number; concept: string } | null = null;
+            // `payerId`: cobro dirigido a una persona; sin él lo paga cualquier miembro.
+            let invoiceData: { amount: number; concept: string; payerId: string | null } | null = null;
             if (isInvoice) {
               try {
                 // El JSON va entre '[COBRO_B2B:' y el último ']' (el concepto puede tener corchetes).
@@ -404,7 +405,11 @@ export function ChatArea({
                 const parsed = JSON.parse(raw);
                 invoiceData =
                   typeof parsed?.amount === 'number' && parsed.amount > 0 && typeof parsed?.concept === 'string'
-                    ? { amount: parsed.amount, concept: parsed.concept }
+                    ? {
+                        amount: parsed.amount,
+                        concept: parsed.concept,
+                        payerId: typeof parsed?.payerId === 'string' ? parsed.payerId : null,
+                      }
                     : null;
               } catch {
                 invoiceData = null;
@@ -417,7 +422,16 @@ export function ChatArea({
             const prev = index > 0 ? messages[index - 1] : null;
             const grouped =
               !invoiceData && !vaquitaId && prev !== null && prev.author.id === msg.author.id && !prev.content.startsWith('[COBRO_B2B:') && !prev.content.startsWith('[VAQUITA:');
-            const isPaid = paidInvoices[msg.id];
+            // El servidor manda `paidBy` (migración 0018): por eso recargar ya no
+            // vuelve a habilitar el botón, y un pago de otra persona también cuenta.
+            const isPaid = Boolean(msg.paidBy) || paidInvoices[msg.id];
+            const paidByMe = msg.paidBy !== undefined && msg.paidBy === currentUserId;
+            // Dirigido a otra persona: no es "mío" para pagar.
+            const notMyInvoice =
+              invoiceData?.payerId != null && currentUserId !== undefined && invoiceData.payerId !== currentUserId;
+            const targetName = invoiceData?.payerId
+              ? (community.members || []).find((m) => m.id === invoiceData.payerId)?.username
+              : null;
             const isMine = currentUserId !== undefined && msg.author.id === currentUserId;
             const isPaying = payingInvoice === msg.id;
 
@@ -474,16 +488,26 @@ export function ChatArea({
                         type="button"
                         className={`btn-pay-invoice ${isPaid ? 'paid' : ''}`}
                         onClick={() => invoiceData && void handlePay(msg.id, invoiceData.amount, invoiceData.concept, msg.author.username)}
-                        disabled={isPaid || isMine || isPaying || payingInvoice !== null}
-                        title={isMine ? 'Es tu propio cobro' : undefined}
+                        disabled={isPaid || isMine || notMyInvoice || isPaying || payingInvoice !== null}
+                        title={
+                          isMine
+                            ? 'Es tu propio cobro'
+                            : notMyInvoice
+                              ? `Este cobro es para ${targetName ?? 'otra persona'}`
+                              : undefined
+                        }
                       >
                         {isPaid
-                          ? '✓ Pago Confirmado en Testnet'
+                          ? paidByMe
+                            ? '✓ Pagado por ti'
+                            : '✓ Cobro ya pagado'
                           : isMine
                             ? 'Tu cobro: esperando pago'
-                            : isPaying
-                              ? 'Pagando…'
-                              : `Pagar ${invoiceData.amount} USDC a ${msg.author.username}`}
+                            : notMyInvoice
+                              ? `Esperando el pago de ${targetName ?? 'su destinatario'}`
+                              : isPaying
+                                ? 'Pagando…'
+                                : `Pagar ${invoiceData.amount} USDC a ${msg.author.username}`}
                       </button>
                     </div>
                   ) : isEditing ? (
