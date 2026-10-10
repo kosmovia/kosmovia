@@ -60,6 +60,8 @@ export interface MessageRow {
   created_at: string;
   /** null = nunca se editó. Solo lo devuelve el backend "api" (migración 0007). */
   edited_at?: string | null;
+  /** Si este mensaje es un cobro ya pagado: el perfil que lo pagó. null = sin pagar (migración 0018). */
+  paid_by?: string | null;
 }
 
 export type MemberRole = "owner" | "admin" | "moderator" | "member";

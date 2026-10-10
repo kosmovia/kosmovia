@@ -40,6 +40,8 @@ import {
   verifyPinHash,
 } from "../pin.ts";
 import { canCloseVaquita, checkContribution } from "../vaquita-rules.ts";
+import * as rules from "../invoice-rules.ts";
+import type { PayDecision } from "../invoice-rules.ts";
 import { getPool } from "./pool.ts";
 import * as q from "./sql.ts";
 
@@ -177,6 +179,36 @@ export async function joinCommunity(communityId: string, profileId: string): Pro
 export async function getRole(communityId: string, profileId: string): Promise<Role> {
   const row = await one<{ role: string }>(q.memberRole(communityId, profileId));
   return roleOf(row?.role);
+}
+
+/**
+ * Si `profileId` puede pagar el cobro del mensaje `messageId`. Se consulta antes
+ * de dejar que el cliente mande la plata, para no cobrar dos veces el mismo
+ * cobro ni dejar que lo pague quien no corresponde. Es una comprobación previa:
+ * lo que de verdad impide el registro doble es el índice único de la 0018.
+ */
+export async function canPayInvoice(messageId: string, profileId: string): Promise<PayDecision> {
+  if (!isUuid(messageId)) {
+    return { allowed: false, status: 400, code: "invalid_invoice", error: "Ese cobro no existe." };
+  }
+  const row = await one<{
+    content: string;
+    author_id: string;
+    visibility: string | null;
+    role: string | null;
+    already_paid: boolean;
+  }>(q.invoiceForPayment(messageId, profileId));
+  if (!row) {
+    return { allowed: false, status: 404, code: "invoice_not_found", error: "Ese cobro no existe." };
+  }
+  return rules.canPayInvoice({
+    content: row.content,
+    authorId: row.author_id,
+    payerId: profileId,
+    role: row.role,
+    visibility: row.visibility === "private" ? "private" : "public",
+    alreadyPaid: row.already_paid === true,
+  });
 }
 
 export type MemberWithProfile = { role: string; joined_at: string; profile: ProfileRow };

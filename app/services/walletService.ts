@@ -18,6 +18,12 @@ export interface SendPaymentInput {
    * el activo del permiso. El modo demo lo ignora.
    */
   approval?: PaymentApproval;
+  /**
+   * El cobro (`[COBRO_B2B:...]`) que este pago liquida, por id de su mensaje. El
+   * servidor comprueba que siga abierto y que quien paga sea el destinatario, y
+   * lo liga al pago para que no se pueda pagar dos veces (migración 0018).
+   */
+  invoiceMessageId?: string;
 }
 
 export interface IWalletService {

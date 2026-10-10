@@ -2465,6 +2465,32 @@ html, body {
   }
 }
 
+/* ===== Aplicaciones: necesita mas ancho que los otros paneles =====
+   Una mini-app no entra comoda en 256 px. El reparto del ancho es:
+   riel 72 + canales 208 + chat (minimo 300) + panel, asi que la mitad real
+   solo cabe desde ~1160 px; entre 769 y 1159 px el panel flota sobre el chat
+   en vez de aplastarlo (forzarlo daria scroll horizontal), y en movil ocupa
+   todo. Los otros paneles siguen en 256 px. */
+@media (min-width: 1160px) {
+  .kv-docked-panel.kv-apps-panel {
+    width: min(50vw, 760px); min-width: min(50vw, 760px); max-width: 760px;
+    flex: 0 0 min(50vw, 760px);
+  }
+}
+@media (max-width: 1159px) and (min-width: 769px) {
+  .kv-docked-panel.kv-apps-panel {
+    position: absolute; right: 0; top: 0; bottom: 0; z-index: 35;
+    width: min(50vw, 560px); min-width: 0; max-width: 560px; flex: none;
+    box-shadow: -12px 0 32px rgba(0, 0, 0, 0.45);
+  }
+}
+@media (max-width: 768px) {
+  .kv-docked-panel.kv-apps-panel {
+    inset: 0; width: 100vw; min-width: 0; max-width: 100vw;
+    border-left: none; box-shadow: none;
+  }
+}
+
 /* Logo de Kosmovia (provisorio) */
 .kv-brand-img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
 .kv-rail-logo { overflow: hidden; padding: 0; }
@@ -2681,6 +2707,34 @@ html, body {
 .kv-visibility-opt.on { border-color: var(--accent); color: var(--fg); }
 .kv-visibility-opt:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 .kv-visibility-opt input { accent-color: var(--accent); }
+
+/* ===== "Escribiendo…" (Supabase Realtime broadcast) ===== */
+.kv-typing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  padding: 0 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.kv-typing-dots { display: inline-flex; gap: 3px; align-items: flex-end; }
+.kv-typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: kv-typing-bounce 1.2s infinite ease-in-out;
+}
+.kv-typing-dot:nth-child(2) { animation-delay: 0.15s; }
+.kv-typing-dot:nth-child(3) { animation-delay: 0.3s; }
+@keyframes kv-typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.45; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kv-typing-dot { animation: none; opacity: 0.8; }
+}
 
 /* PIN de pagos: casillas, modal Confirmar pago y seccion Seguridad */
 .kv-pin { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }

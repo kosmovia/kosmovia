@@ -63,6 +63,8 @@ export interface Message {
   createdAt: string;
   /** ISO de la última edición; sin valor si nunca se editó. */
   editedAt?: string;
+  /** Cobro ya pagado: id del perfil que lo pagó. Sin valor = sin pagar. */
+  paidBy?: string;
 }
 
 export interface WalletTransaction {

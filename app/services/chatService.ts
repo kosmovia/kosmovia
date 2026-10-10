@@ -18,6 +18,17 @@ export interface IChatService {
     callback: (msg: Message) => void,
     onSync?: (latestPage: Message[], isFullChannel: boolean) => void,
   ): () => void;
+  /**
+   * Avisa que `profileId` está escribiendo. Opcional: solo existe donde hay
+   * tiempo real (modo "api" con Supabase); en el modo demo no se implementa.
+   * Se puede llamar por cada tecla, el adaptador limita la frecuencia.
+   */
+  notifyTyping?(channelId: string, profileId: string): void;
+  /**
+   * Ids de perfil que están escribiendo en el canal, con su propia expiración.
+   * Devuelve la función de baja. Opcional, igual que `notifyTyping`.
+   */
+  subscribeToTyping?(channelId: string, onChange: (profileIds: string[]) => void): () => void;
 }
 
 const STORAGE_KEY = 'kosmovia_messages_by_channel';

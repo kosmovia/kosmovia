@@ -430,6 +430,20 @@ function PlataformaContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, inDm, ready, messageRetry]);
 
+  // Quién está escribiendo en el canal abierto. Solo en canales: las
+  // conversaciones directas todavía no tienen tiempo real.
+  const [typingIds, setTypingIds] = useState<string[]>([]);
+  useEffect(() => {
+    setTypingIds([]);
+    if (!chatId || inDm || !chatService.subscribeToTyping) return;
+    return chatService.subscribeToTyping(chatId, setTypingIds);
+  }, [chatId, inDm]);
+
+  const handleTyping = useCallback(() => {
+    if (!chatId || inDm) return;
+    chatService.notifyTyping?.(chatId, currentUser.id);
+  }, [chatId, inDm, currentUser.id]);
+
   const handleChangeTheme = (next: ThemeId) => {
     setTheme(next);
     try {
@@ -814,8 +828,9 @@ function PlataformaContent() {
   };
 
   /** Los cobros se publican en #cobros (donde también se pagan); sin ese canal, en el actual. */
-  const handleCreateInvoice = async (amount: number, concept: string) => {
-    const payload = JSON.stringify({ amount, concept });
+  const handleCreateInvoice = async (amount: number, concept: string, payerId: string | null = null) => {
+    // `payerId` solo viaja si hay destinatario: un cobro abierto no lleva el campo.
+    const payload = JSON.stringify(payerId ? { amount, concept, payerId } : { amount, concept });
     const cobros = activeCommunity.channels.find((ch) => ch.name === 'cobros' && ch.type === 'text');
     if (!cobros || cobros.id === activeChannel.id) {
       void handleSendMessage(`[COBRO_B2B:${payload}]`);
@@ -833,7 +848,12 @@ function PlataformaContent() {
   };
 
   /** Paga un cobro B2B a quien lo emitió (el autor del mensaje con la tarjeta). */
-  const handlePayInvoice = async (amount: number, concept: string, payee: string): Promise<boolean> => {
+  const handlePayInvoice = async (
+    amount: number,
+    concept: string,
+    payee: string,
+    invoiceMessageId?: string,
+  ): Promise<boolean> => {
     const payTo = SERVICES_MODE === 'api' ? payee : `#${activeChannel.name}`;
     setPayNotice(null);
     const approval = await requestApproval({ to: payTo, toLabel: recipientLabel(payee), asset: 'USDC', amount });
@@ -849,6 +869,8 @@ function PlataformaContent() {
         amount,
         asset: 'USDC',
         approval,
+        // Liga el pago al cobro: el servidor rechaza un segundo pago del mismo.
+        invoiceMessageId,
       });
       setTransactions((prev) => [newTx, ...prev]);
 
@@ -921,6 +943,12 @@ function PlataformaContent() {
   const currentMembers = (activeCommunity.members || []).map((m) =>
     m.id === currentUser.id ? { ...m, ...currentUser, role: m.role ?? currentUser.role } : m
   );
+
+  /** Los que escriben, resueltos contra la lista de miembros y sin incluirme. */
+  const typingUsers = typingIds
+    .filter((id) => id !== currentUser.id)
+    .map((id) => currentMembers.find((m) => m.id === id))
+    .filter((u): u is User => u !== undefined);
 
   const myCommunityRole = currentMembers.find((m) => m.id === currentUser.id)?.role;
   // Configurar: dueño o admin (en modo demo, todos).
@@ -1060,6 +1088,8 @@ function PlataformaContent() {
         onOpenChannelSettings={isCommunityOwner && !inDm ? () => setChannelSettingsId(activeChannel.id) : undefined}
         onEditMessage={handleEditMessage}
         onDeleteMessage={handleDeleteMessage}
+        typingUsers={inDm ? undefined : typingUsers}
+        onTyping={inDm ? undefined : handleTyping}
         onOpenVaquita={(id) => {
           setAppsTarget({ vaquitaId: id, nonce: Date.now() });
           setRightPanel('apps');
@@ -1202,6 +1232,8 @@ function PlataformaContent() {
         isOpen={isQuickInvoiceOpen}
         onClose={() => setIsQuickInvoiceOpen(false)}
         onSubmit={handleCreateInvoice}
+        members={currentMembers}
+        currentUserId={currentUser.id}
       />
       {payNotice ? (
         <div

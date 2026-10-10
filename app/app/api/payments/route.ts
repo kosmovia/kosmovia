@@ -67,13 +67,31 @@ export async function POST(request: Request): Promise<Response> {
 
   const body = await readJsonBody(request, 2_048);
   if (!body.ok) return body.response;
-  const input = (body.value ?? {}) as { hash?: unknown; memo?: unknown; startedAt?: unknown; note?: unknown; approvalId?: unknown };
+  const input = (body.value ?? {}) as {
+    hash?: unknown;
+    memo?: unknown;
+    startedAt?: unknown;
+    note?: unknown;
+    approvalId?: unknown;
+    invoiceMessageId?: unknown;
+  };
   const hash = typeof input.hash === "string" ? input.hash.trim().toLowerCase() : "";
   const memo = typeof input.memo === "string" ? input.memo.trim() : "";
   if (hash && !TX_HASH_RE.test(hash)) return failure(400, "El hash de la transacción no es válido.", "invalid_hash");
   if (!hash && !MEMO_RE.test(memo)) return failure(400, "Falta el hash o la referencia del pago.", "invalid_hash");
   const note = cleanNote(input.note);
   const approvalId = typeof input.approvalId === "string" ? input.approvalId.trim().toLowerCase() : null;
+  const invoiceMessageId =
+    typeof input.invoiceMessageId === "string" && input.invoiceMessageId.trim() ? input.invoiceMessageId.trim() : null;
+
+  // Un pago que dice liquidar un cobro: se comprueba quién es el pagador y que
+  // el cobro siga abierto. La garantía final es el indice unico de la 0018, que
+  // separa dos pagos simultaneos; esto es para dar el motivo y no guardar un
+  // vinculo que no corresponde.
+  if (invoiceMessageId) {
+    const allowed = await repo.canPayInvoice(invoiceMessageId, g.session.profileId);
+    if (!allowed.allowed) return failure(allowed.status, allowed.error, allowed.code);
+  }
 
   if (hash) {
     const lookup = await fetchTxOperations(hash);
@@ -81,7 +99,7 @@ export async function POST(request: Request): Promise<Response> {
     if (!lookup.found) return json({ pending: true }, 202);
     const verified = pickPayment(lookup.ops, g.session.wallet);
     if (!verified.ok) return failure(verified.status, verified.error, verified.code);
-    return save(g.session, verified.payment, note, approvalId);
+    return save(g.session, verified.payment, note, approvalId, invoiceMessageId);
   }
 
   // By memo. The watermark is read BEFORE the search, so it never vouches for history the search didn't see.
@@ -96,7 +114,7 @@ export async function POST(request: Request): Promise<Response> {
       continue;
     }
     const verified = pickPayment(lookup.ops, g.session.wallet);
-    if (verified.ok) return save(g.session, verified.payment, note, approvalId);
+    if (verified.ok) return save(g.session, verified.payment, note, approvalId, invoiceMessageId);
   }
   const startedAt = typeof input.startedAt === "string" ? Date.parse(input.startedAt) : NaN;
   // 200 results is the page: a wallet that sent more than that since this attempt can't be searched to the end.
@@ -112,7 +130,13 @@ function horizonDown(code: string): Response {
   return failure(502, "No pudimos consultar la red de Stellar. Intenta de nuevo en unos segundos.", "horizon_error");
 }
 
-function save(session: Session, p: VerifiedPayment, note: string | null, approvalId: string | null): Promise<Response> {
+function save(
+  session: Session,
+  p: VerifiedPayment,
+  note: string | null,
+  approvalId: string | null,
+  invoiceMessageId: string | null,
+): Promise<Response> {
   return handled("POST /api/payments", async () => {
     const outcome = await repo.recordPayment({
       opId: p.opId,
@@ -126,6 +150,7 @@ function save(session: Session, p: VerifiedPayment, note: string | null, approva
       paidAt: p.createdAt,
       approvalId,
       memo: p.memo,
+      invoiceMessageId,
     });
     if (outcome.status === "conflict") return failure(409, "Ese pago ya está registrado.", "payment_exists");
     if (outcome.status === "created") notifyPayment(outcome.payment, session.profileId);

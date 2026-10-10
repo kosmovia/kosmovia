@@ -57,4 +57,4 @@ El proyecto se construye por etapas largas, no todo junto. Lo que no es de la et
 - USDC en testnet de Stellar
 - Proveedor de KYC para empresas, a definir (Roberto)
 - Render solo si hace falta un backend aparte
-- Contratos en Soroban (Rust) para pagos en garantía y pagos divididos; antes de escribir uno propio, evaluar servicios existentes en Stellar como Trustless Work
+- Contratos en Soroban (Rust) para pagos en garantía y pagos divididos. Desplegamos al menos un contrato propio en testnet: es un compromiso del proyecto, así que esa parte no se reemplaza por un servicio de terceros. Para lo que quede fuera de ese contrato, sigue valiendo evaluar servicios existentes en Stellar (por ejemplo Trustless Work) antes de escribir más código propio

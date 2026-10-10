@@ -502,10 +502,10 @@ test("pagos: el SQL guarda approval_id y unverified, y a quien recibe no se le m
     note: null, registeredBy: aliceId, paidAt: "2026-10-09T12:00:00Z",
   };
   const without = q.insertPayment(base);
-  assert.match(without.text, /approval_id, unverified\) values/);
-  assert.deepEqual(without.values.slice(9), [null, true], "sin permiso: unverified");
+  assert.match(without.text, /approval_id, unverified, invoice_message_id\) values/);
+  assert.deepEqual(without.values.slice(9), [null, true, null], "sin permiso: unverified, sin cobro ligado");
   const withApproval = q.insertPayment({ ...base, approvalId: "5b9f0ed1-ca61-4f5c-9cc6-5c0a0c94c6aa" });
-  assert.deepEqual(withApproval.values.slice(9), ["5b9f0ed1-ca61-4f5c-9cc6-5c0a0c94c6aa", false]);
+  assert.deepEqual(withApproval.values.slice(9), ["5b9f0ed1-ca61-4f5c-9cc6-5c0a0c94c6aa", false, null]);
   const list = q.paymentsOfWallet(ALICE, 50);
   assert.match(list.text, /\(py\.unverified and py\.from_wallet = \$1\) as unverified/);
   assert.match(q.paymentByOpForSender("1", ALICE).text, /py\.unverified as unverified/);
@@ -1357,7 +1357,7 @@ test(
     // perfil de la sesión, destino y monto de LO QUE VIO HORIZON (no del cuerpo)
     assert.deepEqual(claim.values.slice(0, 5), [APPROVAL_ID, aliceId, BOB, "USDC", "5.0000000"]);
     assert.equal(claim.values[6], APPROVAL_GRACE_MS);
-    assert.deepEqual(queryOf(calls, T.insertPayment)?.values.slice(9), [APPROVAL_ID, false]);
+    assert.deepEqual(queryOf(calls, T.insertPayment)?.values.slice(9), [APPROVAL_ID, false, null]);
     assert.deepEqual(queryOf(calls, T.link)?.values, [APPROVAL_ID, paymentRow(false).id]);
     const [begin, claimAt, insertAt, linkAt, commit] = [
       calls.findIndex((c) => c.text === "begin"),
@@ -1389,7 +1389,7 @@ test(
     const res = await postPayment({ approvalId: APPROVAL_ID });
     assert.equal(res.status, 201, "nunca se rechaza el registro: el dinero ya se movió");
     assert.equal((await res.json()).payment.unverified, true);
-    assert.deepEqual(queryOf(calls, T.insertPayment)?.values.slice(9), [null, true]);
+    assert.deepEqual(queryOf(calls, T.insertPayment)?.values.slice(9), [null, true, null]);
     assert.ok(!has(calls, T.link));
   }),
 );
@@ -1401,7 +1401,7 @@ test(
       const calls = paymentsPool({ claimMatches: false });
       const res = await postPayment(body);
       assert.equal(res.status, 201, JSON.stringify(body));
-      assert.deepEqual(queryOf(calls, T.insertPayment)?.values.slice(9), [null, true]);
+      assert.deepEqual(queryOf(calls, T.insertPayment)?.values.slice(9), [null, true, null]);
       assert.ok(!has(calls, T.claim), JSON.stringify(body));
       resetApiLimits();
     }
@@ -1503,7 +1503,7 @@ test(
     );
     assert.equal(res2.status, 201);
     assert.equal(queryOf(noMemo, T.claim)?.values[7], null, "un memo mandado en el cuerpo no cuenta");
-    assert.deepEqual(queryOf(noMemo, T.insertPayment)?.values.slice(9), [null, true]);
+    assert.deepEqual(queryOf(noMemo, T.insertPayment)?.values.slice(9), [null, true, null]);
   }),
 );
 

@@ -38,6 +38,10 @@ export function classifyDbError(err: unknown): ApiFailure {
     if (c === "profiles_kosmonauta_key") {
       return { status: 409, code: "avatar_taken", error: "Ese Kosmonauta ya es de otra persona. Cambia al menos un rasgo." };
     }
+    if (c === "payments_invoice_message_key") {
+      // Dos personas pagaron el mismo cobro casi a la vez: la base deja pasar una sola.
+      return { status: 409, code: "invoice_paid", error: "Ese cobro ya fue pagado por otra persona." };
+    }
     if (c === "communities_slug_key") return { status: 409, code: "slug_taken", error: "Ese enlace ya está en uso" };
     if (c === "channels_community_name_key") return { status: 409, code: "channel_taken", error: "Ya existe un canal con ese nombre." };
     if (c === "profiles_pkey" || c === "profiles_wallet_key") {

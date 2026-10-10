@@ -30,10 +30,20 @@ const isoUs = (column: string): string => ISO_US.replace("%s", column);
 const AUTHOR_JSON =
   "json_build_object('id', a.id, 'username', a.username, 'display_name', a.display_name, 'avatar_seed', a.avatar_seed, 'avatar_style', a.avatar_style)";
 
-/** What a message row looks like on the wire: MessageRow + the slim author. */
-const MESSAGE_SELECT = `m.id, m.channel_id, m.author_id, m.content, ${isoUs("m.created_at")} as created_at, ${isoUs("m.edited_at")} as edited_at, ${AUTHOR_JSON} as author`;
+/**
+ * What a message row looks like on the wire: MessageRow + the slim author.
+ *
+ * `paid_by` es el perfil que pagó el cobro de ESTE mensaje, o null. Viaja con
+ * cada mensaje porque es la única forma de que el chat sepa, al cargar, qué
+ * cobros ya están pagados: antes "pagado" solo vivía en memoria del navegador
+ * y recargar la página habilitaba pagar de nuevo (migración 0018).
+ */
+const MESSAGE_SELECT = `m.id, m.channel_id, m.author_id, m.content, ${isoUs("m.created_at")} as created_at, ${isoUs("m.edited_at")} as edited_at, ${AUTHOR_JSON} as author, pay.registered_by as paid_by`;
 
-export const MESSAGE_FROM = "from public.messages m join public.profiles a on a.id = m.author_id";
+/** El left join no puede multiplicar filas: `payments_invoice_message_key` es único. */
+export const MESSAGE_FROM =
+  "from public.messages m join public.profiles a on a.id = m.author_id " +
+  "left join public.payments pay on pay.invoice_message_id = m.id";
 
 // ----------------------------------------------------------------- profiles
 
@@ -466,6 +476,23 @@ export const messageWithRole = (channelId: string, messageId: string, profileId:
 });
 
 /**
+ * Todo lo que hace falta para decidir si `profileId` puede pagar el cobro del
+ * mensaje `messageId`: el contenido (de ahí sale a quién va dirigido), su autor,
+ * el rol del pagador en la comunidad, la visibilidad del canal y si el cobro ya
+ * tiene un pago. Una sola consulta: la decisión no se parte en varias idas a la
+ * base, donde otro pago podría colarse en el medio.
+ */
+export const invoiceForPayment = (messageId: string, profileId: string): Query => ({
+  text:
+    "select m.content, m.author_id, ch.visibility, mem.role, " +
+    "exists (select 1 from public.payments p where p.invoice_message_id = m.id) as already_paid " +
+    "from public.messages m join public.channels ch on ch.id = m.channel_id " +
+    "left join public.members mem on mem.community_id = ch.community_id and mem.profile_id = $2 " +
+    "where m.id = $1",
+  values: [messageId, profileId],
+});
+
+/**
  * Edits a message's content and stamps edited_at, only if the caller is its
  * author and still a member (the same rule as canEditMessage). Zero rows back
  * = not allowed (or it no longer exists).
@@ -763,6 +790,8 @@ export interface NewPayment {
   memo?: string | null;
   /** Sin permiso válido: se guarda igual (el dinero ya se movió) pero se marca. Por defecto: `!approvalId`. */
   unverified?: boolean;
+  /** El cobro (mensaje `[COBRO_B2B:...]`) que este pago liquida; null si fue un envío suelto. */
+  invoiceMessageId?: string | null;
 }
 
 const PARTY_JSON = (alias: string) =>
@@ -781,14 +810,15 @@ const PAYMENT_FROM =
 export const insertPayment = (p: NewPayment): Query => ({
   text:
     "with ins as (" +
-    "insert into public.payments (op_id, tx_hash, from_wallet, to_wallet, asset, amount, note, registered_by, paid_at, approval_id, unverified) " +
-    "values ($1, $2, $3, $4, $5, $6::numeric, $7, $8, $9::timestamptz, $10::uuid, $11::boolean) on conflict (op_id) do nothing returning *) " +
+    "insert into public.payments (op_id, tx_hash, from_wallet, to_wallet, asset, amount, note, registered_by, paid_at, approval_id, unverified, invoice_message_id) " +
+    "values ($1, $2, $3, $4, $5, $6::numeric, $7, $8, $9::timestamptz, $10::uuid, $11::boolean, $12::uuid) on conflict (op_id) do nothing returning *) " +
     `select ${PAYMENT_SELECT} from ins py ` +
     "left join public.profiles pf on pf.wallet = py.from_wallet left join public.profiles pt on pt.wallet = py.to_wallet",
   values: [
     p.opId, p.txHash, p.fromWallet, p.toWallet, p.asset, p.amount, p.note, p.registeredBy, p.paidAt,
     p.approvalId ?? null,
     p.unverified ?? !p.approvalId,
+    p.invoiceMessageId ?? null,
   ],
 });
 
