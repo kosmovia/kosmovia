@@ -1,29 +1,5 @@
-import type { Metadata } from "next";
-import Landing from "../Landing";
-import { es } from "../content";
+import { permanentRedirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "Kosmovia · Explora. Conecta. Pertenece.",
-  description:
-    "Comunidades con wallet y pagos integrados, en Stellar. Empezamos en Bolivia, pensado para el mundo.",
-  alternates: { canonical: "/es", languages: { en: "/", es: "/es" } },
-  openGraph: {
-    type: "website",
-    siteName: "Kosmovia",
-    locale: "es_ES",
-    url: "/es",
-    title: "Kosmovia · Explora. Conecta. Pertenece.",
-    description:
-      "Comunidades con wallet y pagos integrados, en Stellar. Empezamos en Bolivia, pensado para el mundo.",
-  },
-  twitter: {
-    card: "summary",
-    title: "Kosmovia · Explora. Conecta. Pertenece.",
-    description:
-      "Comunidades con wallet y pagos integrados, en Stellar. Empezamos en Bolivia, pensado para el mundo.",
-  },
-};
-
-export default function Home() {
-  return <Landing lang="es" content={es} />;
+export default function EsRedirect() {
+  permanentRedirect("/");
 }
