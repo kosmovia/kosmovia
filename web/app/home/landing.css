@@ -236,3 +236,18 @@ html:has(.kv-root) { background: #061314; }
   margin: 14px 0 0; font-size: clamp(1.4rem, 3.6vw, 2.1rem); line-height: 1.15; font-weight: 800; color: var(--k-fg);
 }
 .kv-root .kv-tagline span { background: linear-gradient(90deg, #00f2fe, #5eead4); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* Comparativa (mismos datos que el pitch). */
+.kv-root .kv-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.kv-root .kv-table-wrap { margin-top: 24px; overflow-x: auto; border: 1px solid var(--k-line); border-radius: 16px; }
+.kv-root .kv-compare { width: 100%; border-collapse: collapse; min-width: 760px; font-size: 14px; }
+.kv-root .kv-compare th, .kv-root .kv-compare td { padding: 12px 14px; text-align: left; vertical-align: top; border-top: 1px solid var(--k-line); }
+.kv-root .kv-compare thead th { border-top: 0; color: var(--k-muted); font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.kv-root .kv-compare tbody th { color: var(--k-fg); font-weight: 700; white-space: nowrap; }
+.kv-root .kv-compare td { color: var(--k-muted); }
+.kv-root .kv-compare tr.kv-me th, .kv-root .kv-compare tr.kv-me td { background: rgba(45, 212, 191, .09); color: var(--k-fg); }
+.kv-root .kv-compare tr.kv-me th { color: var(--k-cyan); }
+.kv-root .kv-mark { display: inline-grid; place-items: center; width: 20px; height: 20px; margin-right: 8px; border-radius: 50%; font-size: 12px; font-weight: 800; vertical-align: -4px; }
+.kv-root .kv-mark-yes { background: rgba(46, 230, 166, .15); color: #2ee6a6; }
+.kv-root .kv-mark-no { background: rgba(248, 113, 113, .15); color: #f87171; }
+.kv-root .kv-mark-partial { background: rgba(155, 189, 186, .15); color: var(--k-muted); }

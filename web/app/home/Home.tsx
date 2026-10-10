@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import "./landing.css";
+import { es as pitchEs, section } from "../pitch/deck";
 import CosmicScene from "./CosmicScene";
 import Nav from "./Nav";
 import {
@@ -23,9 +24,14 @@ const NAV = [
   { href: "#que-es", label: "Qué es" },
   { href: "#como-funciona", label: "Cómo funciona" },
   { href: "#mini-apps", label: "Mini-apps" },
+  { href: "#comparativa", label: "Comparativa" },
   { href: "#roadmap", label: "Roadmap" },
   { href: "/pitch", label: "Pitch", page: true },
 ];
+
+const COMPARE = section(pitchEs, "compare", "table");
+
+const MARK_LABEL = { yes: "Sí", no: "No", partial: "Parcial" } as const;
 
 const ROADMAP = [
   { stage: "Hecho · oct 2026", status: "done", title: "La base", items: ["Comunidades, chat y archivos", "Wallet USDC y pagos con PIN", "Mini-apps y notificaciones"] },
@@ -292,11 +298,47 @@ export default function Home() {
           </div>
         </section>
 
+        {/* Comparativa */}
+        <section id="comparativa" className="kv-section kv-alt">
+          <div className="kv-wrap">
+            <p className="kv-eyebrow">Comparativa</p>
+            <h2>{COMPARE.title}</h2>
+            <div className="kv-table-wrap">
+              <table className="kv-compare">
+                <caption className="kv-sr-only">{COMPARE.caption}</caption>
+                <thead>
+                  <tr>
+                    <th scope="col"><span className="kv-sr-only">Plataforma</span></th>
+                    {COMPARE.cols.map((c) => (
+                      <th key={c} scope="col">{c}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {COMPARE.rows.map((r) => (
+                    <tr key={r.name} className={r.highlight ? "kv-me" : undefined}>
+                      <th scope="row">{r.name}</th>
+                      {r.cells.map((m, i) => (
+                        <td key={i} data-label={COMPARE.cols[i]}>
+                          <span className={`kv-mark kv-mark-${m.v}`} aria-label={MARK_LABEL[m.v]}>
+                            {m.v === "yes" ? "✓" : m.v === "no" ? "✕" : "–"}
+                          </span>
+                          {m.text}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
         {/* Roadmap */}
         <section id="roadmap" className="kv-section">
           <div className="kv-wrap">
             <p className="kv-eyebrow">Hoja de ruta</p>
-            <h2>Primero Bolivia, después el mundo</h2>
+            <h2>Construimos hoy la infraestructura de comunidades en Stellar</h2>
             <ol className="kv-timeline">
               {ROADMAP.map((r) => (
                 <li key={r.stage} className={`kv-tl-item kv-tl-${r.status}`}>
