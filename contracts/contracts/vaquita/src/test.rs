@@ -1,14 +1,15 @@
 #![cfg(test)]
 
 //! Lo que se prueba acá no es el camino feliz (eso es lo fácil), sino que la
-//! plata no pueda salir por donde no debe: cobrar sin meta, cobrar dos veces,
-//! reembolsar antes del plazo, reembolsar una vaquita que sí llegó, reembolsar
-//! dos veces, y aportar después de vencido o cobrado.
+//! plata no pueda salir por donde no debe ni quedar encerrada: cobrar sin meta,
+//! cobrar dos veces, cobrar fuera de plazo, reembolsar antes de tiempo,
+//! reembolsar dos veces, aportar después del cierre, y que `raised` nunca
+//! muestre plata que ya se fue.
 
 use super::*;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    token, Address, Env,
+    token, Address, Env, IntoVal,
 };
 
 struct Setup {
@@ -21,13 +22,16 @@ struct Setup {
 }
 
 const GOAL: i128 = 100;
-const DEADLINE: u64 = 1_000;
+const START: u64 = 1_000;
+const DEADLINE: u64 = START + 10_000;
+/// 15 días en segundos, igual que GRACE_SECS del contrato.
+const GRACE: u64 = 15 * 24 * 60 * 60;
 
-/// Vaquita con meta 100, plazo 1000, y dos aportantes con 500 cada uno.
+/// Vaquita con meta 100 y dos aportantes con 500 cada uno.
 fn setup() -> Setup {
     let env = Env::default();
     env.mock_all_auths();
-    env.ledger().with_mut(|l| l.timestamp = 1);
+    env.ledger().with_mut(|l| l.timestamp = START);
 
     let admin = Address::generate(&env);
     let sac = env.register_stellar_asset_contract_v2(admin.clone());
@@ -41,9 +45,11 @@ fn setup() -> Setup {
     mint.mint(&ana, &500);
     mint.mint(&beto, &500);
 
-    let contract_id = env.register(Vaquita, ());
+    let contract_id = env.register(
+        Vaquita,
+        (beneficiary.clone(), token_id.clone(), GOAL, DEADLINE),
+    );
     let client = VaquitaClient::new(&env, &contract_id);
-    client.init(&beneficiary, &token_id, &GOAL, &DEADLINE);
 
     Setup { env, client, token, beneficiary, ana, beto }
 }
@@ -51,23 +57,44 @@ fn setup() -> Setup {
 // ------------------------------------------------------------------ términos
 
 #[test]
-fn init_solo_una_vez() {
+fn los_terminos_quedan_fijos_desde_el_despliegue() {
     let s = setup();
-    assert_eq!(
-        s.client.try_init(&s.beneficiary, &s.token.address, &GOAL, &DEADLINE),
-        Err(Ok(Error::AlreadyInitialized)),
-    );
+    let pot = s.client.state();
+    assert_eq!(pot.beneficiary, s.beneficiary);
+    assert_eq!(pot.goal, GOAL);
+    assert_eq!(pot.deadline, DEADLINE);
+    assert_eq!(pot.raised, 0);
+    assert!(!pot.claimed);
+    // No hay `init` público: nadie puede re-inicializar ni adelantarse a hacerlo.
+    assert_eq!(s.client.claim_deadline(), DEADLINE + GRACE);
+}
+
+/// Un constructor que devuelve Err hace panic al registrar, así que cada término
+/// inválido va en su propio test.
+fn registrar_con(goal: i128, deadline: u64) {
+    let env = Env::default();
+    env.ledger().with_mut(|l| l.timestamp = START);
+    let who = Address::generate(&env);
+    env.register(Vaquita, (who.clone(), who, goal, deadline));
 }
 
 #[test]
-fn init_rechaza_terminos_sin_sentido() {
-    let env = Env::default();
-    env.ledger().with_mut(|l| l.timestamp = 100);
-    let who = Address::generate(&env);
-    let client = VaquitaClient::new(&env, &env.register(Vaquita, ()));
-    // Meta cero y plazo ya vencido.
-    assert_eq!(client.try_init(&who, &who, &0, &200), Err(Ok(Error::InvalidTerms)));
-    assert_eq!(client.try_init(&who, &who, &100, &50), Err(Ok(Error::InvalidTerms)));
+#[should_panic]
+fn el_constructor_rechaza_meta_cero() {
+    registrar_con(0, DEADLINE);
+}
+
+#[test]
+#[should_panic]
+fn el_constructor_rechaza_un_plazo_ya_vencido() {
+    registrar_con(100, START - 1);
+}
+
+#[test]
+#[should_panic]
+fn el_constructor_rechaza_un_plazo_demasiado_lejano() {
+    // Más de 60 días: el estado se archivaría antes de que alguien pueda retirar.
+    registrar_con(100, START + 61 * 24 * 60 * 60);
 }
 
 // ------------------------------------------------------------------ aportes
@@ -106,6 +133,17 @@ fn no_se_aporta_despues_de_cobrada() {
     assert_eq!(s.client.try_contribute(&s.beto, &10), Err(Ok(Error::AlreadyClaimed)));
 }
 
+#[test]
+fn un_aporte_fallido_no_deja_rastro() {
+    let s = setup();
+    // Ana tiene 500: pedir 600 hace fallar la transferencia del token.
+    assert!(s.client.try_contribute(&s.ana, &600).is_err());
+    // La invocación se revierte entera: ni share ni raised quedaron escritos.
+    assert_eq!(s.client.contributed(&s.ana), 0);
+    assert_eq!(s.client.state().raised, 0);
+    assert_eq!(s.token.balance(&s.client.address), 0);
+}
+
 // ------------------------------------------------------------------ cobro
 
 #[test]
@@ -117,6 +155,17 @@ fn el_beneficiario_cobra_al_alcanzar_la_meta_sin_esperar_el_plazo() {
     assert_eq!(s.token.balance(&s.beneficiary), 100);
     assert_eq!(s.token.balance(&s.client.address), 0);
     assert!(s.client.state().claimed);
+}
+
+#[test]
+fn el_beneficiario_puede_cobrar_despues_del_plazo_dentro_de_la_ventana() {
+    let s = setup();
+    s.client.contribute(&s.ana, &GOAL);
+    // `claim` no mira `deadline`, solo la ventana de cobro: fijamos esa invariante
+    // para que un refactor que agregue el check trabe los botes exitosos.
+    s.env.ledger().with_mut(|l| l.timestamp = DEADLINE + GRACE);
+    assert_eq!(s.client.claim(), GOAL);
+    assert_eq!(s.token.balance(&s.beneficiary), GOAL);
 }
 
 #[test]
@@ -133,7 +182,6 @@ fn no_se_cobra_dos_veces() {
     s.client.contribute(&s.ana, &GOAL);
     s.client.claim();
     assert_eq!(s.client.try_claim(), Err(Ok(Error::AlreadyClaimed)));
-    // Y el bote no quedó con saldo para un segundo cobro.
     assert_eq!(s.token.balance(&s.client.address), 0);
 }
 
@@ -162,6 +210,22 @@ fn vencido_sin_meta_cada_quien_retira_lo_suyo() {
 }
 
 #[test]
+fn raised_y_saldo_coinciden_despues_de_un_reembolso_parcial() {
+    let s = setup();
+    s.client.contribute(&s.ana, &30);
+    s.client.contribute(&s.beto, &20);
+    s.env.ledger().with_mut(|l| l.timestamp = DEADLINE + 1);
+
+    s.client.refund(&s.ana);
+    // `raised` baja con el reembolso: el progreso que ve la app no miente, y el
+    // total sigue coincidiendo con el saldo real del contrato.
+    assert_eq!(s.client.state().raised, 20);
+    assert_eq!(s.token.balance(&s.client.address), 20);
+    assert_eq!(s.client.contributed(&s.ana), 0);
+    assert_eq!(s.client.contributed(&s.beto), 20);
+}
+
+#[test]
 fn no_se_reembolsa_antes_del_plazo() {
     let s = setup();
     s.client.contribute(&s.ana, &30);
@@ -169,12 +233,29 @@ fn no_se_reembolsa_antes_del_plazo() {
 }
 
 #[test]
-fn no_se_reembolsa_si_la_meta_se_alcanzo() {
+fn con_la_meta_alcanzada_hay_que_esperar_la_ventana_de_cobro() {
     let s = setup();
     s.client.contribute(&s.ana, &GOAL);
     s.env.ledger().with_mut(|l| l.timestamp = DEADLINE + 1);
-    // Aunque venza el plazo: la meta se alcanzó, le toca cobrar al beneficiario.
     assert_eq!(s.client.try_refund(&s.ana), Err(Ok(Error::GoalWasReached)));
+}
+
+#[test]
+fn si_el_beneficiario_no_cobra_la_plata_vuelve_a_los_aportantes() {
+    let s = setup();
+    s.client.contribute(&s.ana, &60);
+    s.client.contribute(&s.beto, &40); // meta alcanzada
+    // Pasó el plazo y toda la ventana de cobro sin que el beneficiario cobrara:
+    // sin esta salida, el bote quedaba encerrado para siempre.
+    s.env.ledger().with_mut(|l| l.timestamp = DEADLINE + GRACE + 1);
+
+    assert_eq!(s.client.try_claim(), Err(Ok(Error::ClaimWindowClosed)));
+    assert_eq!(s.client.refund(&s.ana), 60);
+    assert_eq!(s.client.refund(&s.beto), 40);
+    assert_eq!(s.token.balance(&s.ana), 500);
+    assert_eq!(s.token.balance(&s.beto), 500);
+    assert_eq!(s.token.balance(&s.client.address), 0);
+    assert_eq!(s.token.balance(&s.beneficiary), 0);
 }
 
 #[test]
@@ -200,7 +281,7 @@ fn cobrada_no_deja_reembolsar_aunque_pase_el_plazo() {
     let s = setup();
     s.client.contribute(&s.ana, &GOAL);
     s.client.claim();
-    s.env.ledger().with_mut(|l| l.timestamp = DEADLINE + 1);
+    s.env.ledger().with_mut(|l| l.timestamp = DEADLINE + GRACE + 1);
     assert_eq!(s.client.try_refund(&s.ana), Err(Ok(Error::AlreadyClaimed)));
 }
 
@@ -215,19 +296,38 @@ fn sin_autorizacion_no_se_mueve_nada() {
     // exige autorización de verdad: sin firma, nadie mueve plata ajena.
     s.env.set_auths(&[]);
     assert!(s.client.try_contribute(&s.ana, &10).is_err());
-    // Y nadie puede cobrar haciéndose pasar por el beneficiario.
     assert!(s.client.try_claim().is_err());
+    assert!(s.client.try_refund(&s.ana).is_err());
     assert_eq!(s.token.balance(&s.client.address), 10);
 }
 
 #[test]
-fn sin_init_no_se_puede_operar() {
-    let env = Env::default();
-    env.mock_all_auths();
-    let who = Address::generate(&env);
-    let client = VaquitaClient::new(&env, &env.register(Vaquita, ()));
-    assert_eq!(client.try_state(), Err(Ok(Error::NotInitialized)));
-    assert_eq!(client.try_contribute(&who, &10), Err(Ok(Error::NotInitialized)));
-    assert_eq!(client.try_claim(), Err(Ok(Error::NotInitialized)));
-    assert_eq!(client.try_refund(&who), Err(Ok(Error::NotInitialized)));
+fn el_aporte_exige_la_firma_del_aportante_por_el_monto_exacto() {
+    let s = setup();
+    s.env.set_auths(&[]);
+    // Autorizado por Ana para 10: no sirve para que Beto aporte ni para otro monto.
+    let auth = soroban_sdk::testutils::MockAuth {
+        address: &s.ana,
+        invoke: &soroban_sdk::testutils::MockAuthInvoke {
+            contract: &s.client.address,
+            fn_name: "contribute",
+            args: (s.ana.clone(), 10_i128).into_val(&s.env),
+            sub_invokes: &[],
+        },
+    };
+    assert!(s.client.mock_auths(&[auth.clone()]).try_contribute(&s.beto, &10).is_err());
+    assert!(s.client.mock_auths(&[auth]).try_contribute(&s.ana, &99).is_err());
+}
+
+// ------------------------------------------------------------------ límite conocido
+
+#[test]
+fn un_aporte_directo_al_contrato_no_cuenta_y_queda_atrapado() {
+    let s = setup();
+    // Pagar a la dirección del contrato sin pasar por `contribute`: el bote no
+    // lo registra y no hay forma de sacarlo. Límite conocido y documentado.
+    s.token.transfer(&s.ana, &s.client.address, &40);
+    assert_eq!(s.client.state().raised, 0);
+    assert_eq!(s.client.contributed(&s.ana), 0);
+    assert_eq!(s.token.balance(&s.client.address), 40);
 }
