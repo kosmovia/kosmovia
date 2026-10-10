@@ -6,7 +6,6 @@ import Nav from "./Nav";
 import {
   IconApps,
   IconChat,
-  IconCheck,
   IconCode,
   IconCreators,
   IconFriends,
@@ -24,14 +23,13 @@ const NAV = [
   { href: "#que-es", label: "Qué es" },
   { href: "#como-funciona", label: "Cómo funciona" },
   { href: "#mini-apps", label: "Mini-apps" },
-  { href: "#seguridad", label: "Seguridad" },
   { href: "#roadmap", label: "Roadmap" },
   { href: "/pitch", label: "Pitch", page: true },
 ];
 
 const ROADMAP = [
   { stage: "Hecho · oct 2026", status: "done", title: "La base", items: ["Comunidades, chat y archivos", "Wallet USDC y pagos con PIN", "Mini-apps y notificaciones"] },
-  { stage: "Próximo", status: "next", title: "Comunidades que cobran", items: ["Chat en tiempo real", "Bot de Telegram y membresías", "Pasanaku en Soroban"] },
+  { stage: "Próximo", status: "next", title: "Comunidades que cobran", items: ["Chat en tiempo real", "Membresías de pago", "Pasanaku en Soroban"] },
   { stage: "Antes de mainnet", status: "later", title: "Dinero real", items: ["Auditoría de seguridad", "Revisión legal", "De Bolivia a Latinoamérica"] },
 ] as const;
 
@@ -82,12 +80,6 @@ const AUDIENCE = [
   { icon: <IconLearn />, title: "Quien quiere aprender Stellar", text: "Lecciones cortas, misiones e insignias para entender Stellar usándolo." },
 ];
 
-const SAFETY = [
-  "PIN de 6 dígitos para confirmar tus pagos.",
-  "Límite diario de pagos y aviso si se hacen pagos sin PIN.",
-  "Beta en Stellar testnet: no se usa dinero real.",
-  "Tu wallet la custodia Pollar si entras con Google o email. También puedes conectar tu propia wallet Freighter.",
-];
 
 
 const SOCIALS = [
@@ -295,38 +287,16 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Seguridad */}
-        <section id="seguridad" className="kv-section">
-          <div className="kv-wrap kv-safety">
-            <div>
-              <p className="kv-eyebrow">Seguridad y confianza</p>
-              <h2>Tu dinero, con cuidado</h2>
-              <p className="kv-sub">Kosmovia está en beta y usa dinero de prueba. Estas protecciones ya forman parte de la app.</p>
-              <p className="kv-links-inline">
-                <a href={`${APP_URL}/terminos`}>Términos</a>
-                <a href={`${APP_URL}/privacidad`}>Privacidad</a>
-              </p>
-            </div>
-            <ul className="kv-checks">
-              {SAFETY.map((s) => (
-                <li key={s}>
-                  <IconCheck />
-                  <span>{s}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-
         {/* Roadmap */}
-        <section id="roadmap" className="kv-section kv-alt">
+        <section id="roadmap" className="kv-section">
           <div className="kv-wrap">
             <p className="kv-eyebrow">Hoja de ruta</p>
             <h2>Primero Bolivia, después el mundo</h2>
-            <ol className="kv-grid kv-grid-3 kv-roadmap">
+            <ol className="kv-timeline">
               {ROADMAP.map((r) => (
-                <li key={r.stage} className={`kv-card kv-stage kv-stage-${r.status}`}>
-                  <p className="kv-stage-label">{r.stage}</p>
+                <li key={r.stage} className={`kv-tl-item kv-tl-${r.status}`}>
+                  <span className="kv-tl-dot" aria-hidden="true" />
+                  <p className="kv-tl-when">{r.stage}</p>
                   <h3>{r.title}</h3>
                   <ul>
                     {r.items.map((it) => (

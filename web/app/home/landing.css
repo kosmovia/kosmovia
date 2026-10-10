@@ -179,3 +179,36 @@ html:has(.kv-root) { background: #061314; }
 @media (max-width: 720px) {
   .kv-root .kv-roadmap { grid-template-columns: 1fr; }
 }
+
+/* Hoja de ruta como línea de tiempo: horizontal en escritorio, vertical en celular. */
+.kv-root .kv-timeline {
+  position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px; margin: 28px 0 0; padding: 0; list-style: none;
+}
+.kv-root .kv-timeline::before {
+  content: ""; position: absolute; left: 9px; right: 9px; top: 9px; height: 2px;
+  background: linear-gradient(90deg, #2ee6a6 0%, #00f2fe 50%, rgba(245, 194, 107, .7) 100%);
+}
+.kv-root .kv-tl-item { position: relative; padding-top: 34px; }
+.kv-root .kv-tl-dot {
+  position: absolute; top: 0; left: 0; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--k-bg); border: 3px solid currentColor; box-shadow: 0 0 0 4px var(--k-bg);
+}
+.kv-root .kv-tl-done { color: #2ee6a6; }
+.kv-root .kv-tl-done .kv-tl-dot { background: currentColor; }
+.kv-root .kv-tl-next { color: #00f2fe; }
+.kv-root .kv-tl-later { color: #f5c26b; }
+.kv-root .kv-tl-later .kv-tl-dot { border-style: dashed; }
+.kv-root .kv-tl-when { margin: 0 0 4px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.kv-root .kv-tl-item h3 { margin: 0 0 8px; color: var(--k-fg); font-size: 18px; }
+.kv-root .kv-tl-item ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.kv-root .kv-tl-item li { color: var(--k-muted); font-size: 15px; line-height: 1.4; }
+@media (max-width: 720px) {
+  .kv-root .kv-timeline { grid-template-columns: 1fr; gap: 22px; padding-left: 34px; }
+  .kv-root .kv-timeline::before {
+    left: 9px; right: auto; top: 6px; bottom: 6px; width: 2px; height: auto;
+    background: linear-gradient(180deg, #2ee6a6 0%, #00f2fe 50%, rgba(245, 194, 107, .7) 100%);
+  }
+  .kv-root .kv-tl-item { padding-top: 0; }
+  .kv-root .kv-tl-dot { left: -34px; top: 2px; }
+}
