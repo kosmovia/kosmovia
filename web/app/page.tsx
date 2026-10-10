@@ -1,29 +1,18 @@
 import type { Metadata } from "next";
-import Landing from "./Landing";
-import { en } from "./content";
+import Home from "./home/Home";
+
+const title = "Kosmovia · Tu comunidad y tu dinero, en un solo lugar";
+const description =
+  "Chat, wallet en dólares digitales (USDC) y pagos entre personas sobre Stellar. Hecho en Bolivia, para el mundo. Beta gratis en Stellar testnet.";
 
 export const metadata: Metadata = {
-  title: "Kosmovia · Explore. Connect. Belong.",
-  description:
-    "Communities with a wallet and payments built in, on Stellar. Starting in Bolivia, built for the world.",
-  alternates: { canonical: "/", languages: { en: "/", es: "/es" } },
-  openGraph: {
-    type: "website",
-    siteName: "Kosmovia",
-    locale: "en_US",
-    url: "/",
-    title: "Kosmovia · Explore. Connect. Belong.",
-    description:
-      "Communities with a wallet and payments built in, on Stellar. Starting in Bolivia, built for the world.",
-  },
-  twitter: {
-    card: "summary",
-    title: "Kosmovia · Explore. Connect. Belong.",
-    description:
-      "Communities with a wallet and payments built in, on Stellar. Starting in Bolivia, built for the world.",
-  },
+  title,
+  description,
+  alternates: { canonical: "/", languages: { es: "/", en: "/en" } },
+  openGraph: { type: "website", siteName: "Kosmovia", locale: "es_LA", url: "/", title, description },
+  twitter: { card: "summary", title, description },
 };
 
-export default function Home() {
-  return <Landing lang="en" content={en} />;
+export default function Page() {
+  return <Home />;
 }

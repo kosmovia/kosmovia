@@ -97,7 +97,7 @@ export const en: Content = {
   ui: {
     switchLabel: "Ver en español",
     switchText: "ES",
-    switchHref: "/es",
+    switchHref: "/",
     themeToLight: "Switch to light theme",
     themeToDark: "Switch to dark theme",
   },

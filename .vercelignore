@@ -1,0 +1,8 @@
+/app
+/server
+/core
+/contracts
+/design
+**/node_modules
+**/.next
+**/.env*

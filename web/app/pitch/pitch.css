@@ -1048,3 +1048,214 @@
     animation: none !important;
   }
 }
+
+/* Tabla con 5 filas: más compacta para que entre en la diapositiva. */
+.deck .compare tbody th,
+.deck .compare tbody td {
+  padding: 0.45em 0.7em;
+}
+.deck .compare tbody th { width: 22%; font-size: 1.15em; }
+.deck .compare tbody td { font-size: 1.1em; }
+.deck .compare thead th { font-size: 1em; padding-bottom: 0.5em; }
+
+/* La landing anterior define .road global (columnas y viñetas): el pitch la anula. */
+.deck .road { display: block; gap: 0; grid-template-columns: none; }
+.deck .road li { position: static; }
+.deck .road li::before { content: none; display: none; }
+
+/* Avatares Kosmonauta (NFT del perfil) del equipo. */
+.deck .avatar-kosmonauta { overflow: hidden; padding: 0; border-radius: 22%; }
+.deck .avatar-kosmonauta img { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+
+/* Cierre v2: CTA, enlaces, redes con ícono y QR para escanear en la presentación. */
+.deck .close-v2 { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 3em; }
+.deck .close-v2 .close-main { position: relative; z-index: 1; }
+.deck .close-cta {
+  display: inline-flex; align-items: baseline; gap: .5em; flex-wrap: wrap;
+  margin: .9em 0 .6em; padding: .55em 1.1em; border-radius: 14px;
+  background: var(--accent); color: #04211f; font-size: 1.5em; font-weight: 700; text-decoration: none;
+}
+.deck .close-cta small { font-size: .55em; font-weight: 600; opacity: .8; }
+.deck .close-cta:hover, .deck .close-cta:focus-visible { filter: brightness(1.08); }
+.deck .close-chips { display: flex; flex-wrap: wrap; gap: .6em; margin: 0 0 1em; }
+.deck .close-chips a {
+  padding: .35em .9em; border: 1px solid var(--line); border-radius: 999px;
+  color: var(--fg); font-size: 1.05em; text-decoration: none;
+}
+.deck .close-chips a:hover, .deck .close-chips a:focus-visible { border-color: var(--accent); color: var(--accent); }
+.deck .close-social { display: flex; flex-wrap: wrap; gap: .5em 1.2em; margin: 0 0 1.2em; padding: 0; list-style: none; }
+.deck .close-social a { display: inline-flex; align-items: center; gap: .45em; color: var(--muted); font-size: 1.05em; text-decoration: none; }
+.deck .close-social a:hover, .deck .close-social a:focus-visible { color: var(--accent); }
+.deck .close-v2 .close-big { margin-top: .2em; }
+.deck .close-qr { position: relative; z-index: 1; margin: 0; padding: 1em; border: 1px solid var(--line); border-radius: 20px; background: rgb(6 19 20 / .75); text-align: center; }
+.deck .close-qr img { display: block; width: 11em; height: 11em; }
+.deck .close-qr figcaption { margin-top: .6em; color: var(--accent); font-weight: 600; font-size: 1.05em; }
+@media (max-width: 760px) {
+  .deck .close-v2 { grid-template-columns: 1fr; gap: 1.5em; }
+  .deck .close-qr { justify-self: start; }
+  .deck .close-qr img { width: 8em; height: 8em; }
+}
+
+/* Eight-slide pitch: screenshots and combined team/contact. */
+.deck .showcase-body,
+.deck .team-contact-body {
+  padding: 4.5em 5em 5em;
+  gap: 1.2em;
+}
+.deck .showcase-body .slide-title,
+.deck .team-contact-body .slide-title,
+.deck .slide-cards .slide-title {
+  font-size: 2.6em;
+}
+.deck .showcase-body .slide-title::before,
+.deck .team-contact-body .slide-title::before,
+.deck .slide-cards .slide-title::before {
+  margin-bottom: .5em;
+}
+.deck .showcase-content { min-height: 0; }
+.deck .showcase-product .showcase-content {
+  display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.3fr);
+  align-items: center;
+  gap: 2.5em;
+  flex: 1;
+}
+.deck .showcase-copy .points { gap: 1.1em; }
+.deck .showcase-copy .points li { padding-left: 1em; }
+.deck .showcase-copy .points p { font-size: 1.35em; color: var(--fg); }
+.deck .showcase-note {
+  margin: 1.4em 0 0;
+  color: var(--muted);
+  font-size: 1.05em;
+  line-height: 1.45;
+}
+.deck .showcase-images { min-width: 0; }
+.deck .app-shot { margin: 0; min-width: 0; }
+.deck .app-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  object-position: top;
+  border: 1px solid var(--line);
+  border-radius: .8em;
+  background: var(--surface);
+  box-shadow: 0 .6em 1.8em rgb(0 0 0 / .25);
+  color: var(--muted);
+}
+.deck .showcase-product .showcase-images {
+  position: relative;
+  padding: 0 3em 3em 0;
+}
+.deck .showcase-product .shot-1 img { aspect-ratio: 16 / 10; }
+.deck .showcase-product .shot-2 {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 7.5em;
+}
+.deck .showcase-product .shot-2 img {
+  aspect-ratio: 9 / 19.5;
+  border: .3em solid var(--surface);
+  border-radius: 1em;
+}
+.deck .showcase-phones .showcase-content { flex: 1; }
+.deck .showcase-phones .showcase-images {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3em;
+  max-width: 48em;
+  margin: 0 auto;
+}
+.deck .showcase-phones .app-shot img {
+  aspect-ratio: 9 / 19.5;
+  width: 8.8em;
+  margin: 0 auto;
+  border: .3em solid var(--line);
+  border-radius: 1.2em;
+}
+.deck .app-shot figcaption {
+  margin-top: .65em;
+  font-size: 1.1em;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--fg);
+}
+.deck .showcase-caption {
+  margin: 0;
+  color: var(--muted);
+  font-size: 1.05em;
+  line-height: 1.4;
+}
+.deck .slide-cards .cards { flex: 1; align-items: stretch; }
+.deck .slide-cards .cards li { padding: 1.2em 1.5em; }
+.deck .slide-cards .cards h3 { font-size: 1.65em; }
+.deck .slide-cards .cards p { font-size: 1.2em; }
+.deck .slide-cards .cards p + p { margin-top: .75em; }
+.deck .road li { grid-template-columns: 17em minmax(0, 1fr) 6em; gap: 1.2em; }
+.deck .road .now .road-when { display: block; }
+.deck .team-contact-body .team { margin: 0; gap: 1.4em; }
+.deck .team-contact-body .team li {
+  display: grid;
+  grid-template-columns: 3.5em minmax(0, 1fr);
+  column-gap: .7em;
+  row-gap: .2em;
+  align-content: start;
+}
+.deck .team-contact-body .avatar {
+  grid-row: span 2;
+  width: 3.5em;
+  height: 3.5em;
+  font-size: 1em;
+  margin: 0;
+}
+.deck .team-contact-body .team h3 { font-size: 1.3em; }
+.deck .team-contact-body .team p { font-size: 1.05em; line-height: 1.35; }
+.deck .contact-block {
+  flex: 1;
+  gap: 2em;
+  border-top: 1px solid var(--line);
+  padding-top: 1.1em;
+  min-height: 0;
+}
+.deck .contact-block .close-text { margin: 0; font-size: 1.2em; }
+.deck .contact-block .close-cta { margin: .5em 0; font-size: 1.55em; }
+.deck .contact-block .close-chips { margin-bottom: .7em; }
+.deck .contact-block .close-social { margin-bottom: 0; max-width: 39em; gap: .7em 1.3em; }
+.deck .contact-block .close-qr { padding: .8em; }
+.deck .contact-block .close-qr img { width: 10em; height: 10em; }
+
+@media screen and (min-width: 641px) and (max-width: 760px) {
+  .deck .contact-block { grid-template-columns: minmax(0, 1fr) auto; }
+}
+@media screen and (max-width: 640px) {
+  .deck .showcase-body,
+  .deck .team-contact-body { padding: 76px 22px 100px; gap: 1.5em; }
+  .deck .showcase-body .slide-title,
+  .deck .team-contact-body .slide-title,
+  .deck .slide-cards .slide-title { font-size: 2em; }
+  .deck .showcase-product .showcase-content { grid-template-columns: 1fr; gap: 1.5em; }
+  .deck .showcase-copy .points p { font-size: 1.2em; }
+  .deck .showcase-product .shot-2 { width: 6em; }
+  .deck .showcase-phones .showcase-images { grid-template-columns: 1fr; gap: 1.8em; }
+  .deck .showcase-phones .app-shot img { width: min(14em, 100%); }
+  .deck .showcase-caption { font-size: 1.1em; }
+  .deck .road li { grid-template-columns: minmax(0, 1fr); gap: .3em; }
+  .deck .road .now .road-when { text-align: left; }
+  .deck .team-contact-body .team { grid-template-columns: 1fr; gap: 1em; }
+  .deck .team-contact-body .team li { grid-template-columns: 3.5em minmax(0, 1fr); }
+  .deck .team-contact-body .team li p { padding: 0; }
+  .deck .contact-block { grid-template-columns: 1fr; gap: 1.5em; }
+  .deck .contact-block .close-qr { justify-self: start; }
+  .deck .contact-block .close-qr img { width: 10em; height: 10em; }
+}
+
+@media (min-width: 641px) {
+  .deck .cover-sub { max-width: none; font-size: 1.35em; }
+}
+
+/* El producto: capturas más grandes y la del PIN en su proporción real (horizontal). */
+.deck .showcase-product .showcase-content { grid-template-columns: minmax(0, .7fr) minmax(0, 1.6fr); gap: 2em; }
+.deck .showcase-product .showcase-images { padding: 0 2em 4.5em 0; }
+.deck .showcase-product .shot-2 { width: 15em; }
+.deck .showcase-product .shot-2 img { aspect-ratio: 1350 / 960; border-radius: .8em; object-fit: cover; }

@@ -1,28 +1,27 @@
-import { en as contentEn, es as contentEs } from "../content";
-import type { Content } from "../content";
-
 export type Item = { lead?: string; text: string; link?: string };
-export type Card = { head: string; text: string };
+export type Card = { head: string; text: string; details?: string[] };
+export type Screenshot = { src: string; alt: string; caption?: string; width: number; height: number };
 export type Mark = { v: "yes" | "no" | "partial"; text: string };
+export type RoadmapStage = {
+  key: string;
+  name: string;
+  what: string;
+  when: string;
+  now?: boolean;
+  soon?: boolean;
+};
 
 export type SlideId =
-  | "cover"
-  | "problem"
-  | "solution"
-  | "how"
-  | "cases"
-  | "stellar"
-  | "works"
-  | "compare"
-  | "money"
-  | "roadmap"
-  | "team"
-  | "close";
+  | "cover" | "problem" | "solution" | "how" | "works"
+  | "miniapps" | "security" | "stellar" | "cases" | "money"
+  | "compare" | "roadmap" | "team" | "close";
 
 export type Slide = { id: SlideId } & (
   | { kind: "cover"; title: string; tagline: string; sub: string; meta: string }
   | { kind: "list"; title: string; items: Item[] }
   | { kind: "cards"; title: string; items: Card[] }
+  | { kind: "showcase"; title: string; layout: "product" | "phones"; items: Item[]; images: Screenshot[]; caption?: string; note?: string }
+  | { kind: "team-contact"; title: string; people: { name: string; role: string }[]; text: string }
   | { kind: "steps"; title: string; items: Item[] }
   | {
       kind: "table";
@@ -31,30 +30,21 @@ export type Slide = { id: SlideId } & (
       cols: string[];
       rows: { name: string; highlight?: boolean; cells: Mark[] }[];
     }
-  | {
-      kind: "roadmap";
-      title: string;
-      nowLabel: string;
-      stages: Content["roadmap"]["stages"];
-    }
-  | {
-      kind: "team";
-      title: string;
-      people: { name: string; role: string }[];
-      footer: string;
-    }
+  | { kind: "roadmap"; title: string; nowLabel: string; stages: RoadmapStage[] }
+  | { kind: "team"; title: string; people: { name: string; role: string }[]; footer: string }
   | { kind: "close"; title: string; text: string; links: string[]; big: string }
 );
 
 export type SlideOf<K extends Slide["kind"]> = Extract<Slide, { kind: K }>;
 
-/** The landing reads its section copy from the deck, so both share one source. */
+/** Retrieve a typed slide for consumers that share the deck's copy. */
 export function section<K extends Slide["kind"]>(
   deck: Deck,
   id: SlideId,
   kind: K,
 ): SlideOf<K> {
-  const found = deck.slides.find((s) => s.id === id);
+  const found = deck.slides.find((s) => s.id === id && s.kind === kind)
+    ?? deck.sections?.find((s) => s.id === id && s.kind === kind);
   if (!found || found.kind !== kind) {
     throw new Error(`Deck slide "${id}" (${kind}) not found`);
   }
@@ -74,10 +64,12 @@ export type Deck = {
     switchLabel: string;
     switchText: string;
     switchHref: string;
-    slideOf: string; // "Slide {n} of {total}"
+    slideOf: string;
     deckLabel: string;
   };
   slides: Slide[];
+  /** Legacy landing copy, outside the eight-slide presentation. */
+  sections?: Slide[];
 };
 
 export const en: Deck = {
@@ -98,228 +90,159 @@ export const en: Deck = {
   },
   slides: [
     {
-      id: "cover",
-      kind: "cover",
-      title: "Kosmovia",
-      tagline: "Explore. Connect. Belong.",
-      sub: "Communities with a wallet and payments built in, on Stellar.",
-      meta: "Stellar Elite Bolivia · 2026 · kosmovia.vercel.app",
+      id: "cover", kind: "cover", title: "Kosmovia",
+      tagline: "Your community and your money, in one place.",
+      sub: "Communities with a wallet and USDC payments on Stellar. Public testnet beta.",
+      meta: "Stellar Elite Bolivia · TechRebel"
     },
     {
-      id: "problem",
-      kind: "list",
-      title: "Communities and money live in different places",
+      id: "problem", kind: "list", title: "Problem and opportunity",
       items: [
-        {
-          text: "Communities are scattered across WhatsApp, Telegram and Discord, and none of them lets you pay inside.",
-        },
-        {
-          text: "Getting started in crypto is still hard: seed phrases, fees and separate apps.",
-        },
-        {
-          text: "Businesses have no trusted place to reach users and builders and close deals online.",
-        },
-      ],
+        { text: "Communities coordinate in chats; collections require QR codes, screenshots and follow-ups." },
+        { text: "Money and conversation use separate tools, without verifiable receipts." },
+        { text: "Bolivia’s limited dollar access creates demand for digital dollars (USDC)." }
+      ]
     },
     {
-      id: "solution",
-      kind: "cards",
-      title: "One place to connect and pay",
+      id: "solution", kind: "showcase", title: "The product",
+      layout: "product",
       items: [
-        {
-          head: "Communities",
-          text: "Channels, roles and chat, with the layout you already know.",
-        },
-        {
-          head: "A wallet from day one",
-          text: "Sign in with Google or email. USDC wallet ready, no seed phrases, fees covered.",
-        },
-        {
-          head: "Payments and transfers",
-          text: "Send money by @username, get paid with a link or QR, close deals with escrow contracts.",
-        },
-        {
-          head: "Verified businesses",
-          text: "Companies verified with KYC open their own communities and connect through an API.",
-        },
+        { text: "Communities with channels, roles and direct messages" },
+        { text: "USDC wallet: Google or email access, no seed phrase" },
+        { text: "PIN payments with verifiable receipts on Stellar" }
       ],
+      note: "Six-digit PIN, attempt lockout and daily limits. App-level controls during testnet beta.",
+      images: [
+        { src: "/pitch/app-chat.webp", alt: "Kosmovia: community, chat and wallet", width: 1600, height: 1000 },
+        { src: "/pitch/app-pin.webp", alt: "Payment confirmation with PIN", width: 360, height: 780 }
+      ]
     },
     {
-      id: "how",
-      kind: "steps",
-      title: "How it works",
-      items: [
-        {
-          lead: "Sign in with Google or email:",
-          text: "your wallet is created for you.",
-        },
-        { text: "Join a community, or create your own." },
-        { text: "Send, request and pay in USDC, right from the chat." },
-        {
-          lead: "Verified businesses close deals with escrow:",
-          text: "the money is released when both sides deliver.",
-        },
+      id: "miniapps", kind: "showcase", title: "Mini-apps",
+      layout: "phones",
+      items: [],
+      images: [
+        { src: "/pitch/app-vaquita.webp", alt: "Vaquita: contributions toward a shared goal", caption: "Vaquita: contributions toward a shared goal", width: 360, height: 780 },
+        { src: "/pitch/app-retos.webp", alt: "Retos: games between members, without betting", caption: "Retos: games between members, without betting", width: 360, height: 780 },
+        { src: "/pitch/app-aprende.webp", alt: "Aprende Stellar: lessons, missions and badges", caption: "Aprende Stellar: lessons, missions and badges", width: 360, height: 780 }
       ],
+      caption: "Each mini-app runs in isolation, with permissions and PIN approval. Coming soon: a software development kit (SDK) for third parties."
     },
     {
-      id: "cases",
-      kind: "cards",
-      title: "Built for real use, starting in Bolivia",
-      items: [
-        {
-          head: "Communities and events",
-          text: "Entry fees, pools and payments between members.",
-        },
-        {
-          head: "Car dealers and real estate",
-          text: "A deposit held in escrow until the car or the keys are delivered.",
-        },
-        {
-          head: "Banks and fintechs",
-          text: "A verified community to reach new users, connected through an API.",
-        },
-        {
-          head: "Builders",
-          text: "Find users and businesses, and get paid in USDC.",
-        },
-      ],
-    },
-    {
-      id: "stellar",
-      kind: "list",
-      title: "Why Stellar",
-      items: [
-        { text: "Fees of a fraction of a cent." },
-        { text: "Payments settle in about 5 seconds." },
-        { text: "USDC built in: digital dollars, not volatile tokens." },
-        { text: "Smart contracts (Soroban) for escrow and split payments." },
-        { text: "Anchors to move between local money and USDC." },
-      ],
-    },
-    {
-      id: "works",
-      kind: "list",
-      title: "What already works",
-      items: [
-        {
-          text: "Live website in English and Spanish",
-          link: "kosmovia.vercel.app",
-        },
-        {
-          text: "Public, open-source repository (AGPL-3.0)",
-          link: "github.com/kosmovia/kosmovia",
-        },
-        {
-          lead: "Payment rails proven:",
-          text: "Alejandro built Pollar Pass, which charges in USDC on Stellar testnet with email sign-in, an on-chain receipt and a QR check-in",
-          link: "pollarpass.vercel.app",
-        },
-        {
-          lead: "Stack:",
-          text: "Next.js · Pollar · Firebase · Stellar testnet",
-        },
-      ],
-    },
-    {
-      id: "compare",
-      kind: "table",
-      title: "How we are different",
-      caption:
-        "Comparison of Kosmovia with WhatsApp or Discord, Telegram and Towns",
-      cols: [
-        "Communities",
-        "Payments inside",
-        "Verified businesses",
-        "Free to join",
-      ],
+      id: "compare", kind: "table", title: "How we are different",
+      caption: "Chat, crypto social, wallets and Kosmovia",
+      cols: ["Community", "Built-in dollars & payments", "Verifiable receipts", "Our focus"],
       rows: [
-        {
-          name: "WhatsApp / Discord",
-          cells: [
-            { v: "yes", text: "Yes" },
-            { v: "no", text: "No" },
-            { v: "no", text: "No" },
-            { v: "yes", text: "Yes" },
-          ],
-        },
-        {
-          name: "Telegram",
-          cells: [
-            { v: "yes", text: "Yes" },
-            { v: "partial", text: "Only with TON" },
-            { v: "no", text: "No" },
-            { v: "yes", text: "Yes" },
-          ],
-        },
-        {
-          name: "Towns",
-          cells: [
-            { v: "yes", text: "Yes" },
-            { v: "yes", text: "Yes, with paid memberships" },
-            { v: "no", text: "No" },
-            { v: "partial", text: "Depends on the community" },
-          ],
-        },
-        {
-          name: "Kosmovia",
-          highlight: true,
-          cells: [
-            { v: "yes", text: "Yes" },
-            { v: "yes", text: "Yes, USDC on Stellar" },
-            { v: "yes", text: "Yes, with KYC" },
-            { v: "yes", text: "Yes" },
-          ],
-        },
+        { name: "Telegram, WhatsApp, Discord", cells: [
+          { v: "yes", text: "Chat and groups" }, { v: "no", text: "Separate tools" },
+          { v: "no", text: "Payment screenshots" }, { v: "partial", text: "General chat" },
+        ] },
+        { name: "Standalone wallets", cells: [
+          { v: "no", text: "No community" }, { v: "yes", text: "Wallet and payments" },
+          { v: "yes", text: "On-chain records" }, { v: "partial", text: "Money" },
+        ] },
+        { name: "Towns · US$35M+ (a16z)", cells: [
+          { v: "yes", text: "Discord-style group chat" }, { v: "partial", text: "Crypto on Base" },
+          { v: "yes", text: "On-chain" }, { v: "partial", text: "Crypto users, English" },
+        ] },
+        { name: "Farcaster · US$180M (Paradigm)", cells: [
+          { v: "partial", text: "Public social feed" }, { v: "partial", text: "Crypto wallet (Web3)" },
+          { v: "yes", text: "On-chain" }, { v: "partial", text: "Crypto users, mini-apps" },
+        ] },
+        { name: "Kosmovia", highlight: true, cells: [
+          { v: "yes", text: "Channels and mini-apps" }, { v: "yes", text: "USDC, Google sign-in" },
+          { v: "yes", text: "Receipts in the chat" }, { v: "yes", text: "General audiences, crypto communities and developers" },
+        ] },
       ],
     },
     {
-      id: "money",
-      kind: "list",
-      title: "How Kosmovia makes money",
+      id: "money", kind: "cards", title: "Business model and why Stellar",
       items: [
-        { lead: "Now:", text: "grants from the Stellar Community Fund." },
         {
-          lead: "Next:",
-          text: "a small fee on the payments that go through the platform: transfers, payment links and escrow.",
+          head: "Model",
+          text: "Free beta.",
+          details: [
+            "Fees only on platform earnings: memberships and collections.",
+            "Free payments between people.",
+            "Premium tools and organization accounts."
+          ]
         },
         {
-          lead: "Premium tools",
-          text: "for verified businesses: analytics and API access.",
-        },
-        {
-          lead: "What we won't do:",
-          text: "our own token, paid channels or ads.",
-        },
-      ],
+          head: "Why Stellar",
+          text: "Native USDC: digital dollars.",
+          details: [
+            "Minimal fees and settlement in seconds.",
+            "Anchors: services connecting digital balances with local money.",
+            "Soroban contracts: Vaquita escrow already deployed on testnet."
+          ]
+        }
+      ]
     },
     {
-      id: "roadmap",
-      kind: "roadmap",
-      title: "Roadmap — Bolivia first, then the world",
-      nowLabel: contentEn.roadmap.nowLabel,
-      stages: contentEn.roadmap.stages,
+      id: "roadmap", kind: "roadmap", title: "Roadmap",
+      nowLabel: "Done",
+      stages: [
+        {
+          key: "done",
+          name: "Testnet beta",
+          now: true,
+          when: "Oct 2026",
+          what: "Communities, wallet, PIN payments and mini-apps"
+        },
+        {
+          key: "income",
+          name: "Community monetization",
+          soon: true,
+          when: "Next",
+          what: "Real-time chat and paid memberships"
+        },
+        {
+          key: "savings",
+          name: "Savings and developers",
+          when: "Later",
+          what: "Pasanaku on Soroban and a mini-app SDK"
+        },
+        {
+          key: "mainnet",
+          name: "Mainnet",
+          when: "",
+          what: "Security audit, legal review and scalability"
+        }
+      ]
     },
     {
-      id: "team",
-      kind: "team",
-      title: "The team",
+      id: "team", kind: "team-contact", title: "Team and contact",
       people: [
-        {
-          name: "Alejandro",
-          role: "Product and backend: wallet, payments and deploys",
-        },
-        { name: "Roberto", role: "Backend and business verification (KYC)" },
-        { name: "Victor", role: "Frontend, UX/UI and the presentation" },
-        { name: "Carla", role: "Social media, marketing and brand" },
+        { name: "Alejandro", role: "Product, wallet, payments and security" },
+        { name: "Roberto", role: "Backend, data, real-time systems and Soroban contracts" },
+        { name: "Victor", role: "Frontend, UX/UI and mobile" },
+        { name: "Carla", role: "Brand, communications and community" }
       ],
-      footer: "Stellar Elite Bolivia · TechRebel",
+      text: "Public beta on Stellar testnet."
+    },
+  ],
+  sections: [
+    {
+      id: "solution", kind: "cards", title: "Connect and pay",
+      items: [
+        { head: "Your community", text: "Channels, roles and conversations like Discord or Towns." },
+        { head: "Digital dollars", text: "USDC wallet and history; Stellar test funds today." },
+        { head: "Chat payments", text: "Pay @usernames, post invoices and verify receipts on Stellar." },
+        { head: "Mini-apps", text: "Pool money, play and learn within your community." },
+      ],
     },
     {
-      id: "close",
-      kind: "close",
-      title: "Join us",
-      text: "We're looking for communities and testers in Bolivia, pilot businesses (car dealers, real estate, fintechs) and your feedback.",
-      links: ["kosmovia.vercel.app", "github.com/kosmovia/kosmovia"],
+      id: "how", kind: "steps", title: "How it works",
+      items: [
+        { lead: "Sign in", text: "Google/email: Pollar-managed wallet, no seed phrase; or connect Freighter." },
+        { lead: "Connect", text: "Join or create a community with channels and roles." },
+        { lead: "Pay", text: "Send test USDC by @username/invoice; enter your six-digit PIN." },
+      ],
+    },
+    {
+      id: "close", kind: "close", title: "Join us",
+      text: "Bring your community, try the free testnet beta and share your feedback.",
+      links: ["kosmovia.onrender.com", "kosmovia.vercel.app", "github.com/kosmovia/kosmovia", "t.me/kosmovia_official", "instagram.com/kosmovia.io", "tiktok.com/@kosmovia0", "x.com/kosmoviaio"],
       big: "Explore. Connect. Belong.",
     },
   ],
@@ -343,231 +266,161 @@ export const es: Deck = {
   },
   slides: [
     {
-      id: "cover",
-      kind: "cover",
-      title: "Kosmovia",
-      tagline: "Explora. Conecta. Pertenece.",
-      sub: "Comunidades con wallet y pagos integrados, en Stellar.",
-      meta: "Stellar Elite Bolivia · 2026 · kosmovia.vercel.app",
+      id: "cover", kind: "cover", title: "Kosmovia",
+      tagline: "Tu comunidad y tu dinero, en un solo lugar.",
+      sub: "Comunidades con wallet y pagos en USDC sobre Stellar. Beta pública en testnet.",
+      meta: "Stellar Elite Bolivia · TechRebel"
     },
     {
-      id: "problem",
-      kind: "list",
-      title: "Las comunidades y el dinero viven en lugares distintos",
+      id: "problem", kind: "list", title: "Problema y oportunidad",
       items: [
-        {
-          text: "Las comunidades están repartidas entre WhatsApp, Telegram y Discord, y en ninguna se puede pagar adentro.",
-        },
-        {
-          text: "Empezar en cripto sigue siendo difícil: frases semilla, comisiones y apps separadas.",
-        },
-        {
-          text: "Las empresas no tienen un lugar confiable para llegar a usuarios y builders y cerrar tratos en línea.",
-        },
-      ],
+        { text: "Comunidades y proyectos coordinan por chat; cobran con QR, capturas y seguimiento." },
+        { text: "Dinero y conversación usan herramientas separadas, sin comprobantes verificables." },
+        { text: "Bolivia necesita dólares digitales (USDC) ante el acceso limitado a dólares." }
+      ]
     },
     {
-      id: "solution",
-      kind: "cards",
-      title: "Un solo lugar para conectar y pagar",
+      id: "solution", kind: "showcase", title: "El producto",
+      layout: "product",
       items: [
-        {
-          head: "Comunidades",
-          text: "Canales, roles y chat, con el diseño que ya conoces.",
-        },
-        {
-          head: "Una wallet desde el primer día",
-          text: "Entra con Google o email. Wallet en USDC lista, sin frases semilla y sin pagar comisiones.",
-        },
-        {
-          head: "Pagos y envíos",
-          text: "Envía dinero por @usuario, cobra con un link o QR y cierra tratos con contratos de garantía.",
-        },
-        {
-          head: "Empresas verificadas",
-          text: "Empresas verificadas con KYC abren su propia comunidad y se conectan por API.",
-        },
+        { text: "Comunidades con canales, roles y mensajes directos" },
+        { text: "Wallet USDC: acceso con Google o email, sin frase semilla" },
+        { text: "Pagos con PIN y comprobantes verificables en Stellar" }
       ],
+      note: "PIN de seis dígitos, bloqueo por intentos y límites diarios. Controles de la app durante la beta en testnet.",
+      images: [
+        { src: "/pitch/app-chat.webp", alt: "Kosmovia: comunidad, chat y wallet", width: 1600, height: 1000 },
+        { src: "/pitch/app-pin.webp", alt: "Confirmación de pago con PIN", width: 360, height: 780 }
+      ]
     },
     {
-      id: "how",
-      kind: "steps",
-      title: "Cómo funciona",
-      items: [
-        {
-          lead: "Entras con Google o email:",
-          text: "tu wallet se crea sola.",
-        },
-        { text: "Te unes a una comunidad o creas la tuya." },
-        { text: "Envías, cobras y pagas en USDC desde el mismo chat." },
-        {
-          lead: "Las empresas verificadas cierran tratos con garantía:",
-          text: "el dinero se libera cuando ambas partes cumplen.",
-        },
+      id: "miniapps", kind: "showcase", title: "Mini-apps",
+      layout: "phones",
+      items: [],
+      images: [
+        { src: "/pitch/app-vaquita.webp", alt: "Vaquita: aportes para un objetivo común", caption: "Vaquita: aportes para un objetivo común", width: 360, height: 780 },
+        { src: "/pitch/app-retos.webp", alt: "Retos: juegos entre miembros, sin apuestas", caption: "Retos: juegos entre miembros, sin apuestas", width: 360, height: 780 },
+        { src: "/pitch/app-aprende.webp", alt: "Aprende Stellar: lecciones, misiones e insignias", caption: "Aprende Stellar: lecciones, misiones e insignias", width: 360, height: 780 }
       ],
+      caption: "Cada mini-app corre aislada y se conecta con permisos y PIN. Próximamente: SDK para terceros (kit de desarrollo)."
     },
     {
-      id: "cases",
-      kind: "cards",
-      title: "Hecho para usos reales, empezando por Bolivia",
-      items: [
-        {
-          head: "Comunidades y eventos",
-          text: "Entradas, colectas y pagos entre miembros.",
-        },
-        {
-          head: "Concesionarias e inmobiliarias",
-          text: "Una seña en garantía hasta que se entrega el auto o las llaves.",
-        },
-        {
-          head: "Bancos y fintechs",
-          text: "Una comunidad verificada para llegar a nuevos usuarios, conectada por API.",
-        },
-        {
-          head: "Builders",
-          text: "Encuentran usuarios y empresas, y cobran en USDC.",
-        },
-      ],
-    },
-    {
-      id: "stellar",
-      kind: "list",
-      title: "Por qué Stellar",
-      items: [
-        { text: "Comisiones de fracciones de centavo." },
-        { text: "Los pagos se confirman en unos 5 segundos." },
-        { text: "USDC integrado: dólares digitales, no tokens volátiles." },
-        {
-          text: "Contratos inteligentes (Soroban) para pagos en garantía y pagos divididos.",
-        },
-        { text: "Anchors para pasar de moneda local a USDC y al revés." },
-      ],
-    },
-    {
-      id: "works",
-      kind: "list",
-      title: "Lo que ya funciona",
-      items: [
-        {
-          text: "Web en vivo en inglés y español",
-          link: "kosmovia.vercel.app",
-        },
-        {
-          text: "Repositorio público y open source (AGPL-3.0)",
-          link: "github.com/kosmovia/kosmovia",
-        },
-        {
-          lead: "Los pagos ya están probados:",
-          text: "Alejandro construyó Pollar Pass, que cobra en USDC en testnet de Stellar con login por email, comprobante en la red y QR en la puerta",
-          link: "pollarpass.vercel.app",
-        },
-        {
-          lead: "Stack:",
-          text: "Next.js · Pollar · Firebase · Stellar testnet",
-        },
-      ],
-    },
-    {
-      id: "compare",
-      kind: "table",
-      title: "En qué nos diferenciamos",
-      caption:
-        "Comparación de Kosmovia con WhatsApp o Discord, Telegram y Towns",
-      cols: [
-        "Comunidades",
-        "Pagos adentro",
-        "Empresas verificadas",
-        "Gratis para entrar",
-      ],
+      id: "compare", kind: "table", title: "En qué nos diferenciamos",
+      caption: "Chat, redes cripto, wallets y Kosmovia",
+      cols: ["Comunidad", "Dólares y pagos integrados", "Comprobantes verificables", "Enfoque"],
       rows: [
-        {
-          name: "WhatsApp / Discord",
-          cells: [
-            { v: "yes", text: "Sí" },
-            { v: "no", text: "No" },
-            { v: "no", text: "No" },
-            { v: "yes", text: "Sí" },
-          ],
-        },
-        {
-          name: "Telegram",
-          cells: [
-            { v: "yes", text: "Sí" },
-            { v: "partial", text: "Solo con TON" },
-            { v: "no", text: "No" },
-            { v: "yes", text: "Sí" },
-          ],
-        },
-        {
-          name: "Towns",
-          cells: [
-            { v: "yes", text: "Sí" },
-            { v: "yes", text: "Sí, con membresías de pago" },
-            { v: "no", text: "No" },
-            { v: "partial", text: "Depende de la comunidad" },
-          ],
-        },
-        {
-          name: "Kosmovia",
-          highlight: true,
-          cells: [
-            { v: "yes", text: "Sí" },
-            { v: "yes", text: "Sí, USDC en Stellar" },
-            { v: "yes", text: "Sí, con KYC" },
-            { v: "yes", text: "Sí" },
-          ],
-        },
+        { name: "Telegram, WhatsApp, Discord", cells: [
+          { v: "yes", text: "Chat y grupos" }, { v: "no", text: "Herramientas separadas" },
+          { v: "no", text: "Capturas de pago" }, { v: "partial", text: "Chat general" },
+        ] },
+        { name: "Wallets independientes", cells: [
+          { v: "no", text: "Sin comunidad" }, { v: "yes", text: "Wallet y pagos" },
+          { v: "yes", text: "Registros en la red" }, { v: "partial", text: "Dinero" },
+        ] },
+        { name: "Towns · US$35M+ (a16z)", cells: [
+          { v: "yes", text: "Chat grupal estilo Discord" }, { v: "partial", text: "Cripto en Base" },
+          { v: "yes", text: "En la red (on-chain)" }, { v: "partial", text: "Público cripto, en inglés" },
+        ] },
+        { name: "Farcaster · US$180M (Paradigm)", cells: [
+          { v: "partial", text: "Red social pública" }, { v: "partial", text: "Wallet cripto (Web3)" },
+          { v: "yes", text: "En la red (on-chain)" }, { v: "partial", text: "Público cripto, mini-apps" },
+        ] },
+        { name: "Kosmovia", highlight: true, cells: [
+          { v: "yes", text: "Canales y mini-apps" }, { v: "yes", text: "USDC, entras con Google" },
+          { v: "yes", text: "Recibos en el chat" }, { v: "yes", text: "Público general, comunidad cripto y desarrolladores" },
+        ] },
       ],
     },
     {
-      id: "money",
-      kind: "list",
-      title: "De qué vive Kosmovia",
+      id: "money", kind: "cards", title: "Modelo de negocio y por qué Stellar",
       items: [
-        { lead: "Ahora:", text: "subvenciones del Stellar Community Fund." },
         {
-          lead: "Después:",
-          text: "una comisión chica sobre los pagos que pasan por la plataforma: envíos, links de cobro y garantías.",
+          head: "Modelo",
+          text: "Beta gratuita.",
+          details: [
+            "Comisión solo sobre ingresos generados en la plataforma: membresías y cobros.",
+            "Pagos entre personas sin costo.",
+            "Herramientas premium y cuentas para organizaciones."
+          ]
         },
         {
-          lead: "Herramientas premium",
-          text: "para empresas verificadas: analíticas y acceso por API.",
-        },
-        {
-          lead: "Lo que no haremos:",
-          text: "token propio, canales de pago ni publicidad.",
-        },
-      ],
+          head: "Por qué Stellar",
+          text: "USDC nativo: dólares digitales.",
+          details: [
+            "Comisiones mínimas y liquidación en segundos.",
+            "Anclas: servicios para conectar con dinero local.",
+            "Contratos Soroban: garantía de Vaquita ya desplegada en testnet."
+          ]
+        }
+      ]
     },
     {
-      id: "roadmap",
-      kind: "roadmap",
-      title: "Hoja de ruta — Primero Bolivia, después el mundo",
-      nowLabel: contentEs.roadmap.nowLabel,
-      stages: contentEs.roadmap.stages,
+      id: "roadmap", kind: "roadmap", title: "Hoja de ruta",
+      nowLabel: "Hecho",
+      stages: [
+        {
+          key: "done",
+          name: "Beta en testnet",
+          now: true,
+          when: "Oct 2026",
+          what: "Comunidades, wallet, pagos con PIN y mini-apps"
+        },
+        {
+          key: "income",
+          name: "Monetización de comunidades",
+          soon: true,
+          when: "Próximo",
+          what: "Chat en tiempo real y membresías de pago"
+        },
+        {
+          key: "savings",
+          name: "Ahorro y desarrolladores",
+          when: "Después",
+          what: "Pasanaku en Soroban y SDK para mini-apps"
+        },
+        {
+          key: "mainnet",
+          name: "Mainnet",
+          when: "",
+          what: "Auditoría de seguridad, revisión legal y escalabilidad"
+        }
+      ]
     },
     {
-      id: "team",
-      kind: "team",
-      title: "El equipo",
+      id: "team", kind: "team-contact", title: "Equipo y contacto",
       people: [
-        {
-          name: "Alejandro",
-          role: "Producto y backend: wallet, pagos y despliegues",
-        },
-        { name: "Roberto", role: "Backend y verificación de empresas (KYC)" },
-        { name: "Victor", role: "Frontend, UX/UI y la presentación" },
-        { name: "Carla", role: "Redes, marketing y marca" },
+        { name: "Alejandro", role: "Producto, wallet, pagos y seguridad" },
+        { name: "Roberto", role: "Backend, datos, tiempo real y contratos Soroban" },
+        { name: "Victor", role: "Frontend, UX/UI y móvil" },
+        { name: "Carla", role: "Marca, comunicación y comunidad" }
       ],
-      footer: "Stellar Elite Bolivia · TechRebel",
+      text: "Beta pública en testnet de Stellar."
+    },
+  ],
+  sections: [
+    {
+      id: "solution", kind: "cards", title: "Conecta y paga",
+      items: [
+        { head: "Tu comunidad", text: "Canales, roles y conversaciones como Discord o Towns." },
+        { head: "Dólares digitales", text: "Wallet USDC e historial; hoy, fondos de prueba en Stellar." },
+        { head: "Pagos en chat", text: "Paga @usuarios, publica cobros y verifica recibos en Stellar." },
+        { head: "Mini-apps", text: "Reúne aportes, juega y aprende en tu comunidad." },
+      ],
     },
     {
-      id: "close",
-      kind: "close",
-      title: "Súmate",
-      text: "Buscamos comunidades y testers en Bolivia, empresas piloto (concesionarias, inmobiliarias, fintechs) y tu opinión.",
-      links: ["kosmovia.vercel.app", "github.com/kosmovia/kosmovia"],
+      id: "how", kind: "steps", title: "Cómo funciona",
+      items: [
+        { lead: "Entra", text: "Google/correo: wallet sin frase semilla; o Freighter." },
+        { lead: "Conecta", text: "Únete o crea tu comunidad con canales y roles." },
+        { lead: "Paga", text: "USDC de prueba por @usuario/cobro; PIN de seis dígitos." },
+      ],
+    },
+    {
+      id: "close", kind: "close", title: "Súmate",
+      text: "Trae a tu comunidad, prueba la beta gratuita en testnet y comparte tu opinión.",
+      links: ["kosmovia.onrender.com", "kosmovia.vercel.app", "github.com/kosmovia/kosmovia", "t.me/kosmovia_official", "instagram.com/kosmovia.io", "tiktok.com/@kosmovia0", "x.com/kosmoviaio"],
       big: "Explora. Conecta. Pertenece.",
     },
   ],
 };
+

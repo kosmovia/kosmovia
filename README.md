@@ -1,70 +1,128 @@
 # Kosmovia
 
-**Explore. Connect. Belong.**
+**Tu comunidad y tu dinero, en un solo lugar.**
 
-Communities with a wallet and payments built in, on Stellar. For people, builders and businesses — starting in Bolivia, built for the world.
+Construimos hoy la infraestructura de comunidades en Stellar. Kosmovia reúne chat, una wallet en dólares digitales (USDC) y pagos entre personas en un mismo espacio. Está dirigida al público general, la comunidad cripto y los desarrolladores. Nace en Bolivia, con una visión global.
 
-## Status
+## Enlaces oficiales
 
-Early development, testnet only. Web first, mobile next.
+- [Sitio web](https://kosmovia.vercel.app/)
+- [Aplicación](https://kosmovia.onrender.com/)
+- [Ingresar](https://kosmovia.onrender.com/login)
+- [Pitch en español](https://kosmovia.vercel.app/es/pitch) · [Pitch en inglés](https://kosmovia.vercel.app/pitch)
+- [Ayuda](https://kosmovia.onrender.com/ayuda) · [Privacidad](https://kosmovia.onrender.com/privacidad) · [Términos](https://kosmovia.onrender.com/terminos)
 
-Live: **https://kosmovia.vercel.app** (the landing is in English, and in Spanish at `/es`)
+## Estado actual
 
-## What it does
+Beta pública en **Stellar testnet**. Los fondos y pagos de prueba no representan dinero real. La landing se publica en Vercel; la aplicación y sus API corren juntas en un servicio de Render.
 
-- Communities with channels, roles and chat, run by people, builders or companies
-- A wallet from day one: sign in with Google or email and your USDC wallet is ready. No seed phrases, no extensions, fees covered
-- Payments and transfers: send money by @username, get paid with a link or QR, and close deals with escrow contracts
-- Verified businesses (banks, fintechs, car dealers, real estate agencies) that open their own communities to reach users and builders
-- Bolivia first, then the world
+La principal está en español. La versión anterior en inglés se conserva en `/en`; `/es` redirige a la principal.
 
-No paid channels and no subscriptions.
+### Funciones implementadas en la beta
 
-## Roadmap
+- Acceso con Google, correo o Freighter; wallet USDC integrada mediante Pollar.
+- Perfiles con @usuario y avatares Kosmonauta.
+- Comunidades, roles, categorías, canales públicos y privados, y mensajes directos.
+- Chat con edición y eliminación de mensajes, imágenes y archivos adjuntos.
+- Envíos y cobros por @usuario, PIN de pagos e historial con comprobantes verificables en Stellar.
+- Mini-apps piloto: **Vaquita**, **Retos** y **Aprende Stellar**.
+- Aplicación web instalable y soporte de notificaciones.
 
-Bolivia first, then the world. Stages A to D are what we commit to for October 2026; the rest follows in 2027.
+La disponibilidad de servicios como notificaciones y tiempo real depende de la configuración del entorno. Una función implementada en el repositorio no implica que haya sido auditada para mainnet.
 
-| Stage | What gets built | When | Done when |
-| --- | --- | --- | --- |
-| A · Communities + wallet | Sign in with Google or email, USDC wallet, communities, channels and chat | Now | A community chatting, every member with a wallet, on testnet |
-| B · Explore | Discover communities, profiles and what's happening now | Oct 2026 | People finding and joining communities they did not know |
-| C · Payments | Send and request money by @username, community payments, escrow and split contracts | Oct 2026 | Money sent between members and a deal closed with an escrow contract, on testnet |
-| D · Verified businesses | Business verification (KYC), company communities, API connections | Oct 2026 | A verified business running its own community |
-| E · Mini apps | Apps running inside, opened from a post | 2027 | — |
-| F · Open to others | A public SDK so anyone can publish an app | 2027 | — |
-| G · Beyond Bolivia | More countries, mainnet and cash on-ramps | 2027 | — |
+## En qué nos diferenciamos
 
-## Stack
+Kosmovia integra la conversación, la wallet y los comprobantes de pago dentro de la comunidad. Las personas pueden participar con Google o correo; los usuarios de Stellar también pueden conectarse con Freighter.
 
-| When | Tools and protocols |
-| --- | --- |
-| Oct 2026 (A–D) | Next.js on Vercel · Pollar SDK (sign-in, USDC wallet, sponsored fees) · Postgres (Render for testing, Supabase next) · Stellar testnet with USDC · Soroban contracts for escrow and split payments · a KYC provider for businesses (to be chosen) |
-| 2027 | Mini apps: sandboxed iframe + our own TypeScript SDK · Scale: mainnet, cash on-ramps (SEP-24), PWA |
+El enfoque incluye público general, comunidad cripto y desarrolladores, con una experiencia en español. Las mini-apps piloto permiten explorar ahorro grupal, juegos sin apuestas y educación sobre Stellar.
 
-Free tools only, testnet until the team decides otherwise.
+## Hoja de ruta
 
-## Team
+Construimos por etapas. Los objetivos pendientes no se presentan como funciones ya disponibles.
 
-- **Roberto** — backend, business verification (KYC)
-- **Alejandro** — product and backend: wallet and payments, deploys
-- **Victor** — frontend, UX/UI and the presentation
-- **Carla** — social media, marketing and brand
-
-Built in the Stellar Elite Bolivia (TechRebel) program.
-
-## Repo structure
-
-| Folder | Owner | What it holds |
+| Etapa | Alcance | Horizonte |
 | --- | --- | --- |
-| `web` | Alejandro and Victor | Landing + web app, deployed on Vercel |
-| `app` | Victor and Alejandro | The Kosmovia app, frontend and backend in one Next.js server: Pollar login (Google, email, Freighter), Kosmonauta profiles, communities with roles, chat and USDC payments by @username on testnet. API routes in `app/app/api`, backend logic in `app/lib/core`, migrations in `app/db`. Deployed as one Render service (`app/DEPLOY-RENDER.md`). |
-| `server` | Roberto and Alejandro | Backend services |
-| `contracts` | Roberto | Soroban contracts (Rust): escrow and split payments |
-| `design` | Carla | Brand assets and Figma exports |
+| A · Comunidades + wallet | Base de comunidades, canales, chat y wallet USDC en testnet | Etapa actual |
+| B · Explorar | Descubrir comunidades, perfiles y actividad | Objetivo: octubre de 2026 |
+| C · Pagos | Ampliar envíos y cobros, pagos en comunidades, garantías y pagos divididos | Objetivo: octubre de 2026 |
+| D · Empresas verificadas | Verificación de empresas (KYC) e integraciones | Objetivo: octubre de 2026 |
+| E · Mini-apps | Ampliar la plataforma más allá de los pilotos actuales | 2027 |
+| F · SDK abierto | Herramientas públicas para desarrolladores externos | 2027 |
+| G · Más allá de Bolivia | Expansión a otros países y evaluación de rampas de entrada y mainnet | 2027 |
 
-Anyone can open a Pull Request on any folder; its owner reviews it.
+El paso a mainnet requiere una decisión del equipo, revisión de seguridad y revisión legal. Todo sigue en testnet hasta entonces.
 
-## Contributing
+## Tecnología
 
-One branch per task → Pull Request → review → merge.
-Never commit keys, seed phrases or `.env` files. Rules: [AGENTS.md](AGENTS.md).
+| Componente | Implementación |
+| --- | --- |
+| Landing y pitch | Next.js y React, publicados en Vercel |
+| Aplicación y API | Next.js, frontend y backend en un solo servicio de Render |
+| Acceso y wallet | Pollar; conexión con Freighter |
+| Datos | PostgreSQL, con migraciones y soporte para Supabase |
+| Red y pagos | Stellar testnet y USDC de prueba |
+| Contratos | Integraciones Soroban; garantías y pagos divididos forman parte de la evolución de pagos |
+
+El proyecto prioriza herramientas y planes gratuitos. Los proveedores pendientes, incluido KYC empresarial, se definen antes de su integración.
+
+## Equipo y contacto
+
+| Integrante | Responsabilidad |
+| --- | --- |
+| **Alejandro** | Producto, wallet, pagos y seguridad |
+| **Roberto** | Backend, datos, tiempo real y contratos Soroban |
+| **Victor** | Frontend, UX/UI y móvil |
+| **Carla** | Marca, comunicación y comunidad |
+
+Construido en el programa **Stellar Elite Bolivia · TechRebel**.
+
+- [Telegram](https://t.me/kosmovia_official)
+- [Instagram](https://instagram.com/kosmovia.io/)
+- [TikTok](https://www.tiktok.com/@kosmovia0)
+- [X](https://x.com/kosmoviaio)
+
+## Estructura del repositorio
+
+| Carpeta | Contenido |
+| --- | --- |
+| `web/` | Landing, pitch e imágenes públicas |
+| `app/` | Aplicación, mini-apps, API y backend integrado en `app/lib/core/` |
+| `app/db/` | Migraciones de PostgreSQL |
+| `app/supabase/` | Migraciones y documentación del modo Supabase |
+| `server/` | Espacio reservado para servicios separados; el backend actual está integrado en `app/` |
+| `contracts/` | Espacio para contratos Soroban en Rust |
+| `design/` | Recursos de marca y diseño |
+
+## Desarrollo local
+
+Requiere Node.js y npm. Ejecuta la landing y la aplicación en terminales separadas.
+
+```bash
+# Landing y pitch
+cd web
+npm install
+npm run dev -- --port 3124
+```
+
+```bash
+# Aplicación
+cd app
+npm install
+npm run dev
+```
+
+La aplicación requiere las variables de entorno de los servicios utilizados. Consulta [la guía de la aplicación](app/README.md), [la base de datos](app/db/README.md) y [el despliegue en Render](app/DEPLOY-RENDER.md). No publiques archivos de entorno ni valores secretos.
+
+Para validar la landing: `npm run build` desde `web/`. Para la aplicación: `npm test` y `npm run build` desde `app/`.
+
+## Contribuir
+
+Las tareas se coordinan en Notion; el código se trabaja en GitHub.
+
+1. Una rama por tarea (`feat/...` o `fix/...`).
+2. Commits pequeños con títulos claros.
+3. Pull Request, revisión de otro integrante y merge a `main`.
+
+Nunca subas claves privadas, frases semilla, tokens ni archivos `.env`. Kosmovia no custodia claves ni fondos de los usuarios. No hay airdrops por registrarse.
+
+Reglas del proyecto: [AGENTS.md](AGENTS.md).

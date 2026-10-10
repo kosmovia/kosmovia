@@ -7,7 +7,7 @@ export const metadata: Metadata = {
 };
 
 export default function PrivacidadPage() {
-  return <LegalLayout title="Política de Privacidad" draft
+  return <LegalLayout title="Política de Privacidad"
     intro="Aquí explicamos qué datos guardamos y para qué los usamos durante la beta en testnet. No hay dinero real, pero tus datos personales siguen siendo importantes."
     sections={[
       { id: 'datos', title: 'Qué datos guardamos', content: <ul><li>Tu perfil público: @usuario, nombre, avatar y biografía.</li><li>La dirección pública de tu wallet.</li><li>Mensajes de canales y mensajes directos. Los directos no son publicaciones públicas, pero se almacenan para prestar el servicio.</li><li>Imágenes y PDF que adjuntas, sus miniaturas cuando corresponda, nombre de archivo, tamaño, dimensiones y vínculo con el mensaje y la persona que lo subió.</li><li>Registros de pagos, que también son públicos en Stellar.</li><li>Los aportes a vaquitas, actividad de Retos y progreso de Aprende Stellar.</li><li>Las mini apps conectadas a tu cuenta y los permisos que autorizaste.</li><li>La suscripción de notificaciones de cada navegador: dirección técnica de entrega, claves de comunicación, información del navegador y tus preferencias de avisos.</li><li>Datos técnicos mínimos necesarios para operar, diagnosticar errores y proteger el servicio.</li></ul> },
