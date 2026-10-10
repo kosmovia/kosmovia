@@ -1,0 +1,9 @@
+# Rust's output directory
+target
+
+# Local settings
+.soroban
+.stellar
+
+# Instantáneas que regenera cargo test en cada corrida
+test_snapshots
