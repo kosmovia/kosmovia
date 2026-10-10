@@ -212,3 +212,15 @@ html:has(.kv-root) { background: #061314; }
   .kv-root .kv-tl-item { padding-top: 0; }
   .kv-root .kv-tl-dot { left: -34px; top: 2px; }
 }
+
+/* Para quién: título con ícono en una línea y ejemplos como etiquetas. */
+.kv-root .kv-who { display: flex; flex-direction: column; gap: 10px; }
+.kv-root .kv-who-head { display: flex; align-items: center; gap: 12px; }
+.kv-root .kv-who-head .kv-icon { margin: 0; flex: none; }
+.kv-root .kv-who-head h3 { margin: 0; font-size: 19px; }
+.kv-root .kv-who p { margin: 0; }
+.kv-root .kv-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: auto 0 0; padding: 4px 0 0; list-style: none; }
+.kv-root .kv-tags li {
+  padding: 3px 10px; border: 1px solid var(--k-line); border-radius: 999px;
+  color: var(--k-glow); font-size: 13px; font-weight: 600;
+}

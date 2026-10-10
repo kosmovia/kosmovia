@@ -30,7 +30,7 @@ const NAV = [
 const ROADMAP = [
   { stage: "Hecho · oct 2026", status: "done", title: "La base", items: ["Comunidades, chat y archivos", "Wallet USDC y pagos con PIN", "Mini-apps y notificaciones"] },
   { stage: "Próximo", status: "next", title: "Comunidades que cobran", items: ["Chat en tiempo real", "Membresías de pago", "Pasanaku en Soroban"] },
-  { stage: "Antes de mainnet", status: "later", title: "Dinero real", items: ["Auditoría de seguridad", "Revisión legal", "De Bolivia a Latinoamérica"] },
+  { stage: "Antes de mainnet", status: "later", title: "Dinero real", items: ["Auditoría de seguridad", "Revisión legal", "Escalabilidad"] },
 ] as const;
 
 const FEATURES: { icon: ReactNode; title: string; text: string }[] = [
@@ -75,9 +75,9 @@ const STEPS = [
 const SOON = ["Pasanaku", "Dividir la cuenta", "Propinas para creadores", "Membresías", "Talento"];
 
 const AUDIENCE = [
-  { icon: <IconCreators />, title: "Creadores y comunidades que cobran", text: "Cursos, mentorías y academias: reúne a tu gente y cobra dentro del mismo chat." },
-  { icon: <IconFriends />, title: "Grupos de amigos y familia", text: "Hagan vaquitas, páguense entre ustedes y mantengan las cuentas claras." },
-  { icon: <IconLearn />, title: "Quien quiere aprender Stellar", text: "Lecciones cortas, misiones e insignias para entender Stellar usándolo." },
+  { icon: <IconCreators />, title: "Creadores", text: "Cobra a tu comunidad en dólares digitales, dentro del chat.", tags: ["Cursos", "Mentorías", "Academias"] },
+  { icon: <IconFriends />, title: "Amigos y familia", text: "Junten dinero y páguense entre ustedes, con cuentas claras.", tags: ["Vaquitas", "Retos", "Pagos"] },
+  { icon: <IconLearn />, title: "Curiosos de Stellar", text: "Aprende cómo funciona el dinero digital usándolo.", tags: ["Lecciones", "Misiones", "Insignias"] },
 ];
 
 
@@ -273,14 +273,21 @@ export default function Home() {
         {/* Para quién */}
         <section id="para-quien" className="kv-section kv-alt">
           <div className="kv-wrap">
-            <p className="kv-eyebrow">Para quién</p>
-            <h2>Hecho para ti y tu gente</h2>
+            <p className="kv-eyebrow">Para ti</p>
+            <h2>Para quién es Kosmovia</h2>
             <div className="kv-grid kv-grid-3">
               {AUDIENCE.map((a) => (
-                <article key={a.title} className="kv-card">
-                  <div className="kv-icon">{a.icon}</div>
-                  <h3>{a.title}</h3>
+                <article key={a.title} className="kv-card kv-who">
+                  <div className="kv-who-head">
+                    <div className="kv-icon">{a.icon}</div>
+                    <h3>{a.title}</h3>
+                  </div>
                   <p>{a.text}</p>
+                  <ul className="kv-tags" aria-label="Ejemplos">
+                    {a.tags.map((t) => (
+                      <li key={t}>{t}</li>
+                    ))}
+                  </ul>
                 </article>
               ))}
             </div>
