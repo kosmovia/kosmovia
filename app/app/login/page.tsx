@@ -4,11 +4,11 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { SERVICES_MODE } from '../../services';
 import { CoreLogin } from './CoreLogin';
+import { FirstRunTrust } from '../../components/TrustWelcome';
 
 export default function LoginPage() {
   // Modo api: login real con Pollar. Modo demo: el login de siempre.
-  if (SERVICES_MODE === 'api') return <CoreLogin />;
-  return <DemoLogin />;
+  return <FirstRunTrust>{SERVICES_MODE === 'api' ? <CoreLogin /> : <DemoLogin />}</FirstRunTrust>;
 }
 
 function DemoLogin() {
@@ -26,7 +26,7 @@ function DemoLogin() {
     <div className="login-page-container">
       <div className="login-box">
         <div className="login-header">
-          <span className="login-brand-icon"><img src="/brand/kosmovia-logo.png" alt="" width={56} height={56} className="kv-brand-img" /></span>
+          <span className="login-brand-icon"><img src="/brand/kosmovia-icon.svg" alt="" width={56} height={56} className="kv-brand-img" /></span>
           <h1 className="login-title">Ingresar a Kosmovia</h1>
           <p className="login-subtitle">
             Comunidades, canales y chat en Stellar
@@ -56,6 +56,7 @@ function DemoLogin() {
           >
             {isLoading ? 'Ingresando...' : 'Ingresar a la Plataforma →'}
           </button>
+          <p className="legal-consent">Al continuar aceptas los <Link href="/terminos">Términos</Link> y la <Link href="/privacidad">Política de Privacidad</Link>.</p>
         </form>
 
         <Link href="/" className="login-back-link">

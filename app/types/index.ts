@@ -74,6 +74,8 @@ export interface WalletTransaction {
   timestamp: string;
   hash: string;
   paidAt?: string; // ISO, para saber qué es nuevo en las notificaciones
+  /** Pago enviado que no pasó por el PIN (lo marca el servidor). */
+  unverified?: boolean;
 }
 
 export interface SettlementRecord {

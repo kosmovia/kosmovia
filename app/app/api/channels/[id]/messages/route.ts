@@ -3,6 +3,9 @@ import { limitedResponse } from "../../../../../lib/core/api-limits.ts";
 import { failure, handled, json, readJsonBody, requireGate, type Params } from "../../../../../lib/core/api-route.ts";
 import * as repo from "../../../../../lib/core/db/repo.ts";
 import { isUuid } from "../../../../../lib/core/ids.ts";
+import { checkMarkers } from "../../../../../lib/core/attachments-rules.ts";
+import * as attachments from "../../../../../lib/core/db/attachments-repo.ts";
+import { notifyMentions } from "../../../../../lib/core/push-triggers.ts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,6 +47,10 @@ export async function GET(request: Request, ctx: Params<{ id: string }>): Promis
  * channels; only owner/admin post in `announcement` ones (403
  * `announcement_readonly`). 201 { message }; 429 quota_exceeded (20 per minute,
  * 500 per hour).
+ *
+ * Archivos: el contenido puede llevar hasta 4 marcadores `[ARCHIVO:<id>]` (ver
+ * POST /api/attachments). Cada id tiene que ser de quien publica, de este canal y no estar
+ * usado: si no, 400 `attachment_invalid`. El mensaje y el vínculo se escriben juntos.
  */
 export async function POST(request: Request, ctx: Params<{ id: string }>): Promise<Response> {
   const auth = requireGate(request);
@@ -57,13 +64,19 @@ export async function POST(request: Request, ctx: Params<{ id: string }>): Promi
   if (!body.ok) return body.response;
   const input = parseMessageCreate(body.value);
   if (!input.ok) return failure(400, input.error, "invalid_input");
+  const markers = checkMarkers(input.value.content);
+  if (!markers.ok) return failure(400, markers.error, markers.code);
 
   return handled("POST /api/channels/:id/messages", async () => {
-    const result = await repo.postMessage(channelId, auth.session.profileId, input.value.content);
+    const result =
+      markers.ids.length === 0
+        ? await repo.postMessage(channelId, auth.session.profileId, input.value.content)
+        : await attachments.postChannelMessageWithAttachments(channelId, auth.session.profileId, input.value.content, markers.ids);
     if (!result.ok) {
       if ("notFound" in result) return failure(404, "Canal no encontrado.", "not_found");
       return failure(result.denied.status, result.denied.error, result.denied.code);
     }
+    notifyMentions(channelId, auth.session.profileId, input.value.content);
     return json({ message: result.value }, 201);
   });
 }

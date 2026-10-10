@@ -757,6 +757,12 @@ export interface NewPayment {
   note: string | null;
   registeredBy: string;
   paidAt: string;
+  /** El permiso (PIN) que respalda este pago, ya consumido; null si no hubo. */
+  approvalId?: string | null;
+  /** El memo del pago en Horizon, solo para consumir el permiso (no se guarda en `payments`). */
+  memo?: string | null;
+  /** Sin permiso válido: se guarda igual (el dinero ya se movió) pero se marca. Por defecto: `!approvalId`. */
+  unverified?: boolean;
 }
 
 const PARTY_JSON = (alias: string) =>
@@ -764,9 +770,10 @@ const PARTY_JSON = (alias: string) =>
   `'avatar_seed', ${alias}.avatar_seed, 'avatar_style', ${alias}.avatar_style) end`;
 
 /** What a payment looks like on the wire: the row plus both sides' slim profiles (null for wallets without one). */
-const PAYMENT_SELECT =
+const paymentSelect = (unverified: string) =>
   `py.id, py.tx_hash, py.from_wallet, py.to_wallet, py.asset, py.amount::text as amount, py.note, ${isoUs("py.paid_at")} as paid_at, ` +
-  `${PARTY_JSON("pf")} as from_profile, ${PARTY_JSON("pt")} as to_profile`;
+  `${unverified} as unverified, ${PARTY_JSON("pf")} as from_profile, ${PARTY_JSON("pt")} as to_profile`;
+const PAYMENT_SELECT = paymentSelect("py.unverified");
 const PAYMENT_FROM =
   "from public.payments py left join public.profiles pf on pf.wallet = py.from_wallet left join public.profiles pt on pt.wallet = py.to_wallet";
 
@@ -774,11 +781,15 @@ const PAYMENT_FROM =
 export const insertPayment = (p: NewPayment): Query => ({
   text:
     "with ins as (" +
-    "insert into public.payments (op_id, tx_hash, from_wallet, to_wallet, asset, amount, note, registered_by, paid_at) " +
-    "values ($1, $2, $3, $4, $5, $6::numeric, $7, $8, $9::timestamptz) on conflict (op_id) do nothing returning *) " +
+    "insert into public.payments (op_id, tx_hash, from_wallet, to_wallet, asset, amount, note, registered_by, paid_at, approval_id, unverified) " +
+    "values ($1, $2, $3, $4, $5, $6::numeric, $7, $8, $9::timestamptz, $10::uuid, $11::boolean) on conflict (op_id) do nothing returning *) " +
     `select ${PAYMENT_SELECT} from ins py ` +
     "left join public.profiles pf on pf.wallet = py.from_wallet left join public.profiles pt on pt.wallet = py.to_wallet",
-  values: [p.opId, p.txHash, p.fromWallet, p.toWallet, p.asset, p.amount, p.note, p.registeredBy, p.paidAt],
+  values: [
+    p.opId, p.txHash, p.fromWallet, p.toWallet, p.asset, p.amount, p.note, p.registeredBy, p.paidAt,
+    p.approvalId ?? null,
+    p.unverified ?? !p.approvalId,
+  ],
 });
 
 /** An already recorded operation, only if `wallet` sent it. */
@@ -790,11 +801,409 @@ export const paymentByOpForSender = (opId: string, wallet: string): Query => ({
 /** Payments `wallet` sent or received, newest first. */
 export const paymentsOfWallet = (wallet: string, limit: number): Query => ({
   text:
-    `select ${PAYMENT_SELECT} ${PAYMENT_FROM} where py.from_wallet = $1 or py.to_wallet = $1 ` +
+    `select ${paymentSelect("(py.unverified and py.from_wallet = $1)")} ${PAYMENT_FROM} where py.from_wallet = $1 or py.to_wallet = $1 ` +
     "order by py.paid_at desc, py.id desc limit $2",
   values: [wallet, limit],
 });
 
+// ------------------------------------------------------------ payment security
+//
+// El PIN de pagos (migraciones 0009 y 0011). Cada paso que decide algo de
+// seguridad es UN solo statement atómico (o una transacción con la fila de
+// payment_security bloqueada), para que pedidos en paralelo no puedan saltarse
+// el bloqueo, pasarse del límite ni usar una verificación de un PIN que ya cambió.
+//
+// `pin_version` sube con cada PIN nuevo (crearlo, cambiarlo, activar un reset).
+// La verificación del PIN devuelve la versión con la que se hizo, y cada acción
+// posterior (permiso, límites, cambio de PIN) exige que siga siendo la vigente.
+
+/** Estado del PIN de un perfil. Sin fila = todavía no creó su PIN. `locked_until` solo si sigue vigente. */
+export const securityRow = (profileId: string): Query => ({
+  text:
+    "select (s.pin_hash is not null) as has_pin, " +
+    `${isoUs("(case when s.locked_until > now() then s.locked_until end)")} as locked_until, ` +
+    `${isoUs("s.pending_pin_at")} as pending_pin_at, ` +
+    "s.daily_limit_usdc::text as daily_limit_usdc, s.daily_limit_xlm::text as daily_limit_xlm " +
+    "from public.payment_security s where s.profile_id = $1",
+  values: [profileId],
+});
+
+/**
+ * Lo reservado por los permisos, por activo, para el límite de 24 h móviles: TODOS los
+ * permisos (usados o no, vencidos o no) cuyo último instante de pago, `expires_at` más
+ * la holgura `$2` (ms), todavía cae dentro de las últimas 24 h. Así un permiso reserva
+ * cupo hasta 24 h después del último momento en que su pago podía cerrar y verificarse
+ * (no solo 24 h desde que se creó): dos pagos verificados dentro de una misma ventana de
+ * 24 h nunca suman más que el límite. Un permiso sin usar no libera cupo. (Misma regla
+ * que pin-rules.reservationCounts.)
+ */
+export const approvedLast24h = (profileId: string, graceMs: number): Query => ({
+  text:
+    "select a.asset, coalesce(sum(a.amount), 0)::text as spent from public.payment_approvals a " +
+    "where a.profile_id = $1 and a.expires_at > now() - interval '24 hours' - $2::double precision * interval '1 millisecond' " +
+    "group by a.asset",
+  values: [profileId, graceMs],
+});
+
+export interface LockPolicy {
+  maxAttempts: number;
+  baseMs: number;
+  maxMs: number;
+  maxLevel: number;
+}
+
+/** Bloquea la fila de seguridad de un perfil hasta el final de la transacción (serializa las verificaciones del PIN). */
+export const lockSecurityForPin = (profileId: string): Query => ({
+  text: "select s.profile_id from public.payment_security s where s.profile_id = $1 for update",
+  values: [profileId],
+});
+
+/**
+ * Si un "olvidé mi PIN" ya cumplió sus 24 h, el PIN pendiente pasa a ser el PIN
+ * (versión + 1, sin fallos ni bloqueo) y los permisos pendientes se revocan (`revoked_at`, una sola
+ * vez), todo en el mismo statement. Devuelve la fila solo si activó algo.
+ */
+export const activatePendingPin = (profileId: string): Query => ({
+  text:
+    "with act as (" +
+    "update public.payment_security s set pin_hash = s.pending_pin_hash, pin_salt = s.pending_pin_salt, pin_set_at = now(), " +
+    "pin_version = s.pin_version + 1, failed_attempts = 0, lock_level = 0, locked_until = null, " +
+    "pending_pin_hash = null, pending_pin_salt = null, pending_pin_at = null, updated_at = now() " +
+    "where s.profile_id = $1 and s.pending_pin_hash is not null and s.pending_pin_at <= now() returning s.profile_id), " +
+    "inv as (update public.payment_approvals set revoked_at = now() " +
+    "where profile_id = $1 and used_at is null and revoked_at is null and exists (select 1 from act) returning id) " +
+    "select profile_id from act",
+  values: [profileId],
+});
+
+/**
+ * Reserva un intento ANTES de mirar el PIN: suma 1 a los fallos y, si llega al
+ * máximo, bloquea (`base * 2^nivel`, con tope), sube el nivel y vuelve los fallos
+ * a 0. Todo en un UPDATE, que además solo corre si NO hay bloqueo vigente. Se usa
+ * dentro de la transacción de `checkPin`, con la fila ya bloqueada. Devuelve el
+ * hash guardado y la versión del PIN; sin fila = sin PIN o bloqueado. Si el PIN
+ * resulta correcto, `clearPinFailures` deshace la cuenta. (Misma regla que
+ * pin-rules.nextFailureState.)
+ */
+export const reservePinAttempt = (profileId: string, policy: LockPolicy): Query => ({
+  text:
+    "update public.payment_security s set " +
+    "failed_attempts = case when s.failed_attempts + 1 >= $2 then 0 else s.failed_attempts + 1 end, " +
+    "lock_level = case when s.failed_attempts + 1 >= $2 then least(s.lock_level + 1, $5) else s.lock_level end, " +
+    "locked_until = case when s.failed_attempts + 1 >= $2 then " +
+    "now() + least($3::double precision * power(2, s.lock_level), $4::double precision) * interval '1 millisecond' " +
+    "else s.locked_until end, updated_at = now() " +
+    "where s.profile_id = $1 and s.pin_hash is not null and (s.locked_until is null or s.locked_until <= now()) " +
+    "returning s.pin_hash, s.pin_salt, s.pin_version, s.failed_attempts, coalesce(s.locked_until > now(), false) as locked, " +
+    `${isoUs("s.locked_until")} as locked_until`,
+  values: [profileId, policy.maxAttempts, policy.baseMs, policy.maxMs, policy.maxLevel],
+});
+
+/** PIN correcto: fallos y nivel de bloqueo vuelven a 0. */
+export const clearPinFailures = (profileId: string): Query => ({
+  text:
+    "update public.payment_security set failed_attempts = 0, lock_level = 0, locked_until = null, updated_at = now() " +
+    "where profile_id = $1 and (failed_attempts <> 0 or lock_level <> 0 or locked_until is not null) returning profile_id",
+  values: [profileId],
+});
+
+/** Crea el primer PIN solo si todavía no hay uno (si dos pedidos compiten, uno no devuelve fila). */
+export const createPin = (profileId: string, hash: string, salt: string): Query => ({
+  text:
+    "insert into public.payment_security as s (profile_id, pin_hash, pin_salt, pin_set_at, pin_version, updated_at) " +
+    "values ($1, $2, $3, now(), 1, now()) on conflict (profile_id) do update set " +
+    "pin_hash = excluded.pin_hash, pin_salt = excluded.pin_salt, pin_set_at = now(), pin_version = s.pin_version + 1, " +
+    "failed_attempts = 0, lock_level = 0, locked_until = null, " +
+    "pending_pin_hash = null, pending_pin_salt = null, pending_pin_at = null, updated_at = now() " +
+    "where s.pin_hash is null returning s.profile_id",
+  values: [profileId, hash, salt],
+});
+
+/**
+ * Cambia un PIN que ya existe (el actual ya se verificó, en la versión `expectedVersion`):
+ * versión + 1, borra un reset pendiente y revoca los permisos pendientes (`revoked_at`,
+ * una sola vez), en un solo statement. Sin fila = el PIN cambió mientras tanto (o no hay PIN).
+ */
+export const changePin = (profileId: string, hash: string, salt: string, expectedVersion: number): Query => ({
+  text:
+    "with chg as (" +
+    "update public.payment_security set pin_hash = $2, pin_salt = $3, pin_set_at = now(), pin_version = pin_version + 1, " +
+    "failed_attempts = 0, lock_level = 0, locked_until = null, " +
+    "pending_pin_hash = null, pending_pin_salt = null, pending_pin_at = null, updated_at = now() " +
+    "where profile_id = $1 and pin_hash is not null and pin_version = $4 returning profile_id), " +
+    "inv as (update public.payment_approvals set revoked_at = now() " +
+    "where profile_id = $1 and used_at is null and revoked_at is null and exists (select 1 from chg) returning id) " +
+    "select profile_id from chg",
+  values: [profileId, hash, salt, expectedVersion],
+});
+
+/** Dentro de la transacción de "olvidé mi PIN": ¿hay PIN?, ¿hay un reset pendiente y cuándo se activa? Bloquea la fila. */
+export const securityForReset = (profileId: string): Query => ({
+  text:
+    "select (s.pin_hash is not null) as has_pin, (s.pending_pin_hash is not null) as has_pending, " +
+    `${isoUs("s.pending_pin_at")} as pending_pin_at from public.payment_security s where s.profile_id = $1 for update`,
+  values: [profileId],
+});
+
+/** "Olvidé mi PIN" con PIN existente: el nuevo queda pendiente y se activa en `delayMs`. El actual sigue valiendo. */
+export const setPendingPin = (profileId: string, hash: string, salt: string, delayMs: number): Query => ({
+  text:
+    "update public.payment_security set pending_pin_hash = $2, pending_pin_salt = $3, " +
+    "pending_pin_at = now() + $4::double precision * interval '1 millisecond', updated_at = now() " +
+    `where profile_id = $1 and pin_hash is not null returning ${isoUs("pending_pin_at")} as pending_pin_at`,
+  values: [profileId, hash, salt, delayMs],
+});
+
+/**
+ * Cancela el reset pendiente (quien llama ya verificó el PIN actual, en la versión
+ * `expectedVersion`). Sin fila = el PIN cambió mientras tanto.
+ */
+export const cancelPendingPin = (profileId: string, expectedVersion: number): Query => ({
+  text:
+    "update public.payment_security set pending_pin_hash = null, pending_pin_salt = null, pending_pin_at = null, updated_at = now() " +
+    "where profile_id = $1 and pin_hash is not null and pin_version = $2 returning profile_id",
+  values: [profileId, expectedVersion],
+});
+
+/**
+ * Cambia uno o los dos límites diarios (null = no tocar) si el PIN sigue en la versión
+ * `expectedVersion` con la que se verificó. Los valores ya vienen validados.
+ */
+export const setDailyLimits = (profileId: string, usdc: string | null, xlm: string | null, expectedVersion: number): Query => ({
+  text:
+    "update public.payment_security set daily_limit_usdc = coalesce($2::numeric, daily_limit_usdc), " +
+    "daily_limit_xlm = coalesce($3::numeric, daily_limit_xlm), updated_at = now() " +
+    "where profile_id = $1 and pin_hash is not null and pin_version = $4 returning profile_id",
+  values: [profileId, usdc, xlm, expectedVersion],
+});
+
+/** Dentro de la transacción de `approve`: bloquea la fila de seguridad si el PIN sigue en la versión verificada. */
+export const lockSecurityRow = (profileId: string, expectedVersion: number): Query => ({
+  text:
+    "select s.daily_limit_usdc::text as daily_limit_usdc, s.daily_limit_xlm::text as daily_limit_xlm " +
+    "from public.payment_security s where s.profile_id = $1 and s.pin_hash is not null and s.pin_version = $2 for update",
+  values: [profileId, expectedVersion],
+});
+
+export interface NewApproval {
+  profileId: string;
+  toWallet: string;
+  asset: string;
+  amount: string;
+  ttlMs: number;
+  /** La versión del PIN con la que se verificó. */
+  pinVersion: number;
+  /** La referencia (memo de texto) que el pago debe llevar; la genera el servidor. */
+  memo: string;
+}
+
+export const insertApproval = (a: NewApproval): Query => ({
+  text:
+    "insert into public.payment_approvals (profile_id, to_wallet, asset, amount, method, expires_at, pin_version, memo) " +
+    "values ($1, $2, $3, $4::numeric, 'pin', now() + $5::double precision * interval '1 millisecond', $6, $7) " +
+    `returning id, ${isoUs("expires_at")} as expires_at, ${isoUs("now()")} as server_now`,
+  values: [a.profileId, a.toWallet, a.asset, a.amount, a.ttlMs, a.pinVersion, a.memo],
+});
+
+export interface ApprovalClaim {
+  approvalId: string;
+  profileId: string;
+  toWallet: string;
+  asset: string;
+  amount: string;
+  /** El memo de texto del pago en Horizon (null si no lleva: entonces no hay permiso que valga). */
+  memo: string | null;
+  paidAt: string;
+  graceMs: number;
+}
+
+/**
+ * Consume el permiso de un pago ya verificado en Horizon: mismo perfil, destino,
+ * activo y monto exacto, el MEMO del pago es el que el servidor generó al aprobar
+ * (eso ata el permiso al pago y prueba que el PIN fue antes), sin usar, el pago cerró
+ * a más tardar `graceMs` después de que venció el permiso y antes de que el permiso se
+ * revocara (`revoked_at`, fijo desde la primera revocación). Una sola vez: el UPDATE
+ * solo toca filas con `used_at is null`. Misma regla que pin-rules.approvalMatches.
+ */
+export const claimApproval = (c: ApprovalClaim): Query => ({
+  text:
+    "update public.payment_approvals a set used_at = now() " +
+    "where a.id = $1::uuid and a.profile_id = $2 and a.to_wallet = $3 and a.asset = $4 " +
+    "and a.amount = $5::numeric and a.memo = $8 and a.used_at is null " +
+    "and $6::timestamptz <= a.expires_at + $7::double precision * interval '1 millisecond' " +
+    "and (a.revoked_at is null or $6::timestamptz < a.revoked_at) " +
+    "returning a.id",
+  values: [c.approvalId, c.profileId, c.toWallet, c.asset, c.amount, c.paidAt, c.graceMs, c.memo],
+});
+
+/**
+ * Un pago ya registrado de `wallet`, bloqueado para verificarlo después: si otro
+ * pedido lo registró antes sin permiso (`unverified`), quien trae el permiso correcto
+ * puede completarlo.
+ */
+export const lockPaymentOfSender = (opId: string, wallet: string): Query => ({
+  text:
+    "select py.id, py.unverified from public.payments py where py.op_id = $1 and py.from_wallet = $2 for update",
+  values: [opId, wallet],
+});
+
+/** Liga un pago que estaba `unverified` con el permiso que ahora sí se consumió. */
+export const verifyPayment = (paymentId: string, approvalId: string): Query => ({
+  text:
+    "update public.payments set approval_id = $2::uuid, unverified = false " +
+    "where id = $1 and unverified and approval_id is null returning id",
+  values: [paymentId, approvalId],
+});
+
+/** Une el permiso consumido con el pago guardado. */
+export const linkApproval = (approvalId: string, paymentId: string): Query => ({
+  text: "update public.payment_approvals set payment_id = $2 where id = $1 and payment_id is null returning id",
+  values: [approvalId, paymentId],
+});
+
+// ----------------------------------------------------------------- vaquitas
+//
+// Vaquita (migración 0010). Lo recaudado y los aportantes se calculan sumando
+// vaquita_contributions; no hay columnas que mantener.
+
+export interface NewVaquita {
+  communityId: string;
+  creatorId: string;
+  title: string;
+  description: string | null;
+  /** Decimal con 7 lugares. */
+  goalUsdc: string;
+  /** ISO o null. */
+  deadline: string | null;
+}
+
+/** Una vaquita tal como viaja: la fila, quién la creó (slim + wallet de cobro) y lo recaudado. */
+const VAQUITA_SELECT =
+  `v.id, v.community_id, v.title, v.description, v.goal_usdc::text as goal_usdc, agg.raised::text as raised_usdc, agg.contributors as contributors_count, ` +
+  `${isoUs("v.deadline")} as deadline, v.status, ${isoUs("v.created_at")} as created_at, ${isoUs("v.closed_at")} as closed_at, ` +
+  `a.wallet as creator_wallet, ${AUTHOR_JSON} as creator`;
+const VAQUITA_FROM =
+  "from public.vaquitas v join public.profiles a on a.id = v.creator_id " +
+  "left join lateral (select coalesce(sum(c.amount_usdc), 0) as raised, count(distinct c.contributor_id)::int as contributors " +
+  "from public.vaquita_contributions c where c.vaquita_id = v.id) agg on true";
+
+/** Crea la vaquita solo si quien la crea es miembro de la comunidad (si no, cero filas). */
+export const insertVaquita = (v: NewVaquita): Query => ({
+  text:
+    "insert into public.vaquitas (community_id, creator_id, title, description, goal_usdc, deadline) " +
+    "select $1::uuid, $2::uuid, $3, $4, $5::numeric, $6::timestamptz " +
+    "where exists (select 1 from public.members m where m.community_id = $1::uuid and m.profile_id = $2::uuid) " +
+    "returning id",
+  values: [v.communityId, v.creatorId, v.title, v.description, v.goalUsdc, v.deadline],
+});
+
+export const vaquitaById = (id: string): Query => ({
+  text: `select ${VAQUITA_SELECT} ${VAQUITA_FROM} where v.id = $1`,
+  values: [id],
+});
+
+/** Abiertas primero (las nuevas arriba), luego las cerradas, las que cerraron hace poco arriba. */
+export const listVaquitas = (communityId: string, limit: number): Query => ({
+  text:
+    `select ${VAQUITA_SELECT} ${VAQUITA_FROM} where v.community_id = $1 ` +
+    "order by (v.status = 'open') desc, coalesce(v.closed_at, v.created_at) desc, v.id desc limit $2",
+  values: [communityId, limit],
+});
+
+/** Lo que hace falta para decidir sobre una vaquita: la fila, la wallet de cobro y el rol de quien pregunta. */
+export const vaquitaWithRole = (id: string, profileId: string): Query => ({
+  text:
+    `select v.id, v.community_id, v.creator_id, v.status, ${isoUs("v.deadline")} as deadline, ${isoUs("v.created_at")} as created_at, ` +
+    "a.wallet as creator_wallet, m.role " +
+    "from public.vaquitas v join public.profiles a on a.id = v.creator_id " +
+    "left join public.members m on m.community_id = v.community_id and m.profile_id = $2 " +
+    "where v.id = $1",
+  values: [id, profileId],
+});
+
+/** Los aportes de una vaquita, el más reciente primero. La fecha es la del pago. */
+export const listVaquitaContributions = (vaquitaId: string, limit: number): Query => ({
+  text:
+    `select c.id, c.amount_usdc::text as amount_usdc, py.tx_hash, ${isoUs("py.paid_at")} as created_at, ` +
+    `json_build_object('id', a.id, 'username', a.username, 'display_name', a.display_name, 'avatar_seed', a.avatar_seed, 'avatar_style', a.avatar_style) as contributor ` +
+    "from public.vaquita_contributions c join public.payments py on py.id = c.payment_id join public.profiles a on a.id = c.contributor_id " +
+    "where c.vaquita_id = $1 order by py.paid_at desc, c.id desc limit $2",
+  values: [vaquitaId, limit],
+});
+
+/** Un pago tal como lo guardó el servidor, para decidir si cuenta como aporte. */
+export const paymentForVaquita = (paymentId: string): Query => ({
+  text:
+    `select py.id, py.from_wallet, py.to_wallet, py.asset, py.unverified, ${isoUs("py.paid_at")} as paid_at, ` +
+    "exists (select 1 from public.vaquita_contributions c where c.payment_id = py.id) as linked " +
+    "from public.payments py where py.id = $1",
+  values: [paymentId],
+});
+
+/**
+ * Vincula el pago como aporte. Las reglas se aplican otra vez aquí, con los datos
+ * de la base: vaquita abierta y sin vencer, pago en USDC enviado por `fromWallet`
+ * (la de la sesión) a la wallet de quien creó la vaquita, con PIN, posterior a la
+ * vaquita. El contribuyente y el monto salen del pago. Un pago ya vinculado
+ * choca con el índice único (23505).
+ */
+export const insertVaquitaContribution = (vaquitaId: string, paymentId: string, profileId: string, fromWallet: string): Query => ({
+  text:
+    "insert into public.vaquita_contributions (vaquita_id, payment_id, contributor_id, amount_usdc) " +
+    "select v.id, py.id, $3::uuid, py.amount " +
+    "from public.vaquitas v join public.profiles cr on cr.id = v.creator_id, public.payments py " +
+    "where v.id = $1 and py.id = $2 and v.status = 'open' and (v.deadline is null or v.deadline > now()) " +
+    "and v.creator_id <> $3::uuid and py.asset = 'USDC' and py.from_wallet = $4 and py.to_wallet = cr.wallet " +
+    "and not py.unverified and py.paid_at >= v.created_at " +
+    "and exists (select 1 from public.members m where m.community_id = v.community_id and m.profile_id = $3::uuid) " +
+    "returning id",
+  values: [vaquitaId, paymentId, profileId, fromWallet],
+});
+
+/** Cierra la vaquita (quien la creó u owner/admin). Cero filas si ya estaba cerrada o no hay permiso. */
+export const closeVaquita = (id: string, profileId: string): Query => ({
+  text:
+    "update public.vaquitas v set status = 'closed', closed_at = now() " +
+    "where v.id = $1 and v.status = 'open' and (v.creator_id = $2 or exists (" +
+    "select 1 from public.members m where m.community_id = v.community_id and m.profile_id = $2 and m.role in ('owner', 'admin'))) " +
+    "returning v.id",
+  values: [id, profileId],
+});
+
+/**
+ * Métricas de uso (sin parámetros): vaquitas creadas y abiertas, quiénes las
+ * crean, aportes, aportantes, USDC aportado y vaquitas completadas (recaudado >= meta).
+ */
+export const vaquitaStats = (): Query => ({
+  text:
+    "select " +
+    "(select count(*) from public.vaquitas)::int as created, " +
+    "(select count(*) from public.vaquitas where status = 'open')::int as open, " +
+    "(select count(distinct creator_id) from public.vaquitas)::int as creators, " +
+    "(select count(*) from public.vaquita_contributions)::int as contributions, " +
+    "(select count(distinct contributor_id) from public.vaquita_contributions)::int as contributors, " +
+    "(select coalesce(sum(amount_usdc), 0) from public.vaquita_contributions)::text as raised_usdc, " +
+    "(select count(*) from public.vaquitas v where (select coalesce(sum(c.amount_usdc), 0) from public.vaquita_contributions c where c.vaquita_id = v.id) >= v.goal_usdc)::int as completed",
+  values: [],
+});
+
 // --------------------------------------------------------------- migrations
 
-export const SCHEMA_TABLES = ["profiles", "communities", "members", "channels", "messages", "payments"] as const;
+export const SCHEMA_TABLES = [
+  "profiles",
+  "communities",
+  "members",
+  "channels",
+  "messages",
+  "payments",
+  "payment_security",
+  "payment_approvals",
+  "vaquitas",
+  "vaquita_contributions",
+  "retos",
+  "academia_progress",
+  "academia_missions",
+  "push_subscriptions",
+  "notification_prefs",
+  "attachments",
+] as const;

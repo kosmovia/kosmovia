@@ -22,7 +22,8 @@ export function failure(status: number, error: string, code: string): Response {
   return json({ error, code }, status);
 }
 
-export type Session = { profileId: string; wallet: string };
+/** `issuedAt`: cuándo se emitió la cookie (`iat`, epoch ms). El PIN lo usa para "olvidé mi PIN" (sesión de hace < 10 min). */
+export type Session = { profileId: string; wallet: string; issuedAt: number };
 export type Gate = { ok: true; session: Session | null } | { ok: false; response: Response };
 
 /**
@@ -43,14 +44,19 @@ export function gate(request: Request, auth: "required" | "optional"): Gate {
   if (auth === "required") {
     const outcome = requireSession(request);
     if (!outcome.ok) return { ok: false, response: outcome.response };
-    return { ok: true, session: { profileId: outcome.profileId, wallet: outcome.wallet } };
+    return { ok: true, session: { profileId: outcome.profileId, wallet: outcome.wallet, issuedAt: outcome.issuedAt } };
   }
   // Optional: a missing or bad cookie is just "anonymous".
   const secret = readSessionSecret();
   const token = readCookie(request.headers.get("cookie"), SESSION_COOKIE);
   if (!secret || !token) return { ok: true, session: null };
   const verified = verifySessionCookie(token, secret);
-  return { ok: true, session: verified.ok ? { profileId: verified.claims.sub, wallet: verified.claims.wallet } : null };
+  return {
+    ok: true,
+    session: verified.ok
+      ? { profileId: verified.claims.sub, wallet: verified.claims.wallet, issuedAt: verified.claims.iat * 1000 }
+      : null,
+  };
 }
 
 /** Same as {@link gate} but narrowed: the session is there or the response is the answer. */

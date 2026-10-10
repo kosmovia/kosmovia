@@ -1,6 +1,7 @@
 import { failure, handled, json, readJsonBody, requireGate, type Session } from "../../../lib/core/api-route.ts";
 import { limitedResponse } from "../../../lib/core/api-limits.ts";
 import * as repo from "../../../lib/core/db/repo.ts";
+import { notifyPayment } from "../../../lib/core/push-triggers.ts";
 import {
   MEMO_RE,
   TX_HASH_RE,
@@ -33,12 +34,20 @@ export async function GET(request: Request): Promise<Response> {
 }
 
 /**
- * POST /api/payments { hash?, memo?, startedAt?, note? } (api backend)
+ * POST /api/payments { hash?, memo?, startedAt?, note?, approvalId? } (api backend)
  *
  * Records a payment the user just sent with Pollar. Nothing the body says
  * about the money is trusted: the server reads it on Horizon testnet and
  * records it only if it is one successful XLM/USDC payment whose sender is
  * the session's wallet, made in the last 24 hours.
+ *
+ * `approvalId` is the PIN permission from POST /api/security/approve. Once the
+ * payment is verified on Horizon it is consumed only if it is this profile's,
+ * unused, and matches the destination, asset, exact amount AND memo of the payment
+ * (the memo is the reference the server generated when approving, so a payment sent
+ * before the PIN can't carry it), and the payment closed within its life. Otherwise the payment is recorded
+ * all the same (the money already moved) but marked `unverified: true` for the
+ * sender. A missing or bad `approvalId` never makes the record fail.
  *
  * - With `hash`: that transaction.
  * - With only `memo` (the send's outcome was unknown: no hash came back): the
@@ -58,12 +67,13 @@ export async function POST(request: Request): Promise<Response> {
 
   const body = await readJsonBody(request, 2_048);
   if (!body.ok) return body.response;
-  const input = (body.value ?? {}) as { hash?: unknown; memo?: unknown; startedAt?: unknown; note?: unknown };
+  const input = (body.value ?? {}) as { hash?: unknown; memo?: unknown; startedAt?: unknown; note?: unknown; approvalId?: unknown };
   const hash = typeof input.hash === "string" ? input.hash.trim().toLowerCase() : "";
   const memo = typeof input.memo === "string" ? input.memo.trim() : "";
   if (hash && !TX_HASH_RE.test(hash)) return failure(400, "El hash de la transacción no es válido.", "invalid_hash");
   if (!hash && !MEMO_RE.test(memo)) return failure(400, "Falta el hash o la referencia del pago.", "invalid_hash");
   const note = cleanNote(input.note);
+  const approvalId = typeof input.approvalId === "string" ? input.approvalId.trim().toLowerCase() : null;
 
   if (hash) {
     const lookup = await fetchTxOperations(hash);
@@ -71,7 +81,7 @@ export async function POST(request: Request): Promise<Response> {
     if (!lookup.found) return json({ pending: true }, 202);
     const verified = pickPayment(lookup.ops, g.session.wallet);
     if (!verified.ok) return failure(verified.status, verified.error, verified.code);
-    return save(g.session, verified.payment, note);
+    return save(g.session, verified.payment, note, approvalId);
   }
 
   // By memo. The watermark is read BEFORE the search, so it never vouches for history the search didn't see.
@@ -86,7 +96,7 @@ export async function POST(request: Request): Promise<Response> {
       continue;
     }
     const verified = pickPayment(lookup.ops, g.session.wallet);
-    if (verified.ok) return save(g.session, verified.payment, note);
+    if (verified.ok) return save(g.session, verified.payment, note, approvalId);
   }
   const startedAt = typeof input.startedAt === "string" ? Date.parse(input.startedAt) : NaN;
   // 200 results is the page: a wallet that sent more than that since this attempt can't be searched to the end.
@@ -102,7 +112,7 @@ function horizonDown(code: string): Response {
   return failure(502, "No pudimos consultar la red de Stellar. Intenta de nuevo en unos segundos.", "horizon_error");
 }
 
-function save(session: Session, p: VerifiedPayment, note: string | null): Promise<Response> {
+function save(session: Session, p: VerifiedPayment, note: string | null, approvalId: string | null): Promise<Response> {
   return handled("POST /api/payments", async () => {
     const outcome = await repo.recordPayment({
       opId: p.opId,
@@ -114,8 +124,11 @@ function save(session: Session, p: VerifiedPayment, note: string | null): Promis
       note,
       registeredBy: session.profileId,
       paidAt: p.createdAt,
+      approvalId,
+      memo: p.memo,
     });
     if (outcome.status === "conflict") return failure(409, "Ese pago ya está registrado.", "payment_exists");
+    if (outcome.status === "created") notifyPayment(outcome.payment, session.profileId);
     return json({ payment: outcome.payment }, outcome.status === "created" ? 201 : 200);
   });
 }

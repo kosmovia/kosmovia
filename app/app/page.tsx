@@ -2,13 +2,14 @@
 
 import React from 'react';
 import Link from 'next/link';
+import SiteFooter from '../components/SiteFooter';
 
 export default function LandingPage() {
   return (
     <div className="landing-wrapper">
       <header className="landing-nav">
         <Link href="/" className="landing-brand">
-          <span className="landing-brand-logo">🌌</span>
+          <img src="/brand/kosmovia-mark.svg" alt="" width={30} height={30} className="landing-brand-logo" />
           <span>Kosmovia</span>
         </Link>
         <div className="landing-nav-actions">
@@ -72,11 +73,7 @@ export default function LandingPage() {
         </article>
       </section>
 
-      <footer className="landing-footer">
-        <p>
-          Kosmovia © 2026 · Construido en el programa Stellar Elite Bolivia (TechRebel) · Testnet
-        </p>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }
