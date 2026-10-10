@@ -17,11 +17,12 @@ export function CoreLogin() {
     <div className="login-page-container">
       <div className="login-box">
         <div className="login-header">
-          <span className="login-brand-icon"><img src="/brand/kosmovia-logo.png" alt="" width={56} height={56} className="kv-brand-img" /></span>
+          <span className="login-brand-icon"><img src="/brand/kosmovia-icon.svg" alt="" width={56} height={56} className="kv-brand-img" /></span>
           <h1 className="login-title">Ingresar a Kosmovia</h1>
           <p className="login-subtitle">Comunidades, canales y chat en Stellar</p>
         </div>
         {pollar.configured ? <Buttons /> : <p className="form-hint">{pollar.message}</p>}
+        <Link href="/bienvenida" className="login-back-link">Guía, confianza y comunidad ↗</Link>
         <Link href="/" className="login-back-link">
           ← Volver a la página principal
         </Link>
@@ -36,7 +37,11 @@ function Buttons() {
   const session = useCoreSession();
 
   useEffect(() => {
-    if (session.step === 'ready') router.replace('/plataforma');
+    if (session.step === 'ready') {
+      const next = new URLSearchParams(window.location.search).get('next');
+      // Solo destinos de la plataforma local; no aceptar redirecciones externas.
+      router.replace(next === '/plataforma' || next?.startsWith('/plataforma?') ? next : '/plataforma');
+    }
   }, [session.step, router]);
 
   const busy = isLoading || session.step === 'loading';
@@ -51,6 +56,7 @@ function Buttons() {
       <button type="button" className="btn-login-submit" onClick={loginFreighter} disabled={busy}>
         Conectar Freighter
       </button>
+      <p className="legal-consent">Al continuar aceptas los <Link href="/terminos">Términos</Link> y la <Link href="/privacidad">Política de Privacidad</Link>.</p>
       <span className="form-hint" role="status">
         {session.step === 'loading' && !isLoading
           ? 'Abriendo tu sesión… (con Freighter, firma el mensaje)'

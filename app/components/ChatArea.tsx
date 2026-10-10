@@ -7,6 +7,12 @@ import { ComposerPlus } from './ComposerPlus';
 import { EmojiPicker } from './EmojiPicker';
 import { IconBell, IconLock, IconPencil, IconTrash, IconUsers, IconWallet } from './Icons';
 import { WalletTransaction } from '../types';
+import { VaquitaChatCard } from './apps/VaquitaChatCard';
+import { ComposerTray, MessageAttachments } from './Attachments';
+import { useComposerAttachments } from './useComposerAttachments';
+import { resetAttachmentCache } from './attachment-cache';
+import { ACCEPT_ATTR, joinContent, splitContent } from '../lib/core/attachments-rules.ts';
+import type { AttachmentTarget } from '../services/attachmentService';
 
 interface ChatAreaProps {
   channel: Channel;
@@ -15,7 +21,10 @@ interface ChatAreaProps {
   dmPeer?: User;
   community: Community;
   messages: Message[];
-  onSendMessage: (content: string) => void;
+  onSendMessage: (content: string) => Promise<boolean>;
+  attachmentTarget?: AttachmentTarget;
+  messageLoadError?: string | null;
+  onRetryMessages?: () => void;
   onToggleMobileMenu: () => void;
   onToggleMemberList?: () => void;
   isMemberListOpen?: boolean;
@@ -50,6 +59,8 @@ interface ChatAreaProps {
   typingUsers?: User[];
   /** Aviso de que estoy escribiendo. Se llama por tecla; quien recibe limita la frecuencia. */
   onTyping?: () => void;
+  /** Abre el panel Aplicaciones en esa vaquita (tarjeta `[VAQUITA:id]`). */
+  onOpenVaquita?: (id: string) => void;
 }
 
 /** "Ana está escribiendo", "Ana y Beto…", "3 personas…". */
@@ -81,6 +92,9 @@ export function ChatArea({
   community,
   messages,
   onSendMessage,
+  attachmentTarget,
+  messageLoadError,
+  onRetryMessages,
   onToggleMobileMenu,
   onToggleMemberList,
   isMemberListOpen,
@@ -103,8 +117,23 @@ export function ChatArea({
   onDeleteMessage,
   typingUsers,
   onTyping,
+  onOpenVaquita,
 }: ChatAreaProps) {
   const [inputText, setInputText] = useState('');
+  const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
+  const photoInput = useRef<HTMLInputElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const feedRef = useRef<HTMLElement>(null);
+  const nearEnd = useRef(true);
+  const drafts = useRef(new Map<string, string>());
+  const destination = variant + ':' + channel.id + ':' + (currentUserId ?? '');
+  const currentDestination = useRef(destination);
+  currentDestination.current = destination;
+  const previousDestination = useRef(destination);
+  const attachments = useComposerAttachments(canPost && !(variant !== 'dm' && channel.type === 'payments') ? attachmentTarget : undefined);
+  const composerLimit = MAX_LEN - joinContent(attachments.readyIds, '').length - (attachments.readyIds.length ? 1 : 0);
+  useEffect(() => { resetAttachmentCache(); }, [currentUserId]);
   const [paidInvoices, setPaidInvoices] = useState<Record<string, boolean>>({});
   const [payingInvoice, setPayingInvoice] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -123,32 +152,60 @@ export function ChatArea({
   useAutoGrow(composerRef, inputText);
   useAutoGrow(editRef, editText);
 
-  // Solo baja al final cuando llega un mensaje nuevo (no en cada refresco por ediciones o borrados).
-  const newestId = messages.length > 0 ? messages[messages.length - 1].id : null;
+  // Keep each conversation's draft and do not pull readers away from older messages.
   useEffect(() => {
-    if (newestId !== lastMessageId.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: lastMessageId.current === null ? 'auto' : 'smooth' });
-      lastMessageId.current = newestId;
+    if (previousDestination.current !== destination) {
+      drafts.current.set(previousDestination.current, inputText);
+      setInputText(drafts.current.get(destination) ?? '');
+      previousDestination.current = destination;
     }
-  }, [newestId]);
-
-  // Al cambiar de canal se cancelan edición y confirmación, y el siguiente canal baja al final sin animación.
-  useEffect(() => {
     setEditingId(null);
     setConfirmDeleteId(null);
     lastMessageId.current = null;
-  }, [channel.id]);
+    nearEnd.current = true;
+  }, [destination]);
+  const newestId = messages.length > 0 ? messages[messages.length - 1].id : null;
+  useEffect(() => {
+    if (newestId !== lastMessageId.current) {
+      if (lastMessageId.current === null || nearEnd.current) messagesEndRef.current?.scrollIntoView({ behavior: lastMessageId.current === null ? 'auto' : 'smooth' });
+      lastMessageId.current = newestId;
+    }
+  }, [newestId, destination]);
 
-  const send = () => {
-    const trimmed = inputText.trim();
-    if (!trimmed || !canPost) return;
-    onSendMessage(trimmed);
-    setInputText('');
+  const send = async () => {
+    if (!canPost || attachments.busy || sendingRef.current) return;
+    const ids = [...attachments.readyIds];
+    const content = joinContent(ids, inputText);
+    if (!content) return;
+    if (content.length > MAX_LEN) { attachments.setError('El mensaje con archivos supera los 2.000 caracteres. Acorta el texto.'); return; }
+    const chatAtSend = destination;
+    const fileDestination = attachmentTarget ? attachmentTarget.scope + ':' + attachmentTarget.id : '';
+    attachments.reserve(ids);
+    sendingRef.current = true;
+    setSending(true);
+    let ok = false;
+    try {
+      ok = await onSendMessage(content);
+      if (ok) {
+        drafts.current.delete(chatAtSend);
+        if (currentDestination.current === chatAtSend) {
+          setInputText('');
+          nearEnd.current = true;
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
+      } else if (currentDestination.current === chatAtSend) attachments.setError('No se pudo enviar. Tu borrador se conserva para reintentar.');
+    } catch {
+      if (currentDestination.current === chatAtSend) attachments.setError('No se pudo enviar. Tu borrador se conserva para reintentar.');
+    } finally {
+      attachments.settle(ids, ok, fileDestination);
+      sendingRef.current = false;
+      setSending(false);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    send();
+    void send();
   };
 
   // Enter envía; Shift+Enter agrega una línea (no se envía mientras se compone con IME).
@@ -162,12 +219,12 @@ export function ChatArea({
   const startEdit = (msg: Message) => {
     setConfirmDeleteId(null);
     setEditingId(msg.id);
-    setEditText(msg.content);
+    setEditText(splitContent(msg.content).text);
     setTimeout(() => editRef.current?.focus(), 0);
   };
 
   const saveEdit = async (msg: Message) => {
-    const next = editText.trim();
+    const next = joinContent(splitContent(msg.content).ids, editText);
     if (actionBusy) return;
     if (!next || next === msg.content) {
       setEditingId(null);
@@ -297,7 +354,12 @@ export function ChatArea({
         </div>
       </header>
 
-      <section className="message-feed" aria-label="Historial de mensajes">
+      <section ref={feedRef} className="message-feed" aria-label="Historial de mensajes" onScroll={(e) => {
+        const el = e.currentTarget;
+        nearEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+      }} onDragOver={(e) => { if (canPost && !isPayments && attachmentTarget && !sending && e.dataTransfer.types.includes('Files')) e.preventDefault(); }}
+      onDrop={(e) => { if (canPost && !isPayments && attachmentTarget && !sending && e.dataTransfer.files.length) { e.preventDefault(); void attachments.addFiles(Array.from(e.dataTransfer.files)); } }}>
+        {messageLoadError ? <div className="kv-att-error" role="alert">{messageLoadError} {onRetryMessages ? <button type="button" className="kv-mini-btn" onClick={onRetryMessages}>Reintentar</button> : null}</div> : null}
         {messages.length === 0 ? (
           <div className="empty-chat-state">
             <div className="empty-chat-icon">{isPayments ? '💸' : channel.emoji || '💬'}</div>
@@ -307,7 +369,7 @@ export function ChatArea({
                 ? 'Este es el inicio de la conversación. Escribe el primer mensaje.'
                 : isPayments
                   ? 'Aquí aparecerán los comprobantes de los pagos verificados en Stellar.'
-                  : channel.topic || 'Este es el inicio del canal. ¡Sé el primero en enviar un mensaje o emitir un cobro B2B en Stellar!'}
+                  : channel.topic || 'Este es el inicio del canal. ¡Sé el primero en enviar un mensaje o crear un cobro en Stellar!'}
             </p>
             <div className="empty-chat-actions">
               {canPost && !isDm && (
@@ -325,7 +387,7 @@ export function ChatArea({
                   className="btn-empty-action accent"
                   onClick={onOpenQuickInvoice}
                 >
-                  💸 Emitir Cobro B2B
+                  💸 Crear cobro
                 </button>
               )}
             </div>
@@ -349,14 +411,17 @@ export function ChatArea({
               }
             }
 
+            const vaquitaMatch = /^\[VAQUITA:([A-Za-z0-9_-]{1,64})\]$/.exec(msg.content.trim());
+            const vaquitaId = vaquitaMatch ? vaquitaMatch[1] : null;
+            const messageBody = splitContent(msg.content);
             const prev = index > 0 ? messages[index - 1] : null;
             const grouped =
-              !invoiceData && prev !== null && prev.author.id === msg.author.id && !prev.content.startsWith('[COBRO_B2B:');
+              !invoiceData && !vaquitaId && prev !== null && prev.author.id === msg.author.id && !prev.content.startsWith('[COBRO_B2B:') && !prev.content.startsWith('[VAQUITA:');
             const isPaid = paidInvoices[msg.id];
             const isMine = currentUserId !== undefined && msg.author.id === currentUserId;
             const isPaying = payingInvoice === msg.id;
 
-            const canEdit = isMine && !invoiceData && !!onEditMessage;
+            const canEdit = isMine && !invoiceData && !vaquitaId && !!onEditMessage;
             const canDelete = (isMine || canModerate) && !!onDeleteMessage;
             const isEditing = editingId === msg.id;
             const isConfirming = confirmDeleteId === msg.id;
@@ -396,7 +461,9 @@ export function ChatArea({
                   </div>
                   )}
 
-                  {invoiceData ? (
+                  {vaquitaId ? (
+                    <VaquitaChatCard id={vaquitaId} onOpen={onOpenVaquita} />
+                  ) : invoiceData ? (
                     <div className="invoice-card">
                       <div className="invoice-header-row">
                         <span className="invoice-tag">Cobro en Stellar</span>
@@ -425,7 +492,7 @@ export function ChatArea({
                         ref={editRef}
                         className="kv-edit-field"
                         rows={1}
-                        maxLength={MAX_LEN}
+                        maxLength={MAX_LEN - joinContent(messageBody.ids, '').length - (messageBody.ids.length ? 1 : 0)}
                         value={editText}
                         onChange={(e) => setEditText(e.target.value)}
                         onKeyDown={(e) => handleEditKey(e, msg)}
@@ -442,7 +509,7 @@ export function ChatArea({
                             type="button"
                             className="kv-mini-btn primary"
                             onClick={() => void saveEdit(msg)}
-                            disabled={actionBusy || !editText.trim()}
+                            disabled={actionBusy || (!editText.trim() && !messageBody.ids.length)}
                           >
                             {actionBusy ? 'Guardando…' : 'Guardar'}
                           </button>
@@ -451,7 +518,7 @@ export function ChatArea({
                     </div>
                   ) : (
                     <p className="msg-content">
-                      {msg.content}
+                      {messageBody.text}
                       {msg.editedAt ? (
                         <span className="kv-edited" title="Este mensaje fue editado">
                           {' '}(editado)
@@ -459,6 +526,7 @@ export function ChatArea({
                       ) : null}
                     </p>
                   )}
+                  {!invoiceData && !vaquitaId && messageBody.ids.length > 0 ? <MessageAttachments ids={messageBody.ids} /> : null}
                   {isConfirming ? (
                     <div className="kv-confirm-row" role="alertdialog" aria-label="Confirmar borrado">
                       <span>¿Borrar este mensaje?</span>
@@ -512,6 +580,7 @@ export function ChatArea({
             {typingLabel(typingUsers)}
           </p>
         ) : null}
+        <ComposerTray items={attachments.items} error={attachments.error} onRemove={sending ? () => undefined : attachments.remove} />
         {isPayments ? (
           <div className="chat-input-box kv-composer-locked" role="note">
             <IconLock size={16} />
@@ -519,12 +588,19 @@ export function ChatArea({
           </div>
         ) : canPost ? (
           <form onSubmit={handleSubmit} className="chat-input-box">
-            {isDm ? null : <ComposerPlus onInvoice={onOpenQuickInvoice} />}
+            <ComposerPlus onInvoice={isDm ? undefined : onOpenQuickInvoice} disabled={sending}
+              onPhoto={attachmentTarget ? () => photoInput.current?.click() : undefined}
+              onFile={attachmentTarget ? () => fileInput.current?.click() : undefined} />
+            <input ref={photoInput} type="file" accept={ACCEPT_ATTR.split(',').filter(t => t.startsWith('image/')).join(',')} multiple hidden
+              onChange={(e) => { void attachments.addFiles(Array.from(e.target.files ?? [])); e.target.value = ''; }} />
+            <input ref={fileInput} type="file" accept="application/pdf" multiple hidden
+              onChange={(e) => { void attachments.addFiles(Array.from(e.target.files ?? [])); e.target.value = ''; }} />
             <textarea
               ref={composerRef}
               className="chat-input-field"
               rows={1}
-              maxLength={MAX_LEN}
+              maxLength={composerLimit}
+              disabled={sending}
               placeholder={isDm ? `Mensaje para ${label}` : `Mensaje en ${label}`}
               aria-label={isDm ? `Mensaje para ${label}` : `Mensaje en ${label}`}
               aria-keyshortcuts="Enter"
@@ -534,10 +610,14 @@ export function ChatArea({
                 onTyping?.();
               }}
               onKeyDown={handleComposerKey}
+              onPaste={(e) => {
+                const files = Array.from(e.clipboardData.files);
+                if (files.length && attachmentTarget && !sending) { e.preventDefault(); void attachments.addFiles(files); }
+              }}
             />
-            <EmojiPicker onPick={(emoji) => setInputText((t) => t + emoji)} />
-            <button type="submit" className="chat-send-btn" disabled={!inputText.trim()}>
-              Enviar
+            <EmojiPicker onPick={(emoji) => { if (!sending) setInputText((t) => t + emoji); }} />
+            <button type="submit" className="chat-send-btn" disabled={sending || attachments.busy || (!inputText.trim() && attachments.readyIds.length === 0)}>
+              {sending ? 'Enviando…' : attachments.busy ? 'Subiendo…' : 'Enviar'}
             </button>
           </form>
         ) : (

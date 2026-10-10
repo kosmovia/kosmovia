@@ -7,8 +7,8 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   // El indicador de desarrollo de Next tapaba la barra izquierda.
   devIndicators: { position: 'bottom-right' },
-  // pg es un módulo de Node: que Next no lo empaquete.
-  serverExternalPackages: ['pg'],
+  // pg y sharp (nativo, para recodificar los adjuntos) son módulos de Node: que Next no los empaquete.
+  serverExternalPackages: ['pg', 'sharp'],
 };
 
 export default nextConfig;

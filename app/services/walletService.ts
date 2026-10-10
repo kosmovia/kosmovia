@@ -1,5 +1,6 @@
 import { WalletTransaction } from '../types';
 import { INITIAL_TRANSACTIONS } from './mockData';
+import type { PaymentApproval } from './securityService';
 import { storage } from './storage';
 
 export interface WalletBalances {
@@ -11,6 +12,12 @@ export interface SendPaymentInput {
   to: string;
   amount: number;
   asset: 'USDC' | 'XLM';
+  /**
+   * El permiso que dio `securityService.approve` (PIN verificado). En modo api es
+   * obligatorio: sin él no se paga. El pago va a `approval.toWallet`, con el monto y
+   * el activo del permiso. El modo demo lo ignora.
+   */
+  approval?: PaymentApproval;
 }
 
 export interface IWalletService {

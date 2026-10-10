@@ -1,0 +1,275 @@
+import { approvalTimeoutSec, checkAmount, fromStroops, toStroops } from "./payments.ts";
+
+/**
+ * Reglas puras del PIN de pagos: formato, PINs triviales, bloqueo progresivo,
+ * límites diarios y cuándo un permiso respalda un pago. Sin node:crypto ni base
+ * de datos, así las usan igual el servidor (lib/core/pin.ts), el modo demo del
+ * navegador y los tests. El hash del PIN está aparte, en pin.ts (solo servidor).
+ */
+
+export const PIN_LENGTH = 6;
+
+/** Fallos seguidos que disparan un bloqueo. */
+export const MAX_FAILED_ATTEMPTS = 5;
+/** Primer bloqueo; cada bloqueo seguido duplica el anterior (15 min, 30 min, 1 h…). */
+export const LOCK_BASE_MS = 15 * 60 * 1000;
+/** Tope del bloqueo. */
+export const LOCK_MAX_MS = 24 * 60 * 60 * 1000;
+/** Tope de `lock_level` (la migración lo exige igual): 2^30 ya pasa de sobra las 24 h. */
+export const MAX_LOCK_LEVEL = 30;
+
+/** Un permiso vale 5 minutos (lo mismo que la vida de una transacción) y se usa una sola vez. */
+export const APPROVAL_TTL_MS = 5 * 60 * 1000;
+/** "Olvidé mi PIN": el PIN nuevo se activa a las 24 h; mientras tanto vale el actual y puede cancelarlo. */
+export const PIN_RESET_DELAY_MS = 24 * 60 * 60 * 1000;
+/** Holgura entre el reloj de la base y el cierre del ledger al ligar un pago con su permiso. */
+export const APPROVAL_GRACE_MS = 60 * 1000;
+/** Para olvidar el PIN, la sesión tiene que haberse emitido hace menos que esto. */
+export const RESET_MAX_SESSION_AGE_MS = 10 * 60 * 1000;
+
+export const DEFAULT_DAILY_LIMIT = { USDC: 100, XLM: 1000 } as const;
+/** Tope de un límite diario (la migración lo exige igual). */
+export const MAX_DAILY_LIMIT = 100_000;
+
+export type PinCheck =
+  | { ok: true; pin: string }
+  | { ok: false; code: "invalid_pin" | "weak_pin"; error: string };
+
+const PIN_RE = /^[0-9]{6}$/;
+
+/**
+ * Los patrones que cualquiera prueba primero. Se mira el PIN como dígitos:
+ * todos iguales (000000), secuencias (123456, 654321, 345678), pares repetidos
+ * (121212), pares dobles (112233), tríos repetidos (123123) y capicúas (123321).
+ */
+export function isTrivialPin(pin: string): boolean {
+  const d = Array.from(pin, Number);
+  if (d.every((x) => x === d[0])) return true;
+  const step = d[1] - d[0];
+  if ((step === 1 || step === -1) && d.every((x, i) => i === 0 || x - d[i - 1] === step)) return true;
+  if (d[0] === d[2] && d[2] === d[4] && d[1] === d[3] && d[3] === d[5]) return true; // ababab
+  if (d[0] === d[1] && d[2] === d[3] && d[4] === d[5]) return true; // aabbcc
+  if (d[0] === d[3] && d[1] === d[4] && d[2] === d[5]) return true; // abcabc
+  if (d[0] === d[5] && d[1] === d[4] && d[2] === d[3]) return true; // abccba
+  return false;
+}
+
+export function validatePin(pin: unknown): PinCheck {
+  if (typeof pin !== "string" || !PIN_RE.test(pin)) {
+    return { ok: false, code: "invalid_pin", error: `El PIN son exactamente ${PIN_LENGTH} dígitos.` };
+  }
+  if (isTrivialPin(pin)) {
+    return { ok: false, code: "weak_pin", error: "Ese PIN es muy fácil de adivinar (como 123456 o 000000). Elige otro." };
+  }
+  return { ok: true, pin };
+}
+
+/** Solo el formato (para verificar un PIN que ya existe: un PIN antiguo débil no se rechaza aquí). */
+export function isPinFormat(pin: unknown): pin is string {
+  return typeof pin === "string" && PIN_RE.test(pin);
+}
+
+// ----------------------------------------------------------------- bloqueo
+
+export interface FailureState {
+  failedAttempts: number;
+  lockLevel: number;
+}
+
+export interface NextFailureState extends FailureState {
+  /** Epoch ms; null si este fallo todavía no bloquea. */
+  lockedUntil: number | null;
+}
+
+/** 15 min * 2^nivel, con tope de 24 h. */
+export function lockDurationMs(level: number): number {
+  const lvl = Math.min(Math.max(Math.trunc(level), 0), MAX_LOCK_LEVEL);
+  return Math.min(LOCK_BASE_MS * 2 ** lvl, LOCK_MAX_MS);
+}
+
+/**
+ * Estado después de un fallo. Al llegar a 5: bloquea por `lockDurationMs(nivel)`,
+ * sube el nivel y vuelve los intentos a 0. (El SQL de repo/sql.ts hace lo mismo
+ * dentro de un solo UPDATE; esta función es la regla de referencia y la del modo demo.)
+ */
+export function nextFailureState(state: FailureState, now: number): NextFailureState {
+  const failed = state.failedAttempts + 1;
+  if (failed >= MAX_FAILED_ATTEMPTS) {
+    return {
+      failedAttempts: 0,
+      lockLevel: Math.min(state.lockLevel + 1, MAX_LOCK_LEVEL),
+      lockedUntil: now + lockDurationMs(state.lockLevel),
+    };
+  }
+  return { failedAttempts: failed, lockLevel: state.lockLevel, lockedUntil: null };
+}
+
+/** Un acierto lo deja todo en cero. */
+export function stateAfterSuccess(): NextFailureState {
+  return { failedAttempts: 0, lockLevel: 0, lockedUntil: null };
+}
+
+export function attemptsLeft(failedAttempts: number): number {
+  return Math.max(MAX_FAILED_ATTEMPTS - failedAttempts, 0);
+}
+
+export function isLocked(lockedUntil: number | null, now: number): boolean {
+  return lockedUntil !== null && lockedUntil > now;
+}
+
+// ------------------------------------------------------------------ límites
+
+export type LimitCheck = { ok: true; amount: string } | { ok: false; error: string };
+
+/** Un límite diario: número o texto, mayor que 0, hasta MAX_DAILY_LIMIT y 7 decimales. */
+export function parseDailyLimit(value: unknown): LimitCheck {
+  // Un número se redondea a 7 lugares (0.1 + 0.2 no debe fallar); fuera de rango queda vacío y se rechaza.
+  const raw =
+    typeof value === "number"
+      ? Number.isFinite(value) && value >= 0 && value < 1e12
+        ? value.toFixed(7)
+        : ""
+      : typeof value === "string"
+        ? value.trim().replace(",", ".")
+        : "";
+  const stroops = toStroops(raw);
+  if (stroops === null) return { ok: false, error: "El límite tiene que ser un número, con hasta 7 decimales." };
+  if (stroops <= BigInt(0)) return { ok: false, error: "El límite tiene que ser mayor que 0." };
+  if (stroops > (toStroops(String(MAX_DAILY_LIMIT)) as bigint)) {
+    return { ok: false, error: `El límite máximo es ${MAX_DAILY_LIMIT} por día.` };
+  }
+  return { ok: true, amount: fromStroops(stroops) };
+}
+
+export type LimitDecision = { ok: true } | { ok: false; remaining: number };
+
+/** ¿Cabe `amount` en lo que queda del límite? Todo en stroops, sin floats. `remaining` en unidades del activo. */
+export function limitDecision(limit: string, spent: string, amount: string): LimitDecision {
+  const l = toStroops(limit);
+  const s = toStroops(spent);
+  const a = toStroops(amount);
+  if (l === null || s === null || a === null) return { ok: false, remaining: 0 };
+  if (s + a <= l) return { ok: true };
+  const left = l > s ? l - s : BigInt(0);
+  return { ok: false, remaining: Number(fromStroops(left)) };
+}
+
+// ----------------------------------------------------------------- permisos
+
+export interface ApprovalFacts {
+  profileId: string;
+  toWallet: string;
+  asset: string;
+  /** Decimal con hasta 7 lugares. */
+  amount: string;
+  /** La referencia (memo de texto) que el servidor generó al aprobar y que el pago debe llevar. */
+  memo: string;
+  /** Epoch ms. */
+  createdAt: number;
+  expiresAt: number;
+  usedAt: number | null;
+  /** Cuándo se revocó (cambio o reset del PIN); null si no. Se fija una sola vez. */
+  revokedAt: number | null;
+}
+
+export interface PaymentFacts {
+  profileId: string;
+  toWallet: string;
+  asset: string;
+  amount: string;
+  /** El memo de texto de la transacción en Horizon; null si no lleva. */
+  memo: string | null;
+  /** Cierre del ledger (`paid_at`), epoch ms. */
+  paidAt: number;
+}
+
+/**
+ * ¿Este permiso respalda este pago? Mismo perfil, destino, activo y monto exacto,
+ * sin usar, y el MEMO del pago en Horizon es el que el servidor generó al aprobar.
+ * Esa referencia es lo que ata el permiso al pago y prueba el orden: el servidor la
+ * inventa al dar el permiso, así que un pago hecho antes del PIN no puede llevarla
+ * (por eso ya no hay tolerancia hacia atrás en la fecha de creación). Además:
+ *  - el pago cerró a más tardar APPROVAL_GRACE_MS después de que venció el permiso
+ *    (holgura por la diferencia entre el reloj de la base y el cierre del ledger), y
+ *  - el permiso no se revocó antes de que el pago cerrara: `revokedAt` es la hora en
+ *    que un cambio o reset del PIN lo invalidó, se fija una sola vez y no se compara
+ *    con cambios posteriores (un segundo cambio no lo rehabilita).
+ * El UPDATE de sql.claimApproval aplica lo mismo en la base.
+ */
+export function approvalMatches(approval: ApprovalFacts, payment: PaymentFacts): boolean {
+  if (approval.usedAt !== null) return false;
+  if (approval.profileId !== payment.profileId) return false;
+  if (approval.toWallet !== payment.toWallet) return false;
+  if (approval.asset !== payment.asset) return false;
+  if (payment.memo === null || approval.memo !== payment.memo) return false;
+  const a = toStroops(approval.amount);
+  const p = toStroops(payment.amount);
+  if (a === null || p === null || a !== p) return false;
+  if (payment.paidAt > approval.expiresAt + APPROVAL_GRACE_MS) return false;
+  if (approval.revokedAt !== null && payment.paidAt >= approval.revokedAt) return false;
+  return true;
+}
+
+/**
+ * Ventana del límite de 24 h móviles. Un permiso reserva cupo hasta 24 h después del
+ * último instante en que su pago podía cerrar y verificarse (`expiresAt` + holgura).
+ * Así, si al aprobar B todavía cuenta A, dos pagos verificados que caigan juntos en
+ * cualquier ventana de 24 h nunca suman más que el límite: un pago de A cierra como
+ * mucho en `A.expiresAt + holgura`, y B (aprobado en `t`) cierra desde `t`; A y B solo
+ * pueden estar a menos de 24 h si `A.expiresAt + holgura > t − 24 h`. (Lo mismo, visto
+ * desde A, lo garantiza la reserva de A cuando B ya existía.) El SQL de approvedLast24h
+ * usa exactamente esta condición.
+ */
+export function reservationCounts(expiresAt: number, now: number): boolean {
+  return expiresAt + APPROVAL_GRACE_MS > now - 24 * 60 * 60 * 1000;
+}
+
+/**
+ * Antes de firmar: ¿el permiso sirve para ESTE pago? Mismo destino (el que se
+ * aprobó con el PIN, ya resuelto a una G…), mismo activo y monto, y con tiempo
+ * de sobra (si le quedan menos de 30 s no se firma). Si sirve, `timeoutSec` es la
+ * vida que debe tener la transacción: nunca más que lo que le queda al permiso.
+ *
+ * El tiempo que le queda NO se mide con el reloj del navegador contra `expiresAt`
+ * (un reloj atrasado alargaría la vida de la transacción): se usa la diferencia
+ * `expiresAt − serverNow`, las dos horas de la base, restándole lo que pasó en el
+ * navegador desde que llegó la respuesta (`receivedAt`, hora local de ese momento;
+ * solo cuenta la duración, no el desfase del reloj). Sin `serverNow`/`receivedAt`
+ * se cae al reloj local. Límite: el SDK de Pollar solo acepta una duración relativa
+ * (`timeoutSec`), no un `maxTime` absoluto, así que queda el error de la hora a la
+ * que Pollar construye la transacción; la holgura de APPROVAL_GRACE_MS al registrar
+ * lo absorbe.
+ */
+export function checkApprovalForPayment(
+  approval: { toWallet: string; asset: string; amount: number | string; expiresAt: string; serverNow?: string; receivedAt?: number },
+  payment: { destination: string; asset: "USDC" | "XLM"; amount: string },
+  now: number,
+): { ok: true; timeoutSec: number } | { ok: false; code: "destination" | "amount" | "expired"; error: string } {
+  if (payment.destination !== approval.toWallet) {
+    return {
+      ok: false,
+      code: "destination",
+      error: "El destino no coincide con el que confirmaste con tu PIN. No se envió nada; confírmalo de nuevo.",
+    };
+  }
+  const approved = checkAmount(String(approval.amount), payment.asset);
+  if (!approved.ok || approval.asset !== payment.asset || approved.amount !== payment.amount) {
+    return { ok: false, code: "amount", error: "La confirmación del PIN no coincide con este pago. Confírmalo de nuevo." };
+  }
+  const expiresAt = Date.parse(approval.expiresAt);
+  const serverNow = approval.serverNow ? Date.parse(approval.serverNow) : NaN;
+  const left =
+    Number.isFinite(serverNow) && typeof approval.receivedAt === "number"
+      ? expiresAt - serverNow - Math.max(0, now - approval.receivedAt)
+      : expiresAt - now;
+  const life = approvalTimeoutSec(now + left, now);
+  if (!life.ok) {
+    return { ok: false, code: "expired", error: "Se venció (o está por vencer) la confirmación del PIN. Confírmala de nuevo." };
+  }
+  return { ok: true, timeoutSec: life.timeoutSec };
+}
+
+/** ¿La sesión se emitió hace poco como para olvidar el PIN? `iatMs` es el `iat` del JWT en ms. */
+export function sessionIsFresh(iatMs: number, now: number): boolean {
+  return Number.isFinite(iatMs) && now - iatMs < RESET_MAX_SESSION_AGE_MS && iatMs <= now + 60_000;
+}
