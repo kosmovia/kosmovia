@@ -1048,3 +1048,12 @@
     animation: none !important;
   }
 }
+
+/* Tabla con 5 filas: más compacta para que entre en la diapositiva. */
+.deck .compare tbody th,
+.deck .compare tbody td {
+  padding: 0.45em 0.7em;
+}
+.deck .compare tbody th { width: 22%; font-size: 1.15em; }
+.deck .compare tbody td { font-size: 1.1em; }
+.deck .compare thead th { font-size: 1em; padding-bottom: 0.5em; }
