@@ -4,7 +4,13 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Rings from "../Rings";
 import type { Deck, Mark, Slide } from "./deck";
+import { SOCIALS } from "./socials";
 import "./pitch.css";
+
+const CLOSE_UI = {
+  es: { cta: "Prueba Kosmovia", scan: "Escanea y entra", web: "Sitio y pitch", code: "Código", follow: "Síguenos" },
+  en: { cta: "Try Kosmovia", scan: "Scan to join", web: "Site and pitch", code: "Code", follow: "Follow us" },
+} as const;
 
 function hashToIndex(total: number): number {
   const n = parseInt(window.location.hash.replace("#", ""), 10);
@@ -62,9 +68,11 @@ function Title({ id, children }: { id: string; children: React.ReactNode }) {
 function SlideBody({
   slide,
   id,
+  lang,
 }: {
   slide: Slide;
   id: string;
+  lang: "es" | "en";
 }) {
   switch (slide.kind) {
     case "cover":
@@ -203,8 +211,15 @@ function SlideBody({
           <ul className="team">
             {slide.people.map((p) => (
               <li key={p.name}>
-                <span className="avatar" aria-hidden="true">
-                  {p.name.charAt(0)}
+                <span className="avatar avatar-kosmonauta" aria-hidden="true">
+                  {/* Kosmonauta de cada persona: web/public/team/<nombre>.svg (scripts/team-avatars.mjs). */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`/team/${p.name.toLowerCase().normalize("NFD").replace(/[^a-z]/g, "")}.svg`}
+                    alt=""
+                    width={96}
+                    height={96}
+                  />
                 </span>
                 <h3>{p.name}</h3>
                 <p>{p.role}</p>
@@ -216,18 +231,42 @@ function SlideBody({
       );
     case "close":
       return (
-        <div className="body close-body">
+        <div className="body close-body close-v2">
           <Rings />
-          <Title id={id}>{slide.title}</Title>
-          <p className="close-text">{slide.text}</p>
-          <p className="close-links">
-            {slide.links.map((l) => (
-              <a key={l} href={`https://${l}`}>
-                {l}
+          <div className="close-main">
+            <Title id={id}>{slide.title}</Title>
+            <p className="close-text">{slide.text}</p>
+            <a className="close-cta" href="https://kosmovia.onrender.com" target="_blank" rel="noopener noreferrer">
+              {CLOSE_UI[lang].cta} <span aria-hidden="true">→</span>
+              <small>kosmovia.onrender.com</small>
+            </a>
+            <p className="close-chips">
+              <a href="https://kosmovia.vercel.app" target="_blank" rel="noopener noreferrer">
+                {CLOSE_UI[lang].web} · kosmovia.vercel.app
               </a>
-            ))}
-          </p>
-          <p className="close-big">{slide.big}</p>
+              <a href="https://github.com/kosmovia/kosmovia" target="_blank" rel="noopener noreferrer">
+                {CLOSE_UI[lang].code} · GitHub
+              </a>
+            </p>
+            <ul className="close-social" aria-label={CLOSE_UI[lang].follow}>
+              {SOCIALS.filter((s) => s.name !== "GitHub").map((s) => (
+                <li key={s.name}>
+                  <a href={s.href} target="_blank" rel="noopener noreferrer" aria-label={`${s.name}: ${s.handle}`}>
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
+                      {s.path}
+                    </svg>
+                    <span>{s.handle}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+            <p className="close-big">{slide.big}</p>
+          </div>
+          <figure className="close-qr">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/qr-kosmovia.svg" alt="QR: kosmovia.vercel.app" width={220} height={220} />
+            <figcaption>{CLOSE_UI[lang].scan}</figcaption>
+          </figure>
         </div>
       );
   }
@@ -389,7 +428,7 @@ export default function PitchViewer({ deck }: { deck: Deck }) {
               inert={!active}
               tabIndex={0}
             >
-              <SlideBody slide={slide} id={id} />
+              <SlideBody slide={slide} id={id} lang={lang === "es" ? "es" : "en"} />
               {slide.kind !== "cover" && (
                 <div className="slide-foot" aria-hidden="true">
                   <span>Kosmovia</span>

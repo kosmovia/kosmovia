@@ -1057,3 +1057,41 @@
 .deck .compare tbody th { width: 22%; font-size: 1.15em; }
 .deck .compare tbody td { font-size: 1.1em; }
 .deck .compare thead th { font-size: 1em; padding-bottom: 0.5em; }
+
+/* La landing anterior define .road global (columnas y viñetas): el pitch la anula. */
+.deck .road { display: block; gap: 0; grid-template-columns: none; }
+.deck .road li { position: static; }
+.deck .road li::before { content: none; display: none; }
+
+/* Avatares Kosmonauta (NFT del perfil) del equipo. */
+.deck .avatar-kosmonauta { overflow: hidden; padding: 0; border-radius: 22%; }
+.deck .avatar-kosmonauta img { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+
+/* Cierre v2: CTA, enlaces, redes con ícono y QR para escanear en la presentación. */
+.deck .close-v2 { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 3em; }
+.deck .close-v2 .close-main { position: relative; z-index: 1; }
+.deck .close-cta {
+  display: inline-flex; align-items: baseline; gap: .5em; flex-wrap: wrap;
+  margin: .9em 0 .6em; padding: .55em 1.1em; border-radius: 14px;
+  background: var(--accent); color: #04211f; font-size: 1.5em; font-weight: 700; text-decoration: none;
+}
+.deck .close-cta small { font-size: .55em; font-weight: 600; opacity: .8; }
+.deck .close-cta:hover, .deck .close-cta:focus-visible { filter: brightness(1.08); }
+.deck .close-chips { display: flex; flex-wrap: wrap; gap: .6em; margin: 0 0 1em; }
+.deck .close-chips a {
+  padding: .35em .9em; border: 1px solid var(--line); border-radius: 999px;
+  color: var(--fg); font-size: 1.05em; text-decoration: none;
+}
+.deck .close-chips a:hover, .deck .close-chips a:focus-visible { border-color: var(--accent); color: var(--accent); }
+.deck .close-social { display: flex; flex-wrap: wrap; gap: .5em 1.2em; margin: 0 0 1.2em; padding: 0; list-style: none; }
+.deck .close-social a { display: inline-flex; align-items: center; gap: .45em; color: var(--muted); font-size: 1.05em; text-decoration: none; }
+.deck .close-social a:hover, .deck .close-social a:focus-visible { color: var(--accent); }
+.deck .close-v2 .close-big { margin-top: .2em; }
+.deck .close-qr { position: relative; z-index: 1; margin: 0; padding: 1em; border: 1px solid var(--line); border-radius: 20px; background: rgb(6 19 20 / .75); text-align: center; }
+.deck .close-qr img { display: block; width: 11em; height: 11em; }
+.deck .close-qr figcaption { margin-top: .6em; color: var(--accent); font-weight: 600; font-size: 1.05em; }
+@media (max-width: 760px) {
+  .deck .close-v2 { grid-template-columns: 1fr; gap: 1.5em; }
+  .deck .close-qr { justify-self: start; }
+  .deck .close-qr img { width: 8em; height: 8em; }
+}
