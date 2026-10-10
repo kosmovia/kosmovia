@@ -1,4 +1,4 @@
-﻿export type Item = { lead?: string; text: string; link?: string };
+export type Item = { lead?: string; text: string; link?: string };
 export type Card = { head: string; text: string; details?: string[] };
 export type Screenshot = { src: string; alt: string; caption?: string; width: number; height: number };
 export type Mark = { v: "yes" | "no" | "partial"; text: string };
@@ -151,7 +151,7 @@ export const en: Deck = {
         ] },
         { name: "Kosmovia", highlight: true, cells: [
           { v: "yes", text: "Channels and mini-apps" }, { v: "yes", text: "USDC, Google sign-in" },
-          { v: "yes", text: "Receipts in the chat" }, { v: "yes", text: "Everyday people, in Spanish" },
+          { v: "yes", text: "Receipts in the chat" }, { v: "yes", text: "General audiences, crypto communities and developers" },
         ] },
       ],
     },
@@ -327,7 +327,7 @@ export const es: Deck = {
         ] },
         { name: "Kosmovia", highlight: true, cells: [
           { v: "yes", text: "Canales y mini-apps" }, { v: "yes", text: "USDC, entras con Google" },
-          { v: "yes", text: "Recibos en el chat" }, { v: "yes", text: "Gente común, en español" },
+          { v: "yes", text: "Recibos en el chat" }, { v: "yes", text: "Público general, comunidad cripto y desarrolladores" },
         ] },
       ],
     },
