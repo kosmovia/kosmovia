@@ -30,6 +30,7 @@ const NAV = [
 ];
 
 const COMPARE = section(pitchEs, "compare", "table");
+const TEAM = section(pitchEs, "team", "team-contact");
 
 const MARK_LABEL = { yes: "Sí", no: "No", partial: "Parcial" } as const;
 
@@ -356,6 +357,24 @@ export default function Home() {
           </div>
         </section>
 
+        <section id="equipo" className="kv-section kv-alt" aria-labelledby="equipo-titulo">
+          <div className="kv-wrap">
+            <p className="kv-eyebrow">El equipo</p>
+            <h2 id="equipo-titulo">{TEAM.title}</h2>
+            <div className="kv-grid kv-team-grid">
+              {TEAM.people.map((person) => (
+                <article key={person.name} className="kv-card">
+                  <h3>{person.name}</h3>
+                  <p>{person.role}</p>
+                </article>
+              ))}
+            </div>
+            <div className="kv-team-contact">
+              <p>Conecta con el equipo en nuestras redes.</p>
+              <Socials label="Contacto con el equipo" />
+            </div>
+          </div>
+        </section>
       </main>
 
       <footer className="kv-footer">

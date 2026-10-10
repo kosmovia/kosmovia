@@ -251,3 +251,9 @@ html:has(.kv-root) { background: #061314; }
 .kv-root .kv-mark-yes { background: rgba(46, 230, 166, .15); color: #2ee6a6; }
 .kv-root .kv-mark-no { background: rgba(248, 113, 113, .15); color: #f87171; }
 .kv-root .kv-mark-partial { background: rgba(155, 189, 186, .15); color: var(--k-muted); }
+
+/* Equipo: nombres y roles compartidos con el pitch. */
+.kv-root .kv-team-grid { grid-template-columns: 1fr; }
+.kv-root .kv-team-contact { margin-top: 28px; color: var(--k-muted); }
+@media (min-width: 640px) { .kv-root .kv-team-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 960px) { .kv-root .kv-team-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
