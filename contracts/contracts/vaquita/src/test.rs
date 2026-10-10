@@ -19,6 +19,8 @@ struct Setup {
     beneficiary: Address,
     ana: Address,
     beto: Address,
+    /// El bote de este test dentro del contrato compartido.
+    pot: u32,
 }
 
 const GOAL: i128 = 100;
@@ -45,56 +47,71 @@ fn setup() -> Setup {
     mint.mint(&ana, &500);
     mint.mint(&beto, &500);
 
-    let contract_id = env.register(
-        Vaquita,
-        (beneficiary.clone(), token_id.clone(), GOAL, DEADLINE),
-    );
-    let client = VaquitaClient::new(&env, &contract_id);
+    let client = VaquitaClient::new(&env, &env.register(Vaquita, ()));
+    let pot = client.create_pot(&beneficiary, &token_id, &GOAL, &DEADLINE);
 
-    Setup { env, client, token, beneficiary, ana, beto }
+    Setup { env, client, token, beneficiary, ana, beto, pot }
 }
 
 // ------------------------------------------------------------------ términos
 
 #[test]
-fn los_terminos_quedan_fijos_desde_el_despliegue() {
+fn los_terminos_quedan_fijos_al_crear_el_bote() {
     let s = setup();
-    let pot = s.client.state();
+    let pot = s.client.state(&s.pot);
     assert_eq!(pot.beneficiary, s.beneficiary);
     assert_eq!(pot.goal, GOAL);
     assert_eq!(pot.deadline, DEADLINE);
     assert_eq!(pot.raised, 0);
     assert!(!pot.claimed);
-    // No hay `init` público: nadie puede re-inicializar ni adelantarse a hacerlo.
-    assert_eq!(s.client.claim_deadline(), DEADLINE + GRACE);
-}
-
-/// Un constructor que devuelve Err hace panic al registrar, así que cada término
-/// inválido va en su propio test.
-fn registrar_con(goal: i128, deadline: u64) {
-    let env = Env::default();
-    env.ledger().with_mut(|l| l.timestamp = START);
-    let who = Address::generate(&env);
-    env.register(Vaquita, (who.clone(), who, goal, deadline));
+    assert_eq!(s.client.claim_deadline(&s.pot), DEADLINE + GRACE);
 }
 
 #[test]
-#[should_panic]
-fn el_constructor_rechaza_meta_cero() {
-    registrar_con(0, DEADLINE);
+fn crear_un_bote_rechaza_terminos_sin_sentido() {
+    let s = setup();
+    let t = &s.token.address;
+    // Meta cero, plazo ya vencido, y plazo a más de 60 días (el estado se
+    // archivaría antes de que alguien pudiera retirar).
+    for (goal, deadline) in [
+        (0_i128, DEADLINE),
+        (100, START - 1),
+        (100, START + 61 * 24 * 60 * 60),
+    ] {
+        assert_eq!(
+            s.client.try_create_pot(&s.beneficiary, t, &goal, &deadline),
+            Err(Ok(Error::InvalidTerms)),
+            "deberia rechazar meta={goal} plazo={deadline}",
+        );
+    }
 }
 
 #[test]
-#[should_panic]
-fn el_constructor_rechaza_un_plazo_ya_vencido() {
-    registrar_con(100, START - 1);
+fn los_botes_no_se_mezclan() {
+    let s = setup();
+    let otro = s.client.create_pot(&s.beneficiary, &s.token.address, &GOAL, &DEADLINE);
+    assert_ne!(otro, s.pot);
+
+    s.client.contribute(&s.pot, &s.ana, &30);
+    s.client.contribute(&otro, &s.beto, &70);
+
+    // Cada bote lleva su propia cuenta: el aporte de uno no habilita cobrar el otro.
+    assert_eq!(s.client.state(&s.pot).raised, 30);
+    assert_eq!(s.client.state(&otro).raised, 70);
+    assert_eq!(s.client.contributed(&s.pot, &s.beto), 0);
+    assert_eq!(s.client.contributed(&otro, &s.ana), 0);
+    assert_eq!(s.client.try_claim(&s.pot), Err(Ok(Error::GoalNotReached)));
+    assert_eq!(s.client.try_claim(&otro), Err(Ok(Error::GoalNotReached)));
 }
 
 #[test]
-#[should_panic]
-fn el_constructor_rechaza_un_plazo_demasiado_lejano() {
-    // Más de 60 días: el estado se archivaría antes de que alguien pueda retirar.
-    registrar_con(100, START + 61 * 24 * 60 * 60);
+fn un_bote_que_no_existe_no_opera() {
+    let s = setup();
+    let fantasma = 9_999_u32;
+    assert_eq!(s.client.try_state(&fantasma), Err(Ok(Error::NoSuchPot)));
+    assert_eq!(s.client.try_contribute(&fantasma, &s.ana, &10), Err(Ok(Error::NoSuchPot)));
+    assert_eq!(s.client.try_claim(&fantasma), Err(Ok(Error::NoSuchPot)));
+    assert_eq!(s.client.try_refund(&fantasma, &s.ana), Err(Ok(Error::NoSuchPot)));
 }
 
 // ------------------------------------------------------------------ aportes
@@ -102,11 +119,11 @@ fn el_constructor_rechaza_un_plazo_demasiado_lejano() {
 #[test]
 fn aportar_mueve_el_token_al_contrato_y_acumula() {
     let s = setup();
-    assert_eq!(s.client.contribute(&s.ana, &30), 30);
+    assert_eq!(s.client.contribute(&s.pot, &s.ana, &30), 30);
     // Aportar de nuevo suma: el reembolso devuelve el total, no el último.
-    assert_eq!(s.client.contribute(&s.ana, &20), 50);
-    assert_eq!(s.client.contributed(&s.ana), 50);
-    assert_eq!(s.client.state().raised, 50);
+    assert_eq!(s.client.contribute(&s.pot, &s.ana, &20), 50);
+    assert_eq!(s.client.contributed(&s.pot, &s.ana), 50);
+    assert_eq!(s.client.state(&s.pot).raised, 50);
     assert_eq!(s.token.balance(&s.ana), 450);
     assert_eq!(s.token.balance(&s.client.address), 50);
 }
@@ -114,33 +131,33 @@ fn aportar_mueve_el_token_al_contrato_y_acumula() {
 #[test]
 fn no_se_aporta_cero_ni_negativo() {
     let s = setup();
-    assert_eq!(s.client.try_contribute(&s.ana, &0), Err(Ok(Error::InvalidAmount)));
-    assert_eq!(s.client.try_contribute(&s.ana, &-5), Err(Ok(Error::InvalidAmount)));
+    assert_eq!(s.client.try_contribute(&s.pot, &s.ana, &0), Err(Ok(Error::InvalidAmount)));
+    assert_eq!(s.client.try_contribute(&s.pot, &s.ana, &-5), Err(Ok(Error::InvalidAmount)));
 }
 
 #[test]
 fn no_se_aporta_despues_del_plazo() {
     let s = setup();
     s.env.ledger().with_mut(|l| l.timestamp = DEADLINE + 1);
-    assert_eq!(s.client.try_contribute(&s.ana, &10), Err(Ok(Error::Expired)));
+    assert_eq!(s.client.try_contribute(&s.pot, &s.ana, &10), Err(Ok(Error::Expired)));
 }
 
 #[test]
 fn no_se_aporta_despues_de_cobrada() {
     let s = setup();
-    s.client.contribute(&s.ana, &GOAL);
-    s.client.claim();
-    assert_eq!(s.client.try_contribute(&s.beto, &10), Err(Ok(Error::AlreadyClaimed)));
+    s.client.contribute(&s.pot, &s.ana, &GOAL);
+    s.client.claim(&s.pot);
+    assert_eq!(s.client.try_contribute(&s.pot, &s.beto, &10), Err(Ok(Error::AlreadyClaimed)));
 }
 
 #[test]
 fn un_aporte_fallido_no_deja_rastro() {
     let s = setup();
     // Ana tiene 500: pedir 600 hace fallar la transferencia del token.
-    assert!(s.client.try_contribute(&s.ana, &600).is_err());
+    assert!(s.client.try_contribute(&s.pot, &s.ana, &600).is_err());
     // La invocación se revierte entera: ni share ni raised quedaron escritos.
-    assert_eq!(s.client.contributed(&s.ana), 0);
-    assert_eq!(s.client.state().raised, 0);
+    assert_eq!(s.client.contributed(&s.pot, &s.ana), 0);
+    assert_eq!(s.client.state(&s.pot).raised, 0);
     assert_eq!(s.token.balance(&s.client.address), 0);
 }
 
@@ -149,47 +166,47 @@ fn un_aporte_fallido_no_deja_rastro() {
 #[test]
 fn el_beneficiario_cobra_al_alcanzar_la_meta_sin_esperar_el_plazo() {
     let s = setup();
-    s.client.contribute(&s.ana, &60);
-    s.client.contribute(&s.beto, &40);
-    assert_eq!(s.client.claim(), 100);
+    s.client.contribute(&s.pot, &s.ana, &60);
+    s.client.contribute(&s.pot, &s.beto, &40);
+    assert_eq!(s.client.claim(&s.pot), 100);
     assert_eq!(s.token.balance(&s.beneficiary), 100);
     assert_eq!(s.token.balance(&s.client.address), 0);
-    assert!(s.client.state().claimed);
+    assert!(s.client.state(&s.pot).claimed);
 }
 
 #[test]
 fn el_beneficiario_puede_cobrar_despues_del_plazo_dentro_de_la_ventana() {
     let s = setup();
-    s.client.contribute(&s.ana, &GOAL);
+    s.client.contribute(&s.pot, &s.ana, &GOAL);
     // `claim` no mira `deadline`, solo la ventana de cobro: fijamos esa invariante
     // para que un refactor que agregue el check trabe los botes exitosos.
     s.env.ledger().with_mut(|l| l.timestamp = DEADLINE + GRACE);
-    assert_eq!(s.client.claim(), GOAL);
+    assert_eq!(s.client.claim(&s.pot), GOAL);
     assert_eq!(s.token.balance(&s.beneficiary), GOAL);
 }
 
 #[test]
 fn no_se_cobra_sin_alcanzar_la_meta() {
     let s = setup();
-    s.client.contribute(&s.ana, &99);
-    assert_eq!(s.client.try_claim(), Err(Ok(Error::GoalNotReached)));
+    s.client.contribute(&s.pot, &s.ana, &99);
+    assert_eq!(s.client.try_claim(&s.pot), Err(Ok(Error::GoalNotReached)));
     assert_eq!(s.token.balance(&s.beneficiary), 0);
 }
 
 #[test]
 fn no_se_cobra_dos_veces() {
     let s = setup();
-    s.client.contribute(&s.ana, &GOAL);
-    s.client.claim();
-    assert_eq!(s.client.try_claim(), Err(Ok(Error::AlreadyClaimed)));
+    s.client.contribute(&s.pot, &s.ana, &GOAL);
+    s.client.claim(&s.pot);
+    assert_eq!(s.client.try_claim(&s.pot), Err(Ok(Error::AlreadyClaimed)));
     assert_eq!(s.token.balance(&s.client.address), 0);
 }
 
 #[test]
 fn un_aporte_de_mas_se_cobra_completo() {
     let s = setup();
-    s.client.contribute(&s.ana, &150);
-    assert_eq!(s.client.claim(), 150);
+    s.client.contribute(&s.pot, &s.ana, &150);
+    assert_eq!(s.client.claim(&s.pot), 150);
     assert_eq!(s.token.balance(&s.beneficiary), 150);
 }
 
@@ -198,12 +215,12 @@ fn un_aporte_de_mas_se_cobra_completo() {
 #[test]
 fn vencido_sin_meta_cada_quien_retira_lo_suyo() {
     let s = setup();
-    s.client.contribute(&s.ana, &30);
-    s.client.contribute(&s.beto, &20);
+    s.client.contribute(&s.pot, &s.ana, &30);
+    s.client.contribute(&s.pot, &s.beto, &20);
     s.env.ledger().with_mut(|l| l.timestamp = DEADLINE + 1);
 
-    assert_eq!(s.client.refund(&s.ana), 30);
-    assert_eq!(s.client.refund(&s.beto), 20);
+    assert_eq!(s.client.refund(&s.pot, &s.ana), 30);
+    assert_eq!(s.client.refund(&s.pot, &s.beto), 20);
     assert_eq!(s.token.balance(&s.ana), 500);
     assert_eq!(s.token.balance(&s.beto), 500);
     assert_eq!(s.token.balance(&s.client.address), 0);
@@ -212,46 +229,46 @@ fn vencido_sin_meta_cada_quien_retira_lo_suyo() {
 #[test]
 fn raised_y_saldo_coinciden_despues_de_un_reembolso_parcial() {
     let s = setup();
-    s.client.contribute(&s.ana, &30);
-    s.client.contribute(&s.beto, &20);
+    s.client.contribute(&s.pot, &s.ana, &30);
+    s.client.contribute(&s.pot, &s.beto, &20);
     s.env.ledger().with_mut(|l| l.timestamp = DEADLINE + 1);
 
-    s.client.refund(&s.ana);
+    s.client.refund(&s.pot, &s.ana);
     // `raised` baja con el reembolso: el progreso que ve la app no miente, y el
     // total sigue coincidiendo con el saldo real del contrato.
-    assert_eq!(s.client.state().raised, 20);
+    assert_eq!(s.client.state(&s.pot).raised, 20);
     assert_eq!(s.token.balance(&s.client.address), 20);
-    assert_eq!(s.client.contributed(&s.ana), 0);
-    assert_eq!(s.client.contributed(&s.beto), 20);
+    assert_eq!(s.client.contributed(&s.pot, &s.ana), 0);
+    assert_eq!(s.client.contributed(&s.pot, &s.beto), 20);
 }
 
 #[test]
 fn no_se_reembolsa_antes_del_plazo() {
     let s = setup();
-    s.client.contribute(&s.ana, &30);
-    assert_eq!(s.client.try_refund(&s.ana), Err(Ok(Error::NotExpiredYet)));
+    s.client.contribute(&s.pot, &s.ana, &30);
+    assert_eq!(s.client.try_refund(&s.pot, &s.ana), Err(Ok(Error::NotExpiredYet)));
 }
 
 #[test]
 fn con_la_meta_alcanzada_hay_que_esperar_la_ventana_de_cobro() {
     let s = setup();
-    s.client.contribute(&s.ana, &GOAL);
+    s.client.contribute(&s.pot, &s.ana, &GOAL);
     s.env.ledger().with_mut(|l| l.timestamp = DEADLINE + 1);
-    assert_eq!(s.client.try_refund(&s.ana), Err(Ok(Error::GoalWasReached)));
+    assert_eq!(s.client.try_refund(&s.pot, &s.ana), Err(Ok(Error::GoalWasReached)));
 }
 
 #[test]
 fn si_el_beneficiario_no_cobra_la_plata_vuelve_a_los_aportantes() {
     let s = setup();
-    s.client.contribute(&s.ana, &60);
-    s.client.contribute(&s.beto, &40); // meta alcanzada
+    s.client.contribute(&s.pot, &s.ana, &60);
+    s.client.contribute(&s.pot, &s.beto, &40); // meta alcanzada
     // Pasó el plazo y toda la ventana de cobro sin que el beneficiario cobrara:
     // sin esta salida, el bote quedaba encerrado para siempre.
     s.env.ledger().with_mut(|l| l.timestamp = DEADLINE + GRACE + 1);
 
-    assert_eq!(s.client.try_claim(), Err(Ok(Error::ClaimWindowClosed)));
-    assert_eq!(s.client.refund(&s.ana), 60);
-    assert_eq!(s.client.refund(&s.beto), 40);
+    assert_eq!(s.client.try_claim(&s.pot), Err(Ok(Error::ClaimWindowClosed)));
+    assert_eq!(s.client.refund(&s.pot, &s.ana), 60);
+    assert_eq!(s.client.refund(&s.pot, &s.beto), 40);
     assert_eq!(s.token.balance(&s.ana), 500);
     assert_eq!(s.token.balance(&s.beto), 500);
     assert_eq!(s.token.balance(&s.client.address), 0);
@@ -261,28 +278,28 @@ fn si_el_beneficiario_no_cobra_la_plata_vuelve_a_los_aportantes() {
 #[test]
 fn no_se_reembolsa_dos_veces() {
     let s = setup();
-    s.client.contribute(&s.ana, &30);
+    s.client.contribute(&s.pot, &s.ana, &30);
     s.env.ledger().with_mut(|l| l.timestamp = DEADLINE + 1);
-    s.client.refund(&s.ana);
-    assert_eq!(s.client.try_refund(&s.ana), Err(Ok(Error::NothingToRefund)));
+    s.client.refund(&s.pot, &s.ana);
+    assert_eq!(s.client.try_refund(&s.pot, &s.ana), Err(Ok(Error::NothingToRefund)));
     assert_eq!(s.token.balance(&s.ana), 500);
 }
 
 #[test]
 fn quien_no_aporto_no_retira_nada() {
     let s = setup();
-    s.client.contribute(&s.ana, &30);
+    s.client.contribute(&s.pot, &s.ana, &30);
     s.env.ledger().with_mut(|l| l.timestamp = DEADLINE + 1);
-    assert_eq!(s.client.try_refund(&s.beto), Err(Ok(Error::NothingToRefund)));
+    assert_eq!(s.client.try_refund(&s.pot, &s.beto), Err(Ok(Error::NothingToRefund)));
 }
 
 #[test]
 fn cobrada_no_deja_reembolsar_aunque_pase_el_plazo() {
     let s = setup();
-    s.client.contribute(&s.ana, &GOAL);
-    s.client.claim();
+    s.client.contribute(&s.pot, &s.ana, &GOAL);
+    s.client.claim(&s.pot);
     s.env.ledger().with_mut(|l| l.timestamp = DEADLINE + GRACE + 1);
-    assert_eq!(s.client.try_refund(&s.ana), Err(Ok(Error::AlreadyClaimed)));
+    assert_eq!(s.client.try_refund(&s.pot, &s.ana), Err(Ok(Error::AlreadyClaimed)));
 }
 
 // ------------------------------------------------------------------ permisos
@@ -290,14 +307,14 @@ fn cobrada_no_deja_reembolsar_aunque_pase_el_plazo() {
 #[test]
 fn sin_autorizacion_no_se_mueve_nada() {
     let s = setup();
-    s.client.contribute(&s.ana, &10);
+    s.client.contribute(&s.pot, &s.ana, &10);
 
     // Se arma con permisos (acuñar y aportar los necesitan) y recién acá se
     // exige autorización de verdad: sin firma, nadie mueve plata ajena.
     s.env.set_auths(&[]);
-    assert!(s.client.try_contribute(&s.ana, &10).is_err());
-    assert!(s.client.try_claim().is_err());
-    assert!(s.client.try_refund(&s.ana).is_err());
+    assert!(s.client.try_contribute(&s.pot, &s.ana, &10).is_err());
+    assert!(s.client.try_claim(&s.pot).is_err());
+    assert!(s.client.try_refund(&s.pot, &s.ana).is_err());
     assert_eq!(s.token.balance(&s.client.address), 10);
 }
 
@@ -311,12 +328,12 @@ fn el_aporte_exige_la_firma_del_aportante_por_el_monto_exacto() {
         invoke: &soroban_sdk::testutils::MockAuthInvoke {
             contract: &s.client.address,
             fn_name: "contribute",
-            args: (s.ana.clone(), 10_i128).into_val(&s.env),
+            args: (s.pot, s.ana.clone(), 10_i128).into_val(&s.env),
             sub_invokes: &[],
         },
     };
-    assert!(s.client.mock_auths(&[auth.clone()]).try_contribute(&s.beto, &10).is_err());
-    assert!(s.client.mock_auths(&[auth]).try_contribute(&s.ana, &99).is_err());
+    assert!(s.client.mock_auths(&[auth.clone()]).try_contribute(&s.pot, &s.beto, &10).is_err());
+    assert!(s.client.mock_auths(&[auth]).try_contribute(&s.pot, &s.ana, &99).is_err());
 }
 
 // ------------------------------------------------------------------ límite conocido
@@ -327,7 +344,7 @@ fn un_aporte_directo_al_contrato_no_cuenta_y_queda_atrapado() {
     // Pagar a la dirección del contrato sin pasar por `contribute`: el bote no
     // lo registra y no hay forma de sacarlo. Límite conocido y documentado.
     s.token.transfer(&s.ana, &s.client.address, &40);
-    assert_eq!(s.client.state().raised, 0);
-    assert_eq!(s.client.contributed(&s.ana), 0);
+    assert_eq!(s.client.state(&s.pot).raised, 0);
+    assert_eq!(s.client.contributed(&s.pot, &s.ana), 0);
     assert_eq!(s.token.balance(&s.client.address), 40);
 }

@@ -1,6 +1,6 @@
 #![no_std]
 
-//! Vaquita con garantía: un bote colectivo que el contrato retiene.
+//! Vaquitas con garantía: botes colectivos que el contrato retiene.
 //!
 //! Hoy, en la app, cada aporte a una vaquita se paga directo a la wallet del
 //! creador y la base solo anota quién puso cuánto. Si no se llega a la meta, no
@@ -18,10 +18,15 @@
 //! `deadline + GRACE` el beneficiario ya no puede cobrar: no hay carrera entre
 //! `claim` y `refund`, cada uno tiene su ventana.
 //!
+//! **Un contrato, muchos botes.** Cada vaquita es un `pot_id` acá adentro, no
+//! una instancia aparte. Es lo que hace viable el camino de las wallets
+//! custodiales de Pollar (Google/email): su backend valida cada autorización
+//! contra una lista blanca de contratos por app, así que una dirección nueva por
+//! vaquita exigiría tocar esa lista cada vez. Con una sola dirección se autoriza
+//! una vez y sirve para todas.
+//!
 //! El contrato **no tiene dueño ni función de rescate**: ni quien lo despliega
-//! puede sacar los fondos por otro camino. Los términos se fijan en el
-//! constructor, en la misma transacción del despliegue, así que nadie puede
-//! adelantarse a inicializarlo apuntándolo a su propia wallet.
+//! puede sacar los fondos de ningún bote.
 //!
 //! Todo en testnet.
 
@@ -31,6 +36,8 @@ use soroban_sdk::{contract, contracterror, contractimpl, contracttype, token, Ad
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum Error {
+    /// No existe un bote con ese id.
+    NoSuchPot = 2,
     /// Meta o plazo sin sentido (meta <= 0, plazo en el pasado o demasiado lejos).
     InvalidTerms = 3,
     /// Monto <= 0.
@@ -43,7 +50,7 @@ pub enum Error {
     GoalNotReached = 7,
     /// `refund` antes de que venza el plazo.
     NotExpiredYet = 8,
-    /// `refund` de una vaquita que alcanzó la meta y aún está en plazo de cobro.
+    /// `refund` de un bote que alcanzó la meta y aún está en plazo de cobro.
     GoalWasReached = 9,
     /// `refund` de quien no aportó, o que ya retiró.
     NothingToRefund = 10,
@@ -54,10 +61,12 @@ pub enum Error {
 #[contracttype]
 #[derive(Clone)]
 pub enum Key {
-    /// Parámetros y total, en una sola entrada: se leen juntos en cada llamada.
-    Pot,
-    /// Lo aportado por una dirección. Persistente: es la plata de esa persona.
-    Share(Address),
+    /// El id que se le dará al próximo bote.
+    NextId,
+    /// Un bote. Persistente: hay tantos como vaquitas, no entran en `instance`.
+    Pot(u32),
+    /// Lo aportado por una dirección a un bote.
+    Share(u32, Address),
 }
 
 #[contracttype]
@@ -78,10 +87,10 @@ pub struct Pot {
 
 /// Ledgers en ~24 h, a 5 s por ledger.
 const DAY_LEDGERS: u32 = 17_280;
-/// El estado se renueva por 90 días en cada operación.
+/// El estado se renueva por 90 días en cada operación sobre el bote.
 const TTL: u32 = DAY_LEDGERS * 90;
-/// Tope del plazo: 60 días. Junto con GRACE entra holgado en el TTL, así que una
-/// vaquita que nadie toca sigue teniendo estado vivo durante toda su vida útil.
+/// Tope del plazo: 60 días. Junto con GRACE entra holgado en el TTL, así que un
+/// bote que nadie toca sigue teniendo estado vivo durante toda su vida útil.
 const MAX_DEADLINE_SECS: u64 = 60 * 24 * 60 * 60;
 /// Ventana del beneficiario para cobrar tras el plazo. Después, el bote vuelve
 /// a los aportantes.
@@ -92,36 +101,43 @@ pub struct Vaquita;
 
 #[contractimpl]
 impl Vaquita {
-    /// Fija los términos en la misma transacción del despliegue.
-    pub fn __constructor(
+    /// Abre un bote y devuelve su id. Los términos quedan fijos para siempre.
+    ///
+    /// No exige firma de nadie: un bote vacío no mueve plata y crear uno cuesta
+    /// las comisiones de quien lo crea. Quién lo creó lo registra la app en su
+    /// base; al contrato solo le importa a quién le toca cobrar.
+    pub fn create_pot(
         env: Env,
         beneficiary: Address,
         token: Address,
         goal: i128,
         deadline: u64,
-    ) -> Result<(), Error> {
+    ) -> Result<u32, Error> {
         let now = env.ledger().timestamp();
         if goal <= 0 || deadline <= now || deadline > now + MAX_DEADLINE_SECS {
             return Err(Error::InvalidTerms);
         }
-        env.storage().instance().set(
-            &Key::Pot,
+        let id: u32 = env.storage().instance().get(&Key::NextId).unwrap_or(1);
+        env.storage().instance().set(&Key::NextId, &(id + 1));
+        env.storage().instance().extend_ttl(TTL, TTL);
+        Self::save_pot(
+            &env,
+            id,
             &Pot { beneficiary, token, goal, deadline, raised: 0, claimed: false },
         );
-        env.storage().instance().extend_ttl(TTL, TTL);
-        Ok(())
+        Ok(id)
     }
 
     /// Aporta `amount` al bote. El token sale de `from`, que debe autorizar.
     ///
     /// Aportar de nuevo suma a lo que esa dirección ya tenía: el reembolso
     /// después devuelve el total, no el último aporte.
-    pub fn contribute(env: Env, from: Address, amount: i128) -> Result<i128, Error> {
+    pub fn contribute(env: Env, pot_id: u32, from: Address, amount: i128) -> Result<i128, Error> {
         from.require_auth();
         if amount <= 0 {
             return Err(Error::InvalidAmount);
         }
-        let mut pot = Self::pot(&env);
+        let mut pot = Self::pot(&env, pot_id)?;
         if pot.claimed {
             return Err(Error::AlreadyClaimed);
         }
@@ -132,10 +148,10 @@ impl Vaquita {
         // Estado primero y transferencia al final, igual que en claim y refund:
         // si el token falla, la invocación entera se revierte, así que escribir
         // antes no puede dejar el bote diciendo que recibió algo que no recibió.
-        let share = Self::share_of(&env, &from) + amount;
+        let share = Self::share_of(&env, pot_id, &from) + amount;
         pot.raised += amount;
-        Self::save_share(&env, &from, share);
-        Self::save_pot(&env, &pot);
+        Self::save_share(&env, pot_id, &from, share);
+        Self::save_pot(&env, pot_id, &pot);
 
         token::Client::new(&env, &pot.token).transfer(&from, &env.current_contract_address(), &amount);
         Ok(share)
@@ -147,8 +163,8 @@ impl Vaquita {
     /// No espera el `deadline`: alcanzada la meta, retener la plata no protege a
     /// nadie. `claimed` es lo que impide cobrar dos veces y cierra la puerta a
     /// cualquier reembolso posterior.
-    pub fn claim(env: Env) -> Result<i128, Error> {
-        let mut pot = Self::pot(&env);
+    pub fn claim(env: Env, pot_id: u32) -> Result<i128, Error> {
+        let mut pot = Self::pot(&env, pot_id)?;
         pot.beneficiary.require_auth();
         if pot.claimed {
             return Err(Error::AlreadyClaimed);
@@ -162,7 +178,7 @@ impl Vaquita {
 
         let amount = pot.raised;
         pot.claimed = true;
-        Self::save_pot(&env, &pot);
+        Self::save_pot(&env, pot_id, &pot);
         token::Client::new(&env, &pot.token).transfer(
             &env.current_contract_address(),
             &pot.beneficiary,
@@ -177,9 +193,9 @@ impl Vaquita {
     ///
     /// El aporte se borra y `raised` baja antes de transferir, así que nadie
     /// retira dos veces y `state()` nunca muestra plata que ya se fue.
-    pub fn refund(env: Env, to: Address) -> Result<i128, Error> {
+    pub fn refund(env: Env, pot_id: u32, to: Address) -> Result<i128, Error> {
         to.require_auth();
-        let mut pot = Self::pot(&env);
+        let mut pot = Self::pot(&env, pot_id)?;
         if pot.claimed {
             return Err(Error::AlreadyClaimed);
         }
@@ -191,53 +207,50 @@ impl Vaquita {
         if pot.raised >= pot.goal && now <= pot.deadline + GRACE_SECS {
             return Err(Error::GoalWasReached);
         }
-        let share = Self::share_of(&env, &to);
+        let share = Self::share_of(&env, pot_id, &to);
         if share <= 0 {
             return Err(Error::NothingToRefund);
         }
 
         pot.raised -= share;
-        env.storage().persistent().remove(&Key::Share(to.clone()));
-        Self::save_pot(&env, &pot);
+        env.storage().persistent().remove(&Key::Share(pot_id, to.clone()));
+        Self::save_pot(&env, pot_id, &pot);
         token::Client::new(&env, &pot.token).transfer(&env.current_contract_address(), &to, &share);
         Ok(share)
     }
 
-    /// Los términos y el total, para que la app muestre el progreso.
-    pub fn state(env: Env) -> Pot {
-        Self::pot(&env)
+    /// Los términos y el total de un bote, para que la app muestre el progreso.
+    pub fn state(env: Env, pot_id: u32) -> Result<Pot, Error> {
+        Self::pot(&env, pot_id)
     }
 
     /// Lo aportado por una dirección (0 si no aportó o ya retiró).
-    pub fn contributed(env: Env, who: Address) -> i128 {
-        Self::share_of(&env, &who)
+    pub fn contributed(env: Env, pot_id: u32, who: Address) -> i128 {
+        Self::share_of(&env, pot_id, &who)
     }
 
     /// Hasta cuándo puede cobrar el beneficiario; pasado eso, manda `refund`.
-    pub fn claim_deadline(env: Env) -> u64 {
-        Self::pot(&env).deadline + GRACE_SECS
+    pub fn claim_deadline(env: Env, pot_id: u32) -> Result<u64, Error> {
+        Ok(Self::pot(&env, pot_id)?.deadline + GRACE_SECS)
     }
 
-    /// El constructor corre al desplegar, así que el bote siempre existe.
-    fn pot(env: &Env) -> Pot {
-        env.storage()
-            .instance()
-            .get(&Key::Pot)
-            .unwrap_or_else(|| panic!("sin inicializar"))
+    fn pot(env: &Env, pot_id: u32) -> Result<Pot, Error> {
+        env.storage().persistent().get(&Key::Pot(pot_id)).ok_or(Error::NoSuchPot)
     }
 
-    fn save_pot(env: &Env, pot: &Pot) {
-        env.storage().instance().set(&Key::Pot, pot);
-        env.storage().instance().extend_ttl(TTL, TTL);
+    fn save_pot(env: &Env, pot_id: u32, pot: &Pot) {
+        env.storage().persistent().set(&Key::Pot(pot_id), pot);
+        env.storage().persistent().extend_ttl(&Key::Pot(pot_id), TTL, TTL);
     }
 
-    fn save_share(env: &Env, who: &Address, share: i128) {
-        env.storage().persistent().set(&Key::Share(who.clone()), &share);
-        env.storage().persistent().extend_ttl(&Key::Share(who.clone()), TTL, TTL);
+    fn save_share(env: &Env, pot_id: u32, who: &Address, share: i128) {
+        let key = Key::Share(pot_id, who.clone());
+        env.storage().persistent().set(&key, &share);
+        env.storage().persistent().extend_ttl(&key, TTL, TTL);
     }
 
-    fn share_of(env: &Env, who: &Address) -> i128 {
-        env.storage().persistent().get(&Key::Share(who.clone())).unwrap_or(0)
+    fn share_of(env: &Env, pot_id: u32, who: &Address) -> i128 {
+        env.storage().persistent().get(&Key::Share(pot_id, who.clone())).unwrap_or(0)
     }
 }
 
