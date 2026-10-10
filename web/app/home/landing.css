@@ -224,3 +224,15 @@ html:has(.kv-root) { background: #061314; }
   padding: 3px 10px; border: 1px solid var(--k-line); border-radius: 999px;
   color: var(--k-glow); font-size: 13px; font-weight: 600;
 }
+
+/* Hero: KOSMOVIA como título principal y el lema debajo. */
+.kv-root .kv-hero h1.kv-brand-title {
+  font-size: clamp(2.8rem, 9vw, 5.4rem); line-height: 1; letter-spacing: .06em; font-weight: 900;
+  background: linear-gradient(90deg, #f2fbfa 0%, #5eead4 55%, #00f2fe 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: 0 0 40px rgba(0, 242, 254, .15);
+}
+.kv-root .kv-tagline {
+  margin: 14px 0 0; font-size: clamp(1.4rem, 3.6vw, 2.1rem); line-height: 1.15; font-weight: 800; color: var(--k-fg);
+}
+.kv-root .kv-tagline span { background: linear-gradient(90deg, #00f2fe, #5eead4); -webkit-background-clip: text; background-clip: text; color: transparent; }

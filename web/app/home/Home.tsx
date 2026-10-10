@@ -75,9 +75,9 @@ const STEPS = [
 const SOON = ["Pasanaku", "Dividir la cuenta", "Propinas para creadores", "Membresías", "Talento"];
 
 const AUDIENCE = [
-  { icon: <IconCreators />, title: "Creadores", text: "Cobra a tu comunidad en dólares digitales, dentro del chat.", tags: ["Cursos", "Mentorías", "Academias"] },
-  { icon: <IconFriends />, title: "Amigos y familia", text: "Junten dinero y páguense entre ustedes, con cuentas claras.", tags: ["Vaquitas", "Retos", "Pagos"] },
-  { icon: <IconLearn />, title: "Curiosos de Stellar", text: "Aprende cómo funciona el dinero digital usándolo.", tags: ["Lecciones", "Misiones", "Insignias"] },
+  { icon: <IconCreators />, title: "Comunidades y creadores", text: "Gestiona membresías, cobros y comprobantes en USDC dentro del mismo espacio donde conversa tu comunidad.", tags: ["Academias", "Cursos", "Clubes"] },
+  { icon: <IconFriends />, title: "Proyectos y equipos", text: "Coordina a tu equipo, recibe aportes y administra fondos comunes con trazabilidad en Stellar.", tags: ["Startups", "ONG", "Colectivos"] },
+  { icon: <IconLearn />, title: "Ecosistema Stellar", text: "Una puerta de entrada simple para nuevos usuarios y una plataforma de mini-apps para desarrolladores.", tags: ["Adopción", "Educación", "Desarrolladores"] },
 ];
 
 
@@ -132,9 +132,10 @@ export default function Home() {
         <section className="kv-hero">
           <div className="kv-wrap kv-hero-grid">
             <div className="kv-hero-copy">
-              <h1>
+              <h1 className="kv-brand-title">KOSMOVIA</h1>
+              <p className="kv-tagline">
                 Tu comunidad y tu dinero, <span>en un solo lugar.</span>
-              </h1>
+              </p>
               <p className="kv-lead">
                 Chat, wallet en dólares digitales (USDC) y pagos entre personas sobre Stellar. Hecho en Bolivia, para el mundo.
               </p>
@@ -146,9 +147,6 @@ export default function Home() {
                   Cómo funciona
                 </a>
               </div>
-              <p className="kv-note">
-                <span className="kv-dot" aria-hidden="true" /> Beta gratis · Stellar testnet
-              </p>
             </div>
             <CosmicScene />
           </div>
@@ -273,7 +271,7 @@ export default function Home() {
         {/* Para quién */}
         <section id="para-quien" className="kv-section kv-alt">
           <div className="kv-wrap">
-            <p className="kv-eyebrow">Para ti</p>
+            <p className="kv-eyebrow">Casos de uso</p>
             <h2>Para quién es Kosmovia</h2>
             <div className="kv-grid kv-grid-3">
               {AUDIENCE.map((a) => (

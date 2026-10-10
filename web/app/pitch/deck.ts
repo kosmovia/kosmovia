@@ -1,5 +1,6 @@
 ﻿export type Item = { lead?: string; text: string; link?: string };
-export type Card = { head: string; text: string };
+export type Card = { head: string; text: string; details?: string[] };
+export type Screenshot = { src: string; alt: string; caption?: string; width: number; height: number };
 export type Mark = { v: "yes" | "no" | "partial"; text: string };
 export type RoadmapStage = {
   key: string;
@@ -19,6 +20,8 @@ export type Slide = { id: SlideId } & (
   | { kind: "cover"; title: string; tagline: string; sub: string; meta: string }
   | { kind: "list"; title: string; items: Item[] }
   | { kind: "cards"; title: string; items: Card[] }
+  | { kind: "showcase"; title: string; layout: "product" | "phones"; items: Item[]; images: Screenshot[]; caption?: string; note?: string }
+  | { kind: "team-contact"; title: string; people: { name: string; role: string }[]; text: string }
   | { kind: "steps"; title: string; items: Item[] }
   | {
       kind: "table";
@@ -40,7 +43,8 @@ export function section<K extends Slide["kind"]>(
   id: SlideId,
   kind: K,
 ): SlideOf<K> {
-  const found = deck.slides.find((s) => s.id === id);
+  const found = deck.slides.find((s) => s.id === id && s.kind === kind)
+    ?? deck.sections?.find((s) => s.id === id && s.kind === kind);
   if (!found || found.kind !== kind) {
     throw new Error(`Deck slide "${id}" (${kind}) not found`);
   }
@@ -64,6 +68,8 @@ export type Deck = {
     deckLabel: string;
   };
   slides: Slide[];
+  /** Legacy landing copy, outside the eight-slide presentation. */
+  sections?: Slide[];
 };
 
 export const en: Deck = {
@@ -71,7 +77,7 @@ export const en: Deck = {
   ui: {
     back: "Back to the Kosmovia site",
     backText: "Kosmovia",
-    backHref: "/en",
+    backHref: "/",
     prev: "Previous slide",
     next: "Next slide",
     fullscreen: "Fullscreen",
@@ -86,88 +92,41 @@ export const en: Deck = {
     {
       id: "cover", kind: "cover", title: "Kosmovia",
       tagline: "Your community and your money, in one place.",
-      sub: "Free public Stellar testnet beta: communities, wallet and test payments.",
-      meta: "Bolivia · Stellar Elite Bolivia · TechRebel",
+      sub: "Communities with a wallet and USDC payments on Stellar. Public testnet beta.",
+      meta: "Stellar Elite Bolivia · TechRebel"
     },
     {
-      id: "problem", kind: "list", title: "Community payments are manual",
+      id: "problem", kind: "list", title: "Problem and opportunity",
       items: [
-        { lead: "Paid groups", text: "Bolivian courses, mentors and creators charge through Telegram and WhatsApp." },
-        { lead: "Manual access", text: "Bank QR payments and screenshots create extra work." },
-        { lead: "Unpaid fees", text: "Organizers chase payments and match receipts to members." },
-        { lead: "Digital dollars", text: "Bolivia’s dollar shortage makes saving and charging digitally attractive." },
-      ],
+        { text: "Communities coordinate in chats; collections require QR codes, screenshots and follow-ups." },
+        { text: "Money and conversation use separate tools, without verifiable receipts." },
+        { text: "Bolivia’s limited dollar access creates demand for digital dollars (USDC)." }
+      ]
     },
     {
-      id: "solution", kind: "cards", title: "Connect and pay",
+      id: "solution", kind: "showcase", title: "The product",
+      layout: "product",
       items: [
-        { head: "Your community", text: "Channels, roles and conversations like Discord or Towns." },
-        { head: "Digital dollars", text: "USDC wallet and history; Stellar test funds today." },
-        { head: "Chat payments", text: "Pay @usernames, post invoices and verify receipts on Stellar." },
-        { head: "Mini-apps", text: "Pool money, play and learn within your community." },
+        { text: "Communities with channels, roles and direct messages" },
+        { text: "USDC wallet: Google or email access, no seed phrase" },
+        { text: "PIN payments with verifiable receipts on Stellar" }
       ],
+      note: "Six-digit PIN, attempt lockout and daily limits. App-level controls during testnet beta.",
+      images: [
+        { src: "/pitch/app-chat.webp", alt: "Kosmovia: community, chat and wallet", width: 1600, height: 1000 },
+        { src: "/pitch/app-pin.webp", alt: "Payment confirmation with PIN", width: 360, height: 780 }
+      ]
     },
     {
-      id: "how", kind: "steps", title: "How it works",
-      items: [
-        { lead: "Sign in", text: "Google/email: Pollar-managed wallet, no seed phrase; or connect Freighter." },
-        { lead: "Connect", text: "Join or create a community with channels and roles." },
-        { lead: "Pay", text: "Send test USDC by @username/invoice; enter your six-digit PIN." },
+      id: "miniapps", kind: "showcase", title: "Mini-apps",
+      layout: "phones",
+      items: [],
+      images: [
+        { src: "/pitch/app-vaquita.webp", alt: "Vaquita: contributions toward a shared goal", caption: "Vaquita: contributions toward a shared goal", width: 360, height: 780 },
+        { src: "/pitch/app-retos.webp", alt: "Retos: games between members, without betting", caption: "Retos: games between members, without betting", width: 360, height: 780 },
+        { src: "/pitch/app-aprende.webp", alt: "Aprende Stellar: lessons, missions and badges", caption: "Aprende Stellar: lessons, missions and badges", width: 360, height: 780 }
       ],
-    },
-    {
-      id: "works", kind: "list", title: "Ready today",
-      items: [
-        { lead: "Chat", text: "Private channels, categories, roles, DMs, message editing/deletion and attachments." },
-        { lead: "Wallet", text: "Testnet USDC history, @username payments, #cobros invoices, #verificacion-pagos receipts." },
-        { lead: "Your device", text: "Installable app; payment, DM and mention notifications." },
-        { lead: "Support", text: "Terms, privacy and help pages." },
-      ],
-    },
-    {
-      id: "miniapps", kind: "cards", title: "Pool, play, learn",
-      items: [
-        { head: "Live apps", text: "Vaquita: Stellar-verified pools; Retos: tic-tac-toe/rock-paper-scissors, points/leaderboards, no money bets." },
-        { head: "Aprende Stellar", text: "Live: two-minute lessons, graded quizzes, missions and badges." },
-        { head: "Your permissions", text: "Separate identities, SDK-only access; PIN approval, keys/PIN stay private." },
-        { head: "Coming soon", text: "Pasanaku savings, bill splits, tips, memberships; Talent connects freelancers/influencers with reputation to companies." },
-      ],
-    },
-    {
-      id: "security", kind: "cards", title: "Security and limits",
-      items: [
-        { head: "Payment PIN", text: "Six digits, protected storage, lockout and daily limit." },
-        { head: "Single approval", text: "Recipient, amount and note linked; payments without PIN flagged." },
-        { head: "Two reviews", text: "Controls challenged twice; external audit required before real funds." },
-        { head: "Current limits", text: "App checks only; PIN enforcement at signing planned before mainnet." },
-      ],
-    },
-    {
-      id: "stellar", kind: "list", title: "Why Stellar",
-      items: [
-        { lead: "USDC", text: "Digital dollars for balances/payments; test funds during beta." },
-        { lead: "Low fees", text: "Low network costs and fast payments." },
-        { lead: "Local money later", text: "Services to exchange local money and USDC." },
-        { lead: "Soroban", text: "Stellar contracts; Vaquita escrow on testnet, multiple pools per contract." },
-      ],
-    },
-    {
-      id: "cases", kind: "cards", title: "Who it serves",
-      items: [
-        { head: "Bolivian communities", text: "Courses, mentoring, academies, trading groups, creators charging via Telegram/WhatsApp." },
-        { head: "Friends and family", text: "Later: @username payments and contributions toward shared goals." },
-        { head: "Existing groups", text: "Next: Telegram bot for paid group access." },
-        { head: "Companies later", text: "Reach communities and connect with talent." },
-      ],
-    },
-    {
-      id: "money", kind: "list", title: "Business model",
-      items: [
-        { lead: "Beta: 0%", text: "Commission code exists; later, small fees on earnings through memberships/invoices." },
-        { lead: "Friends pay free", text: "Always; founder communities keep reduced fees on earnings." },
-        { lead: "Premium tools", text: "Verified badge, creator analytics and bots." },
-        { lead: "Companies", text: "Pay to reach communities." },
-      ],
+      caption: "Each mini-app runs in isolation, with permissions and PIN approval. Coming soon: a software development kit (SDK) for third parties."
     },
     {
       id: "compare", kind: "table", title: "How we are different",
@@ -197,23 +156,88 @@ export const en: Deck = {
       ],
     },
     {
-      id: "roadmap", kind: "roadmap", title: "Roadmap", nowLabel: "Done",
+      id: "money", kind: "cards", title: "Business model and why Stellar",
+      items: [
+        {
+          head: "Model",
+          text: "Free beta.",
+          details: [
+            "Fees only on platform earnings: memberships and collections.",
+            "Free payments between people.",
+            "Premium tools and organization accounts."
+          ]
+        },
+        {
+          head: "Why Stellar",
+          text: "Native USDC: digital dollars.",
+          details: [
+            "Minimal fees and settlement in seconds.",
+            "Anchors: services connecting digital balances with local money.",
+            "Soroban contracts: Vaquita escrow already deployed on testnet."
+          ]
+        }
+      ]
+    },
+    {
+      id: "roadmap", kind: "roadmap", title: "Roadmap",
+      nowLabel: "Done",
       stages: [
-        { key: "done", name: "Testnet beta", now: true, when: "Oct 2026", what: "Communities, wallet, PIN payments and 3 mini-apps" },
-        { key: "access", name: "Community income", soon: true, when: "Next", what: "Telegram bot and paid memberships" },
-        { key: "savings", name: "Savings and developers", soon: true, when: "Later", what: "Pasanaku on Soroban, live chat and SDK" },
-        { key: "mainnet", name: "Real money", when: "Mainnet", what: "Audit, legal review and PIN at signing" },
+        {
+          key: "done",
+          name: "Testnet beta",
+          now: true,
+          when: "Oct 2026",
+          what: "Communities, wallet, PIN payments and mini-apps"
+        },
+        {
+          key: "income",
+          name: "Community monetization",
+          soon: true,
+          when: "Next",
+          what: "Real-time chat and paid memberships"
+        },
+        {
+          key: "savings",
+          name: "Savings and developers",
+          when: "Later",
+          what: "Pasanaku on Soroban and a mini-app SDK"
+        },
+        {
+          key: "mainnet",
+          name: "Mainnet",
+          when: "",
+          what: "Security audit, legal review and scalability"
+        }
+      ]
+    },
+    {
+      id: "team", kind: "team-contact", title: "Team and contact",
+      people: [
+        { name: "Alejandro", role: "Product, wallet, payments and security" },
+        { name: "Roberto", role: "Backend, data, real-time systems and Soroban contracts" },
+        { name: "Victor", role: "Frontend, UX/UI and mobile" },
+        { name: "Carla", role: "Brand, communications and community" }
+      ],
+      text: "Public beta on Stellar testnet."
+    },
+  ],
+  sections: [
+    {
+      id: "solution", kind: "cards", title: "Connect and pay",
+      items: [
+        { head: "Your community", text: "Channels, roles and conversations like Discord or Towns." },
+        { head: "Digital dollars", text: "USDC wallet and history; Stellar test funds today." },
+        { head: "Chat payments", text: "Pay @usernames, post invoices and verify receipts on Stellar." },
+        { head: "Mini-apps", text: "Pool money, play and learn within your community." },
       ],
     },
     {
-      id: "team", kind: "team", title: "The team",
-      people: [
-        { name: "Alejandro", role: "Product, wallet, payments, security" },
-        { name: "Roberto", role: "Backend, data, chat, Soroban contracts" },
-        { name: "Victor", role: "Frontend, UX/UI, landing, mobile" },
-        { name: "Carla", role: "Brand, social media, community" },
+      id: "how", kind: "steps", title: "How it works",
+      items: [
+        { lead: "Sign in", text: "Google/email: Pollar-managed wallet, no seed phrase; or connect Freighter." },
+        { lead: "Connect", text: "Join or create a community with channels and roles." },
+        { lead: "Pay", text: "Send test USDC by @username/invoice; enter your six-digit PIN." },
       ],
-      footer: "Stellar Elite Bolivia · TechRebel",
     },
     {
       id: "close", kind: "close", title: "Join us",
@@ -229,7 +253,7 @@ export const es: Deck = {
   ui: {
     back: "Volver al sitio de Kosmovia",
     backText: "Kosmovia",
-    backHref: "/",
+    backHref: "/es",
     prev: "Diapositiva anterior",
     next: "Diapositiva siguiente",
     fullscreen: "Pantalla completa",
@@ -244,88 +268,41 @@ export const es: Deck = {
     {
       id: "cover", kind: "cover", title: "Kosmovia",
       tagline: "Tu comunidad y tu dinero, en un solo lugar.",
-      sub: "Beta pública gratuita: comunidades, wallet y pagos de prueba en Stellar testnet.",
-      meta: "Bolivia · Stellar Elite Bolivia · TechRebel",
+      sub: "Comunidades con wallet y pagos en USDC sobre Stellar. Beta pública en testnet.",
+      meta: "Stellar Elite Bolivia · TechRebel"
     },
     {
-      id: "problem", kind: "list", title: "Cobrar sigue siendo manual",
+      id: "problem", kind: "list", title: "Problema y oportunidad",
       items: [
-        { lead: "Grupos de pago", text: "Cursos, mentores y creadores bolivianos cobran por Telegram y WhatsApp." },
-        { lead: "Acceso manual", text: "QR bancario y capturas generan más trabajo." },
-        { lead: "Pagos pendientes", text: "Organizadores persiguen pagos y asignan comprobantes a miembros." },
-        { lead: "Dólares digitales", text: "La escasez de dólares vuelve atractivo ahorrar y cobrar digitalmente." },
-      ],
+        { text: "Comunidades y proyectos coordinan por chat; cobran con QR, capturas y seguimiento." },
+        { text: "Dinero y conversación usan herramientas separadas, sin comprobantes verificables." },
+        { text: "Bolivia necesita dólares digitales (USDC) ante el acceso limitado a dólares." }
+      ]
     },
     {
-      id: "solution", kind: "cards", title: "Conecta y paga",
+      id: "solution", kind: "showcase", title: "El producto",
+      layout: "product",
       items: [
-        { head: "Tu comunidad", text: "Canales, roles y conversaciones como Discord o Towns." },
-        { head: "Dólares digitales", text: "Wallet USDC e historial; hoy, fondos de prueba en Stellar." },
-        { head: "Pagos en chat", text: "Paga @usuarios, publica cobros y verifica recibos en Stellar." },
-        { head: "Mini-apps", text: "Reúne aportes, juega y aprende en tu comunidad." },
+        { text: "Comunidades con canales, roles y mensajes directos" },
+        { text: "Wallet USDC: acceso con Google o email, sin frase semilla" },
+        { text: "Pagos con PIN y comprobantes verificables en Stellar" }
       ],
+      note: "PIN de seis dígitos, bloqueo por intentos y límites diarios. Controles de la app durante la beta en testnet.",
+      images: [
+        { src: "/pitch/app-chat.webp", alt: "Kosmovia: comunidad, chat y wallet", width: 1600, height: 1000 },
+        { src: "/pitch/app-pin.webp", alt: "Confirmación de pago con PIN", width: 360, height: 780 }
+      ]
     },
     {
-      id: "how", kind: "steps", title: "Cómo funciona",
-      items: [
-        { lead: "Entra", text: "Google/correo: Pollar custodia tu wallet sin frase semilla; o Freighter." },
-        { lead: "Conecta", text: "Únete o crea tu comunidad con canales y roles." },
-        { lead: "Paga", text: "USDC de prueba por @usuario/cobro; PIN de seis dígitos." },
+      id: "miniapps", kind: "showcase", title: "Mini-apps",
+      layout: "phones",
+      items: [],
+      images: [
+        { src: "/pitch/app-vaquita.webp", alt: "Vaquita: aportes para un objetivo común", caption: "Vaquita: aportes para un objetivo común", width: 360, height: 780 },
+        { src: "/pitch/app-retos.webp", alt: "Retos: juegos entre miembros, sin apuestas", caption: "Retos: juegos entre miembros, sin apuestas", width: 360, height: 780 },
+        { src: "/pitch/app-aprende.webp", alt: "Aprende Stellar: lecciones, misiones e insignias", caption: "Aprende Stellar: lecciones, misiones e insignias", width: 360, height: 780 }
       ],
-    },
-    {
-      id: "works", kind: "list", title: "Ya disponible",
-      items: [
-        { lead: "Chat", text: "Canales privados, categorías, roles, mensajes directos, edición/borrado y adjuntos." },
-        { lead: "Wallet", text: "Historial USDC/testnet, pagos @usuario, cobros #cobros y recibos #verificacion-pagos." },
-        { lead: "Tu dispositivo", text: "App instalable; notificaciones de pagos, mensajes directos y menciones." },
-        { lead: "Ayuda", text: "Términos, privacidad y soporte." },
-      ],
-    },
-    {
-      id: "miniapps", kind: "cards", title: "Reúne, juega, aprende",
-      items: [
-        { head: "Apps disponibles", text: "Vaquita: aportes verificados en Stellar; Retos: tres-en-raya/piedra-papel-tijera, puntos/clasificación, sin apuestas." },
-        { head: "Aprende Stellar", text: "Disponible: lecciones de dos minutos, cuestionarios corregidos, misiones e insignias." },
-        { head: "Tus permisos", text: "Identidades separadas, acceso por SDK; apruebas con PIN, claves/PIN privados." },
-        { head: "Próximamente", text: "Pasanaku, dividir cuentas, propinas, membresías; Talent conecta freelancers/influencers con reputación y empresas." },
-      ],
-    },
-    {
-      id: "security", kind: "cards", title: "Seguridad y límites",
-      items: [
-        { head: "PIN de pago", text: "Seis dígitos, almacenamiento protegido, bloqueo por intentos y límite diario." },
-        { head: "Aprobación única", text: "Destino, monto y nota vinculados; pagos sin PIN marcados." },
-        { head: "Dos revisiones", text: "Controles puestos a prueba; falta auditoría externa antes de mainnet." },
-        { head: "Límites actuales", text: "Control de app; exigir PIN al firmar antes de mainnet." },
-      ],
-    },
-    {
-      id: "stellar", kind: "list", title: "Por qué Stellar",
-      items: [
-        { lead: "USDC", text: "Dólares digitales para saldos/pagos; fondos de prueba durante la beta." },
-        { lead: "Comisiones bajas", text: "Bajos costos de red y pagos rápidos." },
-        { lead: "Moneda local después", text: "Servicios para intercambiar moneda local y USDC." },
-        { lead: "Soroban", text: "Contratos Stellar; garantía Vaquita en testnet, varias colectas por contrato." },
-      ],
-    },
-    {
-      id: "cases", kind: "cards", title: "Para quién",
-      items: [
-        { head: "Comunidades bolivianas", text: "Cursos, mentorías, academias, grupos de trading, creadores cobrando por Telegram/WhatsApp." },
-        { head: "Amigos y familia", text: "Después: pagos por @usuario y aportes para metas comunes." },
-        { head: "Grupos actuales", text: "Próximo: bot de Telegram para cobrar acceso." },
-        { head: "Empresas después", text: "Llegar a comunidades y conectar con talento." },
-      ],
-    },
-    {
-      id: "money", kind: "list", title: "Modelo de negocio",
-      items: [
-        { lead: "Beta gratuita", text: "Comisiones implementadas al 0%; después, cargos sobre ingresos por membresías/cobros." },
-        { lead: "Amigos gratis", text: "Siempre; comunidades fundadoras mantienen comisiones reducidas sobre ingresos." },
-        { lead: "Herramientas premium", text: "Insignia verificada, estadísticas para creadores y bots." },
-        { lead: "Empresas", text: "Pagan por llegar a comunidades." },
-      ],
+      caption: "Cada mini-app corre aislada y se conecta con permisos y PIN. Próximamente: SDK para terceros (kit de desarrollo)."
     },
     {
       id: "compare", kind: "table", title: "En qué nos diferenciamos",
@@ -355,23 +332,88 @@ export const es: Deck = {
       ],
     },
     {
-      id: "roadmap", kind: "roadmap", title: "Hoja de ruta", nowLabel: "Hecho",
+      id: "money", kind: "cards", title: "Modelo de negocio y por qué Stellar",
+      items: [
+        {
+          head: "Modelo",
+          text: "Beta gratuita.",
+          details: [
+            "Comisión solo sobre ingresos generados en la plataforma: membresías y cobros.",
+            "Pagos entre personas sin costo.",
+            "Herramientas premium y cuentas para organizaciones."
+          ]
+        },
+        {
+          head: "Por qué Stellar",
+          text: "USDC nativo: dólares digitales.",
+          details: [
+            "Comisiones mínimas y liquidación en segundos.",
+            "Anclas: servicios para conectar con dinero local.",
+            "Contratos Soroban: garantía de Vaquita ya desplegada en testnet."
+          ]
+        }
+      ]
+    },
+    {
+      id: "roadmap", kind: "roadmap", title: "Hoja de ruta",
+      nowLabel: "Hecho",
       stages: [
-        { key: "done", name: "Beta en testnet", now: true, when: "Oct 2026", what: "Comunidades, wallet, pagos con PIN y 3 mini-apps" },
-        { key: "access", name: "Cobrar en comunidad", soon: true, when: "Próximo", what: "Bot de Telegram y membresías de pago" },
-        { key: "savings", name: "Ahorro y desarrolladores", soon: true, when: "Después", what: "Pasanaku en Soroban, chat en vivo y SDK" },
-        { key: "mainnet", name: "Dinero real", when: "Mainnet", what: "Auditoría, revisión legal y PIN al firmar" },
+        {
+          key: "done",
+          name: "Beta en testnet",
+          now: true,
+          when: "Oct 2026",
+          what: "Comunidades, wallet, pagos con PIN y mini-apps"
+        },
+        {
+          key: "income",
+          name: "Monetización de comunidades",
+          soon: true,
+          when: "Próximo",
+          what: "Chat en tiempo real y membresías de pago"
+        },
+        {
+          key: "savings",
+          name: "Ahorro y desarrolladores",
+          when: "Después",
+          what: "Pasanaku en Soroban y SDK para mini-apps"
+        },
+        {
+          key: "mainnet",
+          name: "Mainnet",
+          when: "",
+          what: "Auditoría de seguridad, revisión legal y escalabilidad"
+        }
+      ]
+    },
+    {
+      id: "team", kind: "team-contact", title: "Equipo y contacto",
+      people: [
+        { name: "Alejandro", role: "Producto, wallet, pagos y seguridad" },
+        { name: "Roberto", role: "Backend, datos, tiempo real y contratos Soroban" },
+        { name: "Victor", role: "Frontend, UX/UI y móvil" },
+        { name: "Carla", role: "Marca, comunicación y comunidad" }
+      ],
+      text: "Beta pública en testnet de Stellar."
+    },
+  ],
+  sections: [
+    {
+      id: "solution", kind: "cards", title: "Conecta y paga",
+      items: [
+        { head: "Tu comunidad", text: "Canales, roles y conversaciones como Discord o Towns." },
+        { head: "Dólares digitales", text: "Wallet USDC e historial; hoy, fondos de prueba en Stellar." },
+        { head: "Pagos en chat", text: "Paga @usuarios, publica cobros y verifica recibos en Stellar." },
+        { head: "Mini-apps", text: "Reúne aportes, juega y aprende en tu comunidad." },
       ],
     },
     {
-      id: "team", kind: "team", title: "El equipo",
-      people: [
-        { name: "Alejandro", role: "Producto, wallet, pagos y seguridad" },
-        { name: "Roberto", role: "Backend, datos, chat, contratos Soroban" },
-        { name: "Victor", role: "Frontend, UX/UI, landing y móvil" },
-        { name: "Carla", role: "Marca, redes sociales y comunidad" },
+      id: "how", kind: "steps", title: "Cómo funciona",
+      items: [
+        { lead: "Entra", text: "Google/correo: wallet sin frase semilla; o Freighter." },
+        { lead: "Conecta", text: "Únete o crea tu comunidad con canales y roles." },
+        { lead: "Paga", text: "USDC de prueba por @usuario/cobro; PIN de seis dígitos." },
       ],
-      footer: "Stellar Elite Bolivia · TechRebel",
     },
     {
       id: "close", kind: "close", title: "Súmate",
@@ -381,3 +423,4 @@ export const es: Deck = {
     },
   ],
 };
+

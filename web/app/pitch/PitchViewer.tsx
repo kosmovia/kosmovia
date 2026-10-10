@@ -117,9 +117,36 @@ function SlideBody({
               <li key={card.head}>
                 <h3>{card.head}</h3>
                 <p>{card.text}</p>
+                {card.details?.map((text) => <p key={text}>{text}</p>)}
               </li>
             ))}
           </ul>
+        </div>
+      );
+    case "showcase":
+      return (
+        <div className={`body stack showcase-body showcase-${slide.layout}`}>
+          <Title id={id}>{slide.title}</Title>
+          <div className="showcase-content">
+            {slide.items.length > 0 && (
+              <div className="showcase-copy">
+                <ul className="points">
+                  {slide.items.map((item) => <li key={item.text}><p>{item.text}</p></li>)}
+                </ul>
+                {slide.note && <p className="showcase-note">{slide.note}</p>}
+              </div>
+            )}
+            <div className="showcase-images">
+              {slide.images.map((shot, index) => (
+                <figure key={shot.src} className={`app-shot shot-${index + 1}`}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={shot.src} alt={shot.alt} width={shot.width} height={shot.height} loading="lazy" />
+                  {shot.caption && <figcaption>{shot.caption}</figcaption>}
+                </figure>
+              ))}
+            </div>
+          </div>
+          {slide.caption && <p className="showcase-caption">{slide.caption}</p>}
         </div>
       );
     case "steps":
@@ -202,6 +229,64 @@ function SlideBody({
               </li>
             ))}
           </ol>
+        </div>
+      );
+    case "team-contact":
+      return (
+        <div className="body stack team-contact-body">
+          <Title id={id}>{slide.title}</Title>
+          <ul className="team">
+            {slide.people.map((p) => (
+              <li key={p.name}>
+                <span className="avatar avatar-kosmonauta" aria-hidden="true">
+                  {/* Kosmonauta de cada persona: web/public/team/<nombre>.svg (scripts/team-avatars.mjs). */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`/team/${p.name.toLowerCase().normalize("NFD").replace(/[^a-z]/g, "")}.svg`}
+                    alt=""
+                    width={96}
+                    height={96}
+                  />
+                </span>
+                <h3>{p.name}</h3>
+                <p>{p.role}</p>
+              </li>
+            ))}
+          </ul>
+          <div className="close-v2 contact-block">
+            <div className="close-main">
+              <p className="close-text">{slide.text}</p>
+              <a className="close-cta" href="https://kosmovia.onrender.com" target="_blank" rel="noopener noreferrer">
+                {CLOSE_UI[lang].cta} <span aria-hidden="true">→</span>
+                <small>kosmovia.onrender.com</small>
+              </a>
+              <p className="close-chips">
+                <a href="https://kosmovia.vercel.app" target="_blank" rel="noopener noreferrer">
+                  {CLOSE_UI[lang].web} · kosmovia.vercel.app
+                </a>
+                <a href="https://github.com/kosmovia/kosmovia" target="_blank" rel="noopener noreferrer">
+                  {CLOSE_UI[lang].code} · GitHub
+                </a>
+              </p>
+              <ul className="close-social" aria-label={CLOSE_UI[lang].follow}>
+                {SOCIALS.filter((s) => s.name !== "GitHub").map((s) => (
+                  <li key={s.name}>
+                    <a href={s.href} target="_blank" rel="noopener noreferrer" aria-label={`${s.name}: ${s.handle}`}>
+                      <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
+                        {s.path}
+                      </svg>
+                      <span>{s.handle}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <figure className="close-qr">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/qr-kosmovia.svg" alt="QR: kosmovia.vercel.app" width={220} height={220} />
+              <figcaption>{CLOSE_UI[lang].scan}</figcaption>
+            </figure>
+          </div>
         </div>
       );
     case "team":
